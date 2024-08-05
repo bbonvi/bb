@@ -7,19 +7,19 @@ use headless_chrome::{
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-pub trait MetaBackend: Send + Sync {
+pub trait MetadataMgrBackend: Send + Sync {
     fn retrieve(&self, url: &str, opts: MetaOptions) -> Option<Meta>;
 }
 
-pub struct MetaLocalService {}
+pub struct MetadataMgr {}
 
-impl MetaLocalService {
+impl MetadataMgr {
     pub fn new() -> Self {
         Self {}
     }
 }
 
-impl MetaBackend for MetaLocalService {
+impl MetadataMgrBackend for MetadataMgr {
     fn retrieve(&self, url: &str, opts: MetaOptions) -> Option<Meta> {
         fetch_meta(&url, opts)
     }

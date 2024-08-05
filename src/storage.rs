@@ -1,24 +1,24 @@
 use std::{path::PathBuf, str::FromStr};
 
-pub trait StorageBackend: Send + Sync {
+pub trait StorageMgrBackend: Send + Sync {
     fn read(&self, ident: &str) -> Vec<u8>;
     fn write(&self, ident: &str, data: &[u8]);
 }
 
 #[derive(Clone)]
-pub struct LocalStorage {
+pub struct StorageMgrLocal {
     pub base_dir: PathBuf,
 }
 
-impl LocalStorage {
+impl StorageMgrLocal {
     pub fn new(storage_dir: &str) -> Self {
-        LocalStorage {
+        StorageMgrLocal {
             base_dir: PathBuf::from_str(&storage_dir).unwrap(),
         }
     }
 }
 
-impl StorageBackend for LocalStorage {
+impl StorageMgrBackend for StorageMgrLocal {
     fn read(&self, ident: &str) -> Vec<u8> {
         std::fs::create_dir_all(&self.base_dir).unwrap();
 

@@ -1,22 +1,24 @@
 use std::sync::{Arc, RwLock};
 
 use crate::{
-    bookmarks::{Bookmark, BookmarkBackend, BookmarkShallow, Bookmarks, Query},
-    scrape::{Meta, MetaBackend, MetaLocalService, MetaOptions},
-    storage::{LocalStorage, StorageBackend},
+    bookmarks::{
+        Bookmark, BookmarkCreate, BookmarkMgrBackend, BookmarkMgrJson, BookmarkUpdate, SearchQuery,
+    },
+    scrape::{Meta, MetaOptions, MetadataMgr, MetadataMgrBackend},
+    storage::{StorageMgrBackend, StorageMgrLocal},
 };
 
 pub struct App {
-    bookmarks: Box<dyn BookmarkBackend>,
-    storage: Box<dyn StorageBackend>,
-    metadata: Box<dyn MetaBackend>,
+    bookmarks: Box<dyn BookmarkMgrBackend>,
+    storage: Box<dyn StorageMgrBackend>,
+    metadata: Box<dyn MetadataMgrBackend>,
 }
 
 impl App {
     pub fn local() -> Self {
-        let bookmarks = Box::new(Bookmarks::load());
-        let storage = Box::new(LocalStorage::new("./uploads"));
-        let metadata = Box::new(MetaLocalService::new());
+        let bookmarks = Box::new(BookmarkMgrJson::load());
+        let storage = Box::new(StorageMgrLocal::new("./uploads"));
+        let metadata = Box::new(MetadataMgr::new());
 
         Self {
             bookmarks,
@@ -27,7 +29,7 @@ impl App {
 }
 
 impl App {
-    pub fn search(&self, query: Query) -> Vec<Bookmark> {
+    pub fn search(&self, query: SearchQuery) -> Vec<Bookmark> {
         let mut query = query;
         // prevent query against empty strings
         {
@@ -47,12 +49,12 @@ impl App {
 
     pub fn add(
         &mut self,
-        shallow_bookmark: BookmarkShallow,
+        shallow_bookmark: BookmarkCreate,
         no_https_upgrade: bool,
         no_headless: bool,
         no_meta: bool,
     ) -> Option<Bookmark> {
-        let query = Query {
+        let query = SearchQuery {
             url: Some(shallow_bookmark.url.clone()),
             ..Default::default()
         };
@@ -89,28 +91,28 @@ impl App {
         if let Some(ref bookmark) = bookmarks {
             match meta {
                 Some(ref meta) => {
-                    let mut shallow_bookmark = BookmarkShallow {
-                        has_image: true,
-                        has_icon: true,
-                        ..Default::default()
-                    };
-
-                    if let Some(ref image) = meta.image {
-                        self.storage.write(&bookmark.id.to_string(), &image);
-                        shallow_bookmark.has_image = true;
-                    };
-
-                    if let Some(ref icon) = meta.icon {
-                        self.storage.write(&bookmark.id.to_string(), &icon);
-
-                        shallow_bookmark.has_icon = true;
-                    };
-
-                    let bookmarks = self
-                        .bookmarks
-                        .update(bookmark.id, shallow_bookmark)
-                        .first()
-                        .cloned();
+                    // let mut shallow_bookmark = BookmarkUpdate {
+                    //     has_image: true,
+                    //     has_icon: true,
+                    //     ..Default::default()
+                    // };
+                    //
+                    // if let Some(ref image) = meta.image {
+                    //     self.storage.write(&bookmark.id.to_string(), &image);
+                    //     shallow_bookmark.has_image = true;
+                    // };
+                    //
+                    // if let Some(ref icon) = meta.icon {
+                    //     self.storage.write(&bookmark.id.to_string(), &icon);
+                    //
+                    //     shallow_bookmark.has_icon = true;
+                    // };
+                    //
+                    // let bookmarks = self
+                    //     .bookmarks
+                    //     .update(bookmark.id, shallow_bookmark)
+                    //     .first()
+                    //     .cloned();
                 }
                 _ => {}
             }
@@ -119,7 +121,7 @@ impl App {
         bookmarks
     }
 
-    pub fn update(&mut self, id: u64, shallow_bookmark: BookmarkShallow) -> Option<Bookmark> {
+    pub fn update(&mut self, id: u64, shallow_bookmark: BookmarkUpdate) -> Option<Bookmark> {
         self.bookmarks.update(id, shallow_bookmark)
     }
 

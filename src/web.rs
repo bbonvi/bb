@@ -5,11 +5,13 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 use crate::{
     app::App,
-    bookmarks::{Bookmark, BookmarkShallow, Query as SearchQuery},
+    bookmarks::{Bookmark, BookmarkUpdate, SearchQuery},
+    parse_tags,
 };
 
 #[derive(Clone)]
@@ -34,32 +36,104 @@ async fn start_app(app: App) {
     axum::serve(listener, app).await.unwrap();
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ListBookmarksRequest {
+    pub id: Option<u64>,
+    pub title: Option<String>,
+    pub url: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+
+    #[serde(default)]
+    pub exact: bool,
+    #[serde(default)]
+    pub no_exact_url: bool,
+}
+
 async fn list_bookmarks(
     State(state): State<Arc<SharedState>>,
-    Query(search_query): Query<SearchQuery>,
+    Query(query): Query<ListBookmarksRequest>,
 ) -> axum::Json<Vec<Bookmark>> {
     let app = state.app.read().await;
+
+    let search_query = SearchQuery {
+        id: query.id,
+        title: query.title,
+        url: query.url,
+        description: query.description,
+        tags: query.tags.map(|tags| parse_tags(tags)),
+        exact: query.exact,
+        no_exact_url: query.no_exact_url,
+    };
+
     tokio::task::block_in_place(move || app.search(search_query).into())
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct BookmarkCreateRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub url: String,
+
+    #[serde(default)]
+    pub no_meta: bool,
+    #[serde(default)]
+    pub no_headless: bool,
 }
 
 async fn create_bookmark(
     State(state): State<Arc<SharedState>>,
-    Json(shallow_bookmark): Json<BookmarkShallow>,
+    Json(payload): Json<BookmarkCreateRequest>,
 ) -> axum::Json<Bookmark> {
     let mut app = state.app.write().await;
+
+    let shallow_bookmark = crate::bookmarks::BookmarkCreate {
+        title: payload.title,
+        description: payload.description,
+        tags: payload.tags.map(|tags| parse_tags(tags)),
+        url: payload.url,
+    };
+
     tokio::task::block_in_place(move || {
-        app.add(shallow_bookmark, false, false, false)
-            .unwrap()
-            .into()
+        app.add(
+            shallow_bookmark,
+            false,
+            payload.no_headless,
+            payload.no_meta,
+        )
+        .unwrap()
+        .into()
     })
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct BookmarkUpdateRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub url: Option<String>,
+
+    #[serde(default)]
+    pub no_meta: bool,
+    #[serde(default)]
+    pub no_headless: bool,
 }
 
 async fn update_bookmark(
     State(state): State<Arc<SharedState>>,
     Path(bookmark_id): Path<u64>,
-    Json(shallow_bookmark): Json<BookmarkShallow>,
+    Json(payload): Json<BookmarkUpdateRequest>,
 ) -> axum::Json<Bookmark> {
     let mut app = state.app.write().await;
+
+    let shallow_bookmark = BookmarkUpdate {
+        title: payload.title,
+        description: payload.description,
+        tags: payload.tags.map(|tags| parse_tags(tags)),
+        url: payload.url,
+    };
+
     tokio::task::block_in_place(move || app.update(bookmark_id, shallow_bookmark).unwrap().into())
 }
 

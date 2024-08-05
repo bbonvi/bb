@@ -6,11 +6,11 @@ mod cli;
 mod scrape;
 mod storage;
 mod web;
-use bookmarks::{BookmarkBackend, BookmarkShallow, Bookmarks, Query};
+use bookmarks::{BookmarkMgrBackend, BookmarkMgrJson, BookmarkUpdate, SearchQuery};
 use cli::{ActionArgs, MetaArgs};
 use inquire::error::InquireResult;
-use scrape::{Meta, MetaBackend, MetaLocalService, MetaOptions};
-use storage::{LocalStorage, StorageBackend};
+use scrape::{Meta, MetaOptions, MetadataMgr, MetadataMgrBackend};
+use storage::{StorageMgrBackend, StorageMgrLocal};
 
 pub fn parse_tags(tags: String) -> Vec<String> {
     tags.split(',')
@@ -41,7 +41,7 @@ fn main() {
             action,
             ..
         } => {
-            let bookmarks = app_service.search(Query {
+            let bookmarks = app_service.search(SearchQuery {
                 id: id.clone(),
                 title: title.clone(),
                 url: url.clone(),
@@ -129,10 +129,10 @@ fn main() {
                 },
             ..
         } => {
-            let shallow_bookmark = BookmarkShallow {
+            let shallow_bookmark = bookmarks::BookmarkCreate {
                 title,
                 description,
-                tags: tags.map(parse_tags).unwrap_or_default(),
+                tags: tags.map(parse_tags),
                 url,
             };
 

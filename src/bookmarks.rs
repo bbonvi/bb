@@ -1,12 +1,9 @@
 use core::panic;
+use serde::{Deserialize, Serialize};
 use std::{
-    cell::RefCell,
     fs::{read_to_string, write},
     io::ErrorKind,
-    sync::Arc,
 };
-
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Bookmark {
@@ -19,27 +16,50 @@ pub struct Bookmark {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct BookmarkShallow {
+pub struct BookmarkCreate {
     pub title: Option<String>,
     pub description: Option<String>,
     #[serde(default)]
-    pub tags: Vec<String>,
+    pub tags: Option<Vec<String>>,
     pub url: String,
 }
 
-pub trait BookmarkBackend: Send + Sync {
-    fn search(&self, query: Query) -> Vec<Bookmark>;
-    fn add(&mut self, bookmark: BookmarkShallow) -> Vec<Bookmark>;
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct BookmarkUpdate {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SearchQuery {
+    pub id: Option<u64>,
+    pub title: Option<String>,
+    pub url: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub exact: bool,
+    #[serde(default)]
+    pub no_exact_url: bool,
+}
+
+pub trait BookmarkMgrBackend: Send + Sync {
+    fn search(&self, query: SearchQuery) -> Vec<Bookmark>;
+    fn add(&mut self, bookmark: BookmarkCreate) -> Vec<Bookmark>;
     fn delete(&mut self, id: u64) -> Option<bool>;
-    fn update(&mut self, id: u64, shallow_bookmark: BookmarkShallow) -> Option<Bookmark>;
+    fn update(&mut self, id: u64, bookmark_update: BookmarkUpdate) -> Option<Bookmark>;
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Bookmarks {
+pub struct BookmarkMgrJson {
     pub bookmarks: Vec<Bookmark>,
 }
 
-impl Bookmarks {
+impl BookmarkMgrJson {
     pub fn load() -> Self {
         let bookmarks_plain = match read_to_string("bookmarks.json") {
             Ok(b) => b,
@@ -62,21 +82,7 @@ impl Bookmarks {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct Query {
-    pub id: Option<u64>,
-    pub title: Option<String>,
-    pub url: Option<String>,
-    pub description: Option<String>,
-    pub tags: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub exact: bool,
-    #[serde(default)]
-    pub no_exact_url: bool,
-}
-
-impl Query {
+impl SearchQuery {
     pub fn lowercase(&mut self) {
         self.title = self.title.as_ref().map(|title| title.to_lowercase());
         self.description = self
@@ -91,16 +97,16 @@ impl Query {
     }
 }
 
-impl BookmarkBackend for Bookmarks {
-    fn add(&mut self, shallow_bookmark: BookmarkShallow) -> Vec<Bookmark> {
+impl BookmarkMgrBackend for BookmarkMgrJson {
+    fn add(&mut self, bmark_create: BookmarkCreate) -> Vec<Bookmark> {
         let id = if let Some(last_bookmark) = self.bookmarks.last() {
             last_bookmark.id + 1
         } else {
             0
         };
 
-        let query = Query {
-            url: Some(shallow_bookmark.url.clone()),
+        let query = SearchQuery {
+            url: Some(bmark_create.url.clone()),
             ..Default::default()
         };
 
@@ -113,10 +119,10 @@ impl BookmarkBackend for Bookmarks {
 
         let bookmark = Bookmark {
             id,
-            title: shallow_bookmark.title.unwrap_or_default(),
-            description: shallow_bookmark.description.unwrap_or_default(),
-            tags: shallow_bookmark.tags,
-            url: shallow_bookmark.url,
+            title: bmark_create.title.unwrap_or_default(),
+            description: bmark_create.description.unwrap_or_default(),
+            tags: bmark_create.tags.unwrap_or_default(),
+            url: bmark_create.url,
         };
 
         self.bookmarks.push(bookmark.clone());
@@ -139,12 +145,20 @@ impl BookmarkBackend for Bookmarks {
         result
     }
 
-    fn update(&mut self, id: u64, shallow_bookmark: BookmarkShallow) -> Option<Bookmark> {
+    fn update(&mut self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark> {
         let result = self.bookmarks.iter_mut().find(|b| b.id == id).map(|b| {
-            b.title = shallow_bookmark.title.unwrap_or_default();
-            b.description = shallow_bookmark.description.unwrap_or_default();
-            b.tags = shallow_bookmark.tags;
-            b.url = shallow_bookmark.url;
+            if let Some(title) = bmark_update.title {
+                b.title = title;
+            }
+            if let Some(descr) = bmark_update.description {
+                b.description = descr;
+            }
+            if let Some(tags) = bmark_update.tags {
+                b.tags = tags;
+            }
+            if let Some(url) = bmark_update.url {
+                b.url = url;
+            }
 
             b.clone()
         });
@@ -156,7 +170,7 @@ impl BookmarkBackend for Bookmarks {
         result
     }
 
-    fn search(&self, query: Query) -> Vec<Bookmark> {
+    fn search(&self, query: SearchQuery) -> Vec<Bookmark> {
         let mut query = query;
         query.lowercase();
 
