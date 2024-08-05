@@ -1,5 +1,10 @@
 use core::panic;
-use std::{fs::read_to_string, fs::write, io::ErrorKind};
+use std::{
+    cell::RefCell,
+    fs::{read_to_string, write},
+    io::ErrorKind,
+    sync::Arc,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +27,7 @@ pub struct BookmarkShallow {
     pub url: String,
 }
 
-pub trait BookmarkBackend: Send {
+pub trait BookmarkBackend: Send + Sync {
     fn search(&self, query: Query) -> Vec<Bookmark>;
     fn add(&mut self, bookmark: BookmarkShallow) -> Vec<Bookmark>;
     fn delete(&mut self, id: u64) -> Option<bool>;

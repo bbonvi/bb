@@ -6,18 +6,17 @@ use crate::{
     storage::{LocalStorage, StorageBackend},
 };
 
-#[derive(Clone)]
 pub struct App {
-    bookmarks: Arc<RwLock<dyn BookmarkBackend + Send + Sync>>,
-    storage: Arc<RwLock<dyn StorageBackend + Send + Sync>>,
-    metadata: Arc<RwLock<dyn MetaBackend + Send + Sync>>,
+    bookmarks: Box<dyn BookmarkBackend>,
+    storage: Box<dyn StorageBackend>,
+    metadata: Box<dyn MetaBackend>,
 }
 
 impl App {
     pub fn local() -> Self {
-        let bookmarks = Arc::new(RwLock::new(Bookmarks::load()));
-        let storage = Arc::new(RwLock::new(LocalStorage::new("./uploads")));
-        let metadata = Arc::new(RwLock::new(MetaLocalService::new()));
+        let bookmarks = Box::new(Bookmarks::load());
+        let storage = Box::new(LocalStorage::new("./uploads"));
+        let metadata = Box::new(MetaLocalService::new());
 
         Self {
             bookmarks,
@@ -43,11 +42,11 @@ impl App {
             };
         }
 
-        self.bookmarks.read().unwrap().search(query)
+        self.bookmarks.search(query)
     }
 
     pub fn add(
-        &self,
+        &mut self,
         shallow_bookmark: BookmarkShallow,
         no_https_upgrade: bool,
         no_headless: bool,
@@ -68,44 +67,64 @@ impl App {
         }
 
         let meta = if !no_meta {
-            match self.fetch_meta(&shallow_bookmark.url, no_https_upgrade, no_headless) {
-                Some(meta) => {
-                    if let Some(ref image) = meta.image {
-                        std::fs::write("screenshot.png", &image).unwrap();
-                    };
-                    if let Some(ref icon) = meta.icon {
-                        std::fs::write("icon.png", &icon).unwrap();
-                    };
-                    Some(meta)
-                }
-                None => None,
-            }
+            self.fetch_meta(&shallow_bookmark.url, no_https_upgrade, no_headless)
         } else {
             None
         };
 
         let mut shallow_bookmark = shallow_bookmark;
 
-        if let Some(meta) = meta {
+        if let Some(ref meta) = meta {
             if shallow_bookmark.title.is_none() {
-                shallow_bookmark.title = meta.title;
+                shallow_bookmark.title = meta.title.clone();
             }
             if shallow_bookmark.description.is_none() {
-                shallow_bookmark.description = meta.description;
+                shallow_bookmark.description = meta.description.clone();
             }
         }
 
-        let bookmark = self.bookmarks.write().unwrap().add(shallow_bookmark);
+        let bookmarks = self.bookmarks.add(shallow_bookmark).first().cloned();
 
-        bookmark.first().cloned()
+        // save images
+        if let Some(ref bookmark) = bookmarks {
+            match meta {
+                Some(ref meta) => {
+                    let mut shallow_bookmark = BookmarkShallow {
+                        has_image: true,
+                        has_icon: true,
+                        ..Default::default()
+                    };
+
+                    if let Some(ref image) = meta.image {
+                        self.storage.write(&bookmark.id.to_string(), &image);
+                        shallow_bookmark.has_image = true;
+                    };
+
+                    if let Some(ref icon) = meta.icon {
+                        self.storage.write(&bookmark.id.to_string(), &icon);
+
+                        shallow_bookmark.has_icon = true;
+                    };
+
+                    let bookmarks = self
+                        .bookmarks
+                        .update(bookmark.id, shallow_bookmark)
+                        .first()
+                        .cloned();
+                }
+                _ => {}
+            }
+        }
+
+        bookmarks
     }
 
-    pub fn update(&self, id: u64, shallow_bookmark: BookmarkShallow) -> Option<Bookmark> {
-        self.bookmarks.write().unwrap().update(id, shallow_bookmark)
+    pub fn update(&mut self, id: u64, shallow_bookmark: BookmarkShallow) -> Option<Bookmark> {
+        self.bookmarks.update(id, shallow_bookmark)
     }
 
-    pub fn delete(&self, id: u64) -> Option<bool> {
-        self.bookmarks.write().unwrap().delete(id)
+    pub fn delete(&mut self, id: u64) -> Option<bool> {
+        self.bookmarks.delete(id)
     }
 
     pub fn fetch_meta(&self, url: &str, no_https_upgrade: bool, no_headless: bool) -> Option<Meta> {
@@ -121,18 +140,12 @@ impl App {
 
         let mut meta = self
             .metadata
-            .read()
-            .unwrap()
             .retrieve(&url_parsed.to_string(), opts.clone());
 
         if meta.is_none() && tried_https {
             println!("https attempt failed. trying http.");
             url_parsed.set_scheme("http").unwrap();
-            meta = self
-                .metadata
-                .read()
-                .unwrap()
-                .retrieve(&url_parsed.to_string(), opts);
+            meta = self.metadata.retrieve(&url_parsed.to_string(), opts);
         }
 
         meta

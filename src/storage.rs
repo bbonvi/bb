@@ -1,10 +1,11 @@
 use std::{path::PathBuf, str::FromStr};
 
-pub trait StorageBackend: Send {
+pub trait StorageBackend: Send + Sync {
     fn read(&self, ident: &str) -> Vec<u8>;
     fn write(&self, ident: &str, data: &[u8]);
 }
 
+#[derive(Clone)]
 pub struct LocalStorage {
     pub base_dir: PathBuf,
 }
