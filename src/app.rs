@@ -1,5 +1,3 @@
-use std::sync::{Arc, RwLock};
-
 use crate::{
     bookmarks::{
         Bookmark, BookmarkCreate, BookmarkMgrBackend, BookmarkMgrJson, BookmarkUpdate, SearchQuery,
@@ -49,13 +47,13 @@ impl App {
 
     pub fn add(
         &mut self,
-        shallow_bookmark: BookmarkCreate,
+        bmark_create: BookmarkCreate,
         no_https_upgrade: bool,
         no_headless: bool,
         no_meta: bool,
     ) -> Option<Bookmark> {
         let query = SearchQuery {
-            url: Some(shallow_bookmark.url.clone()),
+            url: Some(bmark_create.url.clone()),
             ..Default::default()
         };
 
@@ -69,29 +67,29 @@ impl App {
         }
 
         let meta = if !no_meta {
-            self.fetch_meta(&shallow_bookmark.url, no_https_upgrade, no_headless)
+            self.fetch_metadata(&bmark_create.url, no_https_upgrade, no_headless)
         } else {
             None
         };
 
-        let mut shallow_bookmark = shallow_bookmark;
+        let mut bmark_create = bmark_create;
 
         if let Some(ref meta) = meta {
-            if shallow_bookmark.title.is_none() {
-                shallow_bookmark.title = meta.title.clone();
+            if bmark_create.title.is_none() {
+                bmark_create.title = meta.title.clone();
             }
-            if shallow_bookmark.description.is_none() {
-                shallow_bookmark.description = meta.description.clone();
+            if bmark_create.description.is_none() {
+                bmark_create.description = meta.description.clone();
             }
         }
 
-        let bookmarks = self.bookmarks.add(shallow_bookmark).first().cloned();
+        let bookmarks = self.bookmarks.add(bmark_create).first().cloned();
 
         // save images
         if let Some(ref bookmark) = bookmarks {
             match meta {
                 Some(ref meta) => {
-                    // let mut shallow_bookmark = BookmarkUpdate {
+                    // let mut bmark_create = BookmarkUpdate {
                     //     has_image: true,
                     //     has_icon: true,
                     //     ..Default::default()
@@ -99,18 +97,18 @@ impl App {
                     //
                     // if let Some(ref image) = meta.image {
                     //     self.storage.write(&bookmark.id.to_string(), &image);
-                    //     shallow_bookmark.has_image = true;
+                    //     bmark_create.has_image = true;
                     // };
                     //
                     // if let Some(ref icon) = meta.icon {
                     //     self.storage.write(&bookmark.id.to_string(), &icon);
                     //
-                    //     shallow_bookmark.has_icon = true;
+                    //     bmark_create.has_icon = true;
                     // };
                     //
                     // let bookmarks = self
                     //     .bookmarks
-                    //     .update(bookmark.id, shallow_bookmark)
+                    //     .update(bookmark.id, bmark_create)
                     //     .first()
                     //     .cloned();
                 }
@@ -121,15 +119,20 @@ impl App {
         bookmarks
     }
 
-    pub fn update(&mut self, id: u64, shallow_bookmark: BookmarkUpdate) -> Option<Bookmark> {
-        self.bookmarks.update(id, shallow_bookmark)
+    pub fn update(&mut self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark> {
+        self.bookmarks.update(id, bmark_update)
     }
 
     pub fn delete(&mut self, id: u64) -> Option<bool> {
         self.bookmarks.delete(id)
     }
 
-    pub fn fetch_meta(&self, url: &str, no_https_upgrade: bool, no_headless: bool) -> Option<Meta> {
+    pub fn fetch_metadata(
+        &self,
+        url: &str,
+        no_https_upgrade: bool,
+        no_headless: bool,
+    ) -> Option<Meta> {
         let mut url_parsed = reqwest::Url::parse(&url).unwrap();
         let mut tried_https = false;
         if url_parsed.scheme() == "http" && !no_https_upgrade {
@@ -153,7 +156,12 @@ impl App {
         meta
     }
 
-    pub fn schedule_fetch_meta_update(&self, id: u64, no_https_upgrade: bool, no_headless: bool) {
+    pub fn schedule_fetch_and_update_metadata(
+        &self,
+        id: u64,
+        no_https_upgrade: bool,
+        no_headless: bool,
+    ) {
         todo!()
     }
 }

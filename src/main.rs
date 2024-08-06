@@ -6,11 +6,9 @@ mod cli;
 mod scrape;
 mod storage;
 mod web;
-use bookmarks::{BookmarkMgrBackend, BookmarkMgrJson, BookmarkUpdate, SearchQuery};
+use bookmarks::SearchQuery;
 use cli::{ActionArgs, MetaArgs};
 use inquire::error::InquireResult;
-use scrape::{Meta, MetaOptions, MetadataMgr, MetadataMgrBackend};
-use storage::{StorageMgrBackend, StorageMgrLocal};
 
 pub fn parse_tags(tags: String) -> Vec<String> {
     tags.split(',')
@@ -23,13 +21,13 @@ pub fn parse_tags(tags: String) -> Vec<String> {
 fn main() {
     let args = cli::Args::parse();
 
-    // start app in daemon mode.
-    let mut app_service = app::App::local();
+    let mut app_mgr = app::App::local();
 
     match args.command {
         cli::Command::Daemon { .. } => {
-            return web::start_daemon(app_service);
+            return web::start_daemon(app_mgr);
         }
+
         cli::Command::Search {
             id,
             title,
@@ -41,7 +39,7 @@ fn main() {
             action,
             ..
         } => {
-            let bookmarks = app_service.search(SearchQuery {
+            let bookmarks = app_mgr.search(SearchQuery {
                 id: id.clone(),
                 title: title.clone(),
                 url: url.clone(),
@@ -109,7 +107,7 @@ fn main() {
                     }
 
                     for bookmark in &bookmarks {
-                        app_service.delete(bookmark.id).unwrap();
+                        app_mgr.delete(bookmark.id).unwrap();
                     }
 
                     println!("{} items removed", bookmarks.len())
@@ -129,14 +127,14 @@ fn main() {
                 },
             ..
         } => {
-            let shallow_bookmark = bookmarks::BookmarkCreate {
+            let bmark_create = bookmarks::BookmarkCreate {
                 title,
                 description,
                 tags: tags.map(parse_tags),
                 url,
             };
 
-            match app_service.add(shallow_bookmark, no_https_upgrade, no_headless, false) {
+            match app_mgr.add(bmark_create, no_https_upgrade, no_headless, false) {
                 Some(bookmark) => {
                     println!("{}", serde_json::to_string(&bookmark).unwrap());
                 }
@@ -155,7 +153,7 @@ fn main() {
                 },
             ..
         } => {
-            let meta = app_service.fetch_meta(&url, no_https_upgrade, no_headless);
+            let meta = app_mgr.fetch_metadata(&url, no_https_upgrade, no_headless);
 
             if let Some(meta) = meta {
                 if let Some(ref image) = meta.image {

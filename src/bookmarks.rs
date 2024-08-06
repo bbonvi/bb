@@ -51,7 +51,7 @@ pub trait BookmarkMgrBackend: Send + Sync {
     fn search(&self, query: SearchQuery) -> Vec<Bookmark>;
     fn add(&mut self, bookmark: BookmarkCreate) -> Vec<Bookmark>;
     fn delete(&mut self, id: u64) -> Option<bool>;
-    fn update(&mut self, id: u64, bookmark_update: BookmarkUpdate) -> Option<Bookmark>;
+    fn update(&mut self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark>;
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -88,7 +88,7 @@ async fn create_bookmark(
 ) -> axum::Json<Bookmark> {
     let mut app = state.app.write().await;
 
-    let shallow_bookmark = crate::bookmarks::BookmarkCreate {
+    let bmark_create = crate::bookmarks::BookmarkCreate {
         title: payload.title,
         description: payload.description,
         tags: payload.tags.map(|tags| parse_tags(tags)),
@@ -96,14 +96,9 @@ async fn create_bookmark(
     };
 
     tokio::task::block_in_place(move || {
-        app.add(
-            shallow_bookmark,
-            false,
-            payload.no_headless,
-            payload.no_meta,
-        )
-        .unwrap()
-        .into()
+        app.add(bmark_create, false, payload.no_headless, payload.no_meta)
+            .unwrap()
+            .into()
     })
 }
 
@@ -127,14 +122,14 @@ async fn update_bookmark(
 ) -> axum::Json<Bookmark> {
     let mut app = state.app.write().await;
 
-    let shallow_bookmark = BookmarkUpdate {
+    let bmark_update = BookmarkUpdate {
         title: payload.title,
         description: payload.description,
         tags: payload.tags.map(|tags| parse_tags(tags)),
         url: payload.url,
     };
 
-    tokio::task::block_in_place(move || app.update(bookmark_id, shallow_bookmark).unwrap().into())
+    tokio::task::block_in_place(move || app.update(bookmark_id, bmark_update).unwrap().into())
 }
 
 async fn delete_bookmark(
