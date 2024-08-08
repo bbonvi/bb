@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.86"
 axum = { version = "0.7.5", features = ["macros"] }
 clap = { version = "4.5.9", features = ["derive"] }
 headless_chrome = "1.0.10"

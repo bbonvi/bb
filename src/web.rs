@@ -4,8 +4,10 @@ use crate::{
     metadata::MetaOptions,
     parse_tags,
 };
+use anyhow::{anyhow, Context};
 use axum::{
     extract::{Path, Query, State},
+    response::IntoResponse,
     routing::{delete, get, post, put},
     Json, Router,
 };
@@ -78,6 +80,31 @@ async fn start_app(app: App) {
         .unwrap();
 }
 
+// Make our own error that wraps `anyhow::Error`.
+struct AppError(anyhow::Error);
+
+// Tell axum how to convert `AppError` into a response.
+impl IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{}", self.0),
+        )
+            .into_response()
+    }
+}
+
+// This enables using `?` on functions that return `Result<_, anyhow::Error>` to turn them into
+// `Result<_, AppError>`. That way you don't need to do that manually.
+impl<E> From<E> for AppError
+where
+    E: Into<anyhow::Error>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ListBookmarksRequest {
     pub id: Option<u64>,
@@ -102,7 +129,7 @@ pub struct ListBookmarksRequest {
 async fn list_bookmarks(
     State(state): State<Arc<SharedState>>,
     Query(query): Query<ListBookmarksRequest>,
-) -> axum::Json<Vec<Bookmark>> {
+) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
     let app = state.app.read().await;
 
     let search_query = SearchQuery {
@@ -115,7 +142,9 @@ async fn list_bookmarks(
         no_exact_url: query.no_exact_url,
     };
 
-    tokio::task::block_in_place(move || app.search(search_query).into())
+    tokio::task::block_in_place(move || {
+        app.search(search_query).map(Into::into).map_err(Into::into)
+    })
 }
 
 #[derive(Deserialize, Serialize)]
@@ -149,7 +178,7 @@ pub struct BookmarkCreateRequest {
 async fn create_bookmark(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<BookmarkCreateRequest>,
-) -> axum::Json<Bookmark> {
+) -> Result<axum::Json<Bookmark>, AppError> {
     let meta_opts = {
         if payload.no_meta {
             None
@@ -179,7 +208,9 @@ async fn create_bookmark(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.add(bmark_create, opts).unwrap().into()
+        app.add(bmark_create, opts)
+            .map(Into::into)
+            .map_err(Into::into)
     })
 }
 
@@ -208,7 +239,7 @@ async fn update_bookmark(
     State(state): State<Arc<SharedState>>,
     Path(bookmark_id): Path<u64>,
     Json(payload): Json<BookmarkUpdateRequest>,
-) -> axum::Json<Bookmark> {
+) -> Result<axum::Json<Bookmark>, AppError> {
     let mut app = state.app.write().await;
 
     let bmark_update = BookmarkUpdate {
@@ -219,15 +250,25 @@ async fn update_bookmark(
         ..Default::default()
     };
 
-    tokio::task::block_in_place(move || app.update(bookmark_id, bmark_update).unwrap().into())
+    tokio::task::block_in_place(move || {
+        app.update(bookmark_id, bmark_update)?
+            .ok_or_else(|| anyhow!("bookmark not found"))
+            .map(Into::into)
+            .map_err(Into::into)
+    })
 }
 
 async fn delete_bookmark(
     State(state): State<Arc<SharedState>>,
     Path(bookmark_id): Path<u64>,
-) -> axum::Json<bool> {
+) -> Result<axum::Json<bool>, AppError> {
     let mut app = state.app.write().await;
-    tokio::task::block_in_place(move || app.delete(bookmark_id).unwrap().into())
+    tokio::task::block_in_place(move || {
+        app.delete(bookmark_id)?
+            .ok_or_else(|| anyhow!("bookmark not found"))
+            .map(Into::into)
+            .map_err(Into::into)
+    })
 }
 
 pub fn start_daemon(app: App) {

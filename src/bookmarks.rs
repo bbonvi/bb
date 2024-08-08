@@ -1,3 +1,4 @@
+use anyhow::bail;
 use core::panic;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -58,10 +59,10 @@ pub struct SearchQuery {
 }
 
 pub trait BookmarkMgrBackend: Send + Sync {
-    fn search(&self, query: SearchQuery) -> Vec<Bookmark>;
-    fn add(&self, bookmark: BookmarkCreate) -> Option<Bookmark>;
-    fn delete(&self, id: u64) -> Option<bool>;
-    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark>;
+    fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>>;
+    fn add(&self, bookmark: BookmarkCreate) -> anyhow::Result<Bookmark>;
+    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
+    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -107,7 +108,7 @@ impl SearchQuery {
 }
 
 impl BookmarkMgrBackend for BookmarkMgrJson {
-    fn add(&self, bmark_create: BookmarkCreate) -> Option<Bookmark> {
+    fn add(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
         let id = if let Some(last_bookmark) = self.bookmarks.write().unwrap().last() {
             last_bookmark.id + 1
         } else {
@@ -119,11 +120,8 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             ..Default::default()
         };
 
-        if let Some(b) = self.search(query).first() {
-            panic!(
-                "bookmark with following url already exists at index {0}",
-                b.id
-            );
+        if let Some(b) = self.search(query)?.first() {
+            bail!("bookmark with this url already exists at index {0}", b.id);
         };
 
         let bookmark = Bookmark {
@@ -140,10 +138,10 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
 
         self.save();
 
-        Some(bookmark)
+        Ok(bookmark)
     }
 
-    fn delete(&self, id: u64) -> Option<bool> {
+    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
         let mut bmarks = self.bookmarks.write().unwrap();
         let result = bmarks.iter().position(|b| b.id == id).map(|idx| {
             bmarks.remove(idx);
@@ -154,10 +152,10 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             self.save();
         }
 
-        result
+        Ok(result)
     }
 
-    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark> {
+    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>> {
         let result = self
             .bookmarks
             .write()
@@ -192,16 +190,16 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             self.save();
         }
 
-        result
+        Ok(result)
     }
 
-    fn search(&self, query: SearchQuery) -> Vec<Bookmark> {
+    fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
         let bmarks = self.bookmarks.read().unwrap();
 
         let mut query = query;
         query.lowercase();
 
-        bmarks
+        Ok(bmarks
             .iter()
             .filter(|bookmark| {
                 if query.description.is_none()
@@ -273,6 +271,6 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
                 return has_match;
             })
             .map(|b| b.clone())
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>())
     }
 }

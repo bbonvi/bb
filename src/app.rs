@@ -5,6 +5,8 @@ use std::{
     time::Duration,
 };
 
+use anyhow::{bail, Context};
+
 use crate::{
     bookmarks::{
         Bookmark, BookmarkCreate, BookmarkMgrBackend, BookmarkMgrJson, BookmarkUpdate, SearchQuery,
@@ -102,11 +104,24 @@ impl App {
                 None => {}
                 Some(Some((id, url, opts))) => {
                     println!("picked up a job...");
-                    let meta = Self::fetch_metadata(&url, opts);
-                    let bookmarks = bookmark_mgr.search(SearchQuery {
+                    let meta = match Self::fetch_metadata(&url, opts) {
+                        Ok(meta) => meta,
+                        Err(err) => {
+                            eprintln!("{err}");
+                            continue;
+                        }
+                    };
+
+                    let bookmarks = match bookmark_mgr.search(SearchQuery {
                         id: Some(id),
                         ..Default::default()
-                    });
+                    }) {
+                        Ok(b) => b,
+                        Err(err) => {
+                            eprintln!("{err}");
+                            continue;
+                        }
+                    };
 
                     let bookmark = match bookmarks.first() {
                         Some(b) => b,
@@ -116,20 +131,20 @@ impl App {
                         }
                     };
 
-                    if let Some(meta) = meta {
-                        Self::merge_metadata(
-                            bookmark.clone(),
-                            meta,
-                            storage_mgr.clone(),
-                            bookmark_mgr.clone(),
-                        );
+                    if let Err(err) = Self::merge_metadata(
+                        bookmark.clone(),
+                        meta,
+                        storage_mgr.clone(),
+                        bookmark_mgr.clone(),
+                    ) {
+                        eprintln!("{err}");
                     }
                 }
             }
         }
     }
 
-    pub fn search(&self, query: SearchQuery) -> Vec<Bookmark> {
+    pub fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
         let mut query = query;
         // prevent query against empty strings
         {
@@ -147,20 +162,7 @@ impl App {
         self.bmark_mgr.search(query)
     }
 
-    pub fn add(&self, bmark_create: BookmarkCreate, opts: AddOpts) -> Option<Bookmark> {
-        let query = SearchQuery {
-            url: Some(bmark_create.url.clone()),
-            ..Default::default()
-        };
-        if let Some(b) = self.search(query).first() {
-            eprintln!(
-                "bookmark with following url already exists at index {0}",
-                b.id
-            );
-
-            return None;
-        }
-
+    pub fn add(&self, bmark_create: BookmarkCreate, opts: AddOpts) -> anyhow::Result<Bookmark> {
         let url = bmark_create.url.clone();
         let bookmark = self.bmark_mgr.add(bmark_create)?;
 
@@ -180,32 +182,34 @@ impl App {
                         no_https_upgrade: opts.no_https_upgrade,
                         meta_opts,
                     },
-                );
-                if let Some(meta) = meta {
-                    if let Some(bmark) = Self::merge_metadata(
-                        bookmark.clone(),
-                        meta,
-                        self.storage_mgr.clone(),
-                        self.bmark_mgr.clone(),
-                    ) {
-                        return Some(bmark);
-                    }
-                }
+                )?;
+
+                return Self::merge_metadata(
+                    bookmark.clone(),
+                    meta,
+                    self.storage_mgr.clone(),
+                    self.bmark_mgr.clone(),
+                )?
+                .context("bookmark not found");
             }
         }
 
-        Some(bookmark)
+        Ok(bookmark)
     }
 
-    pub fn update(&mut self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark> {
+    pub fn update(
+        &mut self,
+        id: u64,
+        bmark_update: BookmarkUpdate,
+    ) -> anyhow::Result<Option<Bookmark>> {
         self.bmark_mgr.update(id, bmark_update)
     }
 
-    pub fn delete(&mut self, id: u64) -> Option<bool> {
+    pub fn delete(&mut self, id: u64) -> anyhow::Result<Option<bool>> {
         self.bmark_mgr.delete(id)
     }
 
-    pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> Option<Metadata> {
+    pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> anyhow::Result<Metadata> {
         let mut url_parsed = reqwest::Url::parse(&url).unwrap();
         let mut tried_https = false;
         if url_parsed.scheme() == "http" && !opts.no_https_upgrade {
@@ -214,15 +218,18 @@ impl App {
             tried_https = true;
         }
 
-        let mut meta = fetch_meta(&url_parsed.to_string(), opts.meta_opts.clone());
+        let err = match fetch_meta(&url_parsed.to_string(), opts.meta_opts.clone()) {
+            Ok(m) => return Ok(m),
+            Err(err) => Err(err),
+        };
 
-        if meta.is_none() && tried_https {
+        if tried_https {
             println!("https attempt failed. trying http.");
             url_parsed.set_scheme("http").unwrap();
-            meta = fetch_meta(&url_parsed.to_string(), opts.meta_opts.clone());
+            return fetch_meta(&url_parsed.to_string(), opts.meta_opts.clone());
         }
 
-        meta
+        return err;
     }
 
     pub fn schedule_fetch_and_update_metadata(
@@ -242,7 +249,7 @@ impl App {
         meta: Metadata,
         storage_mgr: Arc<dyn StorageMgrBackend>,
         bmark_mgr: Arc<dyn BookmarkMgrBackend>,
-    ) -> Option<Bookmark> {
+    ) -> anyhow::Result<Option<Bookmark>> {
         let mut bmark_update = BookmarkUpdate {
             ..Default::default()
         };

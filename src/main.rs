@@ -1,3 +1,4 @@
+use anyhow::bail;
 use clap::Parser;
 
 mod app;
@@ -21,14 +22,15 @@ pub fn parse_tags(tags: String) -> Vec<String> {
         .collect::<Vec<_>>()
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
 
     let mut app_mgr = app::App::local();
 
     match args.command {
         cli::Command::Daemon { .. } => {
-            return web::start_daemon(app_mgr);
+            web::start_daemon(app_mgr);
+            return Ok(());
         }
 
         cli::Command::Search {
@@ -50,17 +52,17 @@ fn main() {
                 tags: tags.clone().map(parse_tags),
                 exact,
                 no_exact_url,
-            });
+            })?;
 
             if bookmarks.is_empty() {
-                println!("not found");
-                return;
+                bail!("not found");
             }
 
             match action {
                 // print results
                 None => {
                     println!("{}", serde_json::to_string(&bookmarks).unwrap());
+                    Ok(())
                 }
 
                 // update results
@@ -70,7 +72,7 @@ fn main() {
                     description,
                     tags,
                     meta_args,
-                }) => {}
+                }) => Ok(()),
 
                 // delete results
                 Some(ActionArgs::Delete { yes, force }) => {
@@ -90,10 +92,8 @@ fn main() {
                             "Are you sure you want to delete these bookmarks?",
                         ) {
                             InquireResult::Ok(true) => {}
-                            InquireResult::Ok(false) => return,
-                            InquireResult::Err(err) => {
-                                return println!("An error occurred: {}", err)
-                            }
+                            InquireResult::Ok(false) => return Ok(()),
+                            InquireResult::Err(err) => return bail!("An error occurred: {}", err),
                         }
                     }
 
@@ -102,10 +102,8 @@ fn main() {
                             "You are about to wipe your entire database. Are you really sure?",
                         ) {
                             InquireResult::Ok(true) => {}
-                            InquireResult::Ok(false) => return,
-                            InquireResult::Err(err) => {
-                                return println!("An error occurred: {}", err)
-                            }
+                            InquireResult::Ok(false) => return Ok(()),
+                            InquireResult::Err(err) => return bail!("An error occurred: {}", err),
                         }
                     }
 
@@ -113,7 +111,8 @@ fn main() {
                         app_mgr.delete(bookmark.id).unwrap();
                     }
 
-                    println!("{} items removed", bookmarks.len())
+                    println!("{} items removed", bookmarks.len());
+                    Ok(())
                 }
             }
         }
@@ -148,14 +147,9 @@ fn main() {
                 }),
             };
 
-            match app_mgr.add(bmark_create, add_opts) {
-                Some(bookmark) => {
-                    println!("{}", serde_json::to_string(&bookmark).unwrap());
-                }
-                None => {
-                    println!("failed to add bookmark")
-                }
-            }
+            let bookmark = app_mgr.add(bmark_create, add_opts)?;
+            println!("{}", serde_json::to_string(&bookmark).unwrap());
+            Ok(())
         }
         cli::Command::Meta {
             url,
@@ -175,21 +169,18 @@ fn main() {
                     no_duck,
                 },
             };
-            let meta = app::App::fetch_metadata(&url, fetch_meta_opts);
+            let meta = app::App::fetch_metadata(&url, fetch_meta_opts)?;
 
-            if let Some(meta) = meta {
-                if let Some(ref image) = meta.image {
-                    std::fs::write("screenshot.png", &image).unwrap();
-                };
+            if let Some(ref image) = meta.image {
+                std::fs::write("screenshot.png", &image).unwrap();
+            };
 
-                if let Some(ref icon) = meta.icon {
-                    std::fs::write("icon.png", &icon).unwrap();
-                };
+            if let Some(ref icon) = meta.icon {
+                std::fs::write("icon.png", &icon).unwrap();
+            };
 
-                println!("{}", serde_json::to_string(&meta).unwrap());
-            } else {
-                println!("couldn't fetch meta");
-            }
+            println!("{}", serde_json::to_string(&meta).unwrap());
+            Ok(())
         }
     }
 }

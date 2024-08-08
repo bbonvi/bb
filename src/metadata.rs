@@ -1,23 +1,6 @@
 use crate::scrape;
+use anyhow::bail;
 use serde::{Deserialize, Serialize};
-
-pub trait MetadataMgrBackend: Send + Sync {
-    fn retrieve(&self, url: &str, opts: MetaOptions) -> Option<Metadata>;
-}
-
-pub struct MetadataMgr {}
-
-impl MetadataMgr {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl MetadataMgrBackend for MetadataMgr {
-    fn retrieve(&self, url: &str, opts: MetaOptions) -> Option<Metadata> {
-        fetch_meta(&url, opts)
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
@@ -40,7 +23,7 @@ pub struct MetaOptions {
     pub no_duck: bool,
 }
 
-pub fn fetch_meta(url: &str, opts: MetaOptions) -> Option<Metadata> {
+pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
     println!("trying plain request");
 
     let meta = match scrape::fetch_page_with_reqwest(url) {
@@ -180,8 +163,8 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> Option<Metadata> {
                 }
             }
 
-            Some(meta)
+            Ok(meta)
         }
-        None => None,
+        None => bail!("couldnt't retrieve metadata"),
     }
 }
