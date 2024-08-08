@@ -15,8 +15,12 @@ pub struct MetaArgs {
 
     /// Don't use headless browser to capture
     /// screenshots and metadata
-    #[clap(short, long, default_value = "false")]
+    #[clap(long, default_value = "false")]
     pub no_headless: bool,
+
+    /// Don't use duckduckgo as a fallback for metadata scrape
+    #[clap(long, default_value = "false")]
+    pub no_duck: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]

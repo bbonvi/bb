@@ -3,12 +3,15 @@ use clap::Parser;
 mod app;
 mod bookmarks;
 mod cli;
+mod eid;
+mod metadata;
 mod scrape;
 mod storage;
 mod web;
 use bookmarks::SearchQuery;
 use cli::{ActionArgs, MetaArgs};
 use inquire::error::InquireResult;
+use metadata::MetaOptions;
 
 pub fn parse_tags(tags: String) -> Vec<String> {
     tags.split(',')
@@ -123,6 +126,7 @@ fn main() {
                 MetaArgs {
                     no_https_upgrade,
                     no_headless,
+                    no_duck,
                     ..
                 },
             ..
@@ -132,9 +136,19 @@ fn main() {
                 description,
                 tags: tags.map(parse_tags),
                 url,
+                ..Default::default()
             };
 
-            match app_mgr.add(bmark_create, no_https_upgrade, no_headless, false) {
+            let add_opts = app::AddOpts {
+                no_https_upgrade,
+                async_meta: false,
+                meta_opts: Some(MetaOptions {
+                    no_headless,
+                    no_duck,
+                }),
+            };
+
+            match app_mgr.add(bmark_create, add_opts) {
                 Some(bookmark) => {
                     println!("{}", serde_json::to_string(&bookmark).unwrap());
                 }
@@ -149,11 +163,19 @@ fn main() {
                 MetaArgs {
                     no_https_upgrade,
                     no_headless,
+                    no_duck,
                     ..
                 },
             ..
         } => {
-            let meta = app_mgr.fetch_metadata(&url, no_https_upgrade, no_headless);
+            let fetch_meta_opts = app::FetchMetadataOpts {
+                no_https_upgrade,
+                meta_opts: MetaOptions {
+                    no_headless,
+                    no_duck,
+                },
+            };
+            let meta = app::App::fetch_metadata(&url, fetch_meta_opts);
 
             if let Some(meta) = meta {
                 if let Some(ref image) = meta.image {

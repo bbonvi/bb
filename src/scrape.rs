@@ -1,197 +1,14 @@
-use std::{cmp::Ordering, error::Error, sync::Arc, thread::sleep, time::Duration};
-
+use crate::metadata::Metadata;
 use headless_chrome::{
     protocol::cdp::{Page, Target::CreateTarget},
     LaunchOptionsBuilder, Tab,
 };
 use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
-
-pub trait MetadataMgrBackend: Send + Sync {
-    fn retrieve(&self, url: &str, opts: MetaOptions) -> Option<Meta>;
-}
-
-pub struct MetadataMgr {}
-
-impl MetadataMgr {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl MetadataMgrBackend for MetadataMgr {
-    fn retrieve(&self, url: &str, opts: MetaOptions) -> Option<Meta> {
-        fetch_meta(&url, opts)
-    }
-}
+use std::{cmp::Ordering, error::Error, sync::Arc, thread::sleep, time::Duration};
 
 const _USER_AGENT_GOOGLE: &'static str = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 const USER_AGENT_DEFAULT: &'static str =
     "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Meta {
-    pub title: Option<String>,
-    pub description: Option<String>,
-    pub keywords: Option<String>,
-    pub canonical_url: Option<String>,
-    pub icon_url: Option<String>,
-    pub image_url: Option<String>,
-    #[serde(skip_serializing, skip_deserializing)]
-    pub image: Option<Vec<u8>>,
-    #[serde(skip_serializing, skip_deserializing)]
-    pub icon: Option<Vec<u8>>,
-    pub dump: Option<String>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct MetaOptions {
-    pub no_headless: bool,
-}
-
-pub fn fetch_meta(url: &str, opts: MetaOptions) -> Option<Meta> {
-    println!("trying plain request");
-
-    let meta = match fetch_page_with_reqwest(url) {
-        Some(reqwest_result) => {
-            println!("plain request successful");
-
-            let mut meta = get_data_from_page(reqwest_result.html, url);
-
-            if let Some(ref image_url) = meta.image_url {
-                println!("fetching cover");
-
-                if let Some((status, bytes)) = reqwest_with_retries(image_url) {
-                    if status.is_success() {
-                        println!("cover is fetched");
-                        meta.image = Some(bytes);
-                    }
-                }
-            } else {
-                if !opts.no_headless {
-                    println!("cover not found, taking screencapture");
-                    if let Some(chrome_result) = fetch_page_with_chrome(url) {
-                        println!("screencapture is taken");
-
-                        // now that we've captured the page with browser, we might as well
-                        // update the meta data, since the capture is generally more accurate.
-                        {
-                            let m = get_data_from_page(chrome_result.html, url);
-                            if let Some(title) = m.title {
-                                meta.title.replace(title);
-                            }
-                            if let Some(description) = m.description {
-                                meta.description.replace(description);
-                            }
-                            if let Some(icon_url) = m.icon_url {
-                                meta.icon_url.replace(icon_url);
-                            }
-                            if let Some(image_url) = m.image_url {
-                                meta.image_url.replace(image_url.clone());
-                                if let Some((status, bytes)) = reqwest_with_retries(&image_url) {
-                                    if status.is_success() {
-                                        println!("cover is fetched");
-                                        meta.image = Some(bytes);
-                                    }
-                                }
-                            }
-                        }
-
-                        if meta.image.is_none() {
-                            meta.image.replace(chrome_result.screenshot);
-                        }
-                    }
-                }
-            }
-
-            if let Some(ref icon_url) = meta.icon_url {
-                println!("fetching icon");
-                if let Some((status, bytes)) = reqwest_with_retries(icon_url) {
-                    if status.is_success() {
-                        println!("icon is fetched");
-
-                        meta.icon = Some(bytes.to_vec());
-                    }
-                }
-            }
-
-            Some(meta)
-        }
-        None => {
-            if !opts.no_headless {
-                println!("plain request failed. trying chromium.");
-
-                if let Some(chrome_result) = fetch_page_with_chrome(url) {
-                    let mut meta = get_data_from_page(chrome_result.html, url);
-
-                    // TODO: UNCOMMENT
-                    if let Some(ref image_url) = meta.image_url {
-                        if meta.image.is_none() {
-                            println!("fetching cover");
-
-                            if let Some((status, bytes)) = reqwest_with_retries(image_url) {
-                                if status.is_success() {
-                                    println!("cover is fetched");
-
-                                    meta.image = Some(bytes);
-                                }
-                            }
-                        }
-                    }
-
-                    if meta.image.is_none() {
-                        meta.image = Some(chrome_result.screenshot);
-                    }
-
-                    if let Some(ref icon_url) = meta.icon_url {
-                        println!("fetching icon");
-
-                        if let Some((status, bytes)) = reqwest_with_retries(icon_url) {
-                            if status.is_success() {
-                                println!("icon is fetched");
-
-                                meta.icon = Some(bytes.to_vec());
-                            }
-                        }
-                    }
-
-                    Some(meta)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }
-    };
-
-    match meta {
-        Some(mut meta) => {
-            // try to get favicon from duckduckgo
-            if meta.icon.is_none() {
-                let url_parsed = reqwest::Url::parse(url).unwrap();
-                let host = url_parsed.host_str();
-
-                if let Some(host) = host {
-                    let icon_url =
-                        format!("https://external-content.duckduckgo.com/ip3/{host}.ico");
-
-                    if let Some((status, bytes)) = reqwest_with_retries(&icon_url) {
-                        if status.is_success() {
-                            println!("icon is fetched");
-
-                            meta.icon = Some(bytes.to_vec());
-                            meta.icon_url = Some(icon_url);
-                        }
-                    }
-                }
-            }
-
-            Some(meta)
-        }
-        None => None,
-    }
-}
 
 fn get_error(error: &reqwest::Error) -> String {
     match error.source() {
@@ -456,7 +273,7 @@ pub fn fetch_page_with_reqwest(url: &str) -> Option<ReqwestResult> {
     })
 }
 
-pub fn get_data_from_page(resp_text: String, url: &str) -> Meta {
+pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     let document = scraper::Html::parse_document(&resp_text);
     let head_selector = scraper::Selector::parse("head").unwrap();
     let meta_selector = scraper::Selector::parse("meta").unwrap();
@@ -607,7 +424,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Meta {
         }
     }
 
-    Meta {
+    Metadata {
         title,
         description,
         keywords,

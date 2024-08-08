@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs::{read_to_string, write},
     io::ErrorKind,
+    sync::{Arc, RwLock},
 };
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -13,6 +14,9 @@ pub struct Bookmark {
     pub description: String,
     pub tags: Vec<String>,
     pub url: String,
+
+    pub image_id: Option<String>,
+    pub icon_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -22,6 +26,9 @@ pub struct BookmarkCreate {
     #[serde(default)]
     pub tags: Option<Vec<String>>,
     pub url: String,
+
+    pub image_id: Option<String>,
+    pub icon_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -31,6 +38,9 @@ pub struct BookmarkUpdate {
     #[serde(default)]
     pub tags: Option<Vec<String>>,
     pub url: Option<String>,
+
+    pub image_id: Option<String>,
+    pub icon_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -49,14 +59,14 @@ pub struct SearchQuery {
 
 pub trait BookmarkMgrBackend: Send + Sync {
     fn search(&self, query: SearchQuery) -> Vec<Bookmark>;
-    fn add(&mut self, bookmark: BookmarkCreate) -> Vec<Bookmark>;
-    fn delete(&mut self, id: u64) -> Option<bool>;
-    fn update(&mut self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark>;
+    fn add(&self, bookmark: BookmarkCreate) -> Option<Bookmark>;
+    fn delete(&self, id: u64) -> Option<bool>;
+    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark>;
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct BookmarkMgrJson {
-    pub bookmarks: Vec<Bookmark>,
+    pub bookmarks: Arc<RwLock<Vec<Bookmark>>>,
 }
 
 impl BookmarkMgrJson {
@@ -71,14 +81,13 @@ impl BookmarkMgrJson {
             },
         };
         let bookmarks = serde_json::from_str(&bookmarks_plain).unwrap();
-        Self { bookmarks }
+        Self {
+            bookmarks: Arc::new(RwLock::new(bookmarks)),
+        }
     }
     pub fn save(&self) {
-        write(
-            "bookmarks.json",
-            serde_json::to_string(&self.bookmarks).unwrap(),
-        )
-        .unwrap();
+        let bmarks = self.bookmarks.read().unwrap();
+        write("bookmarks.json", serde_json::to_string(&*bmarks).unwrap()).unwrap();
     }
 }
 
@@ -98,8 +107,8 @@ impl SearchQuery {
 }
 
 impl BookmarkMgrBackend for BookmarkMgrJson {
-    fn add(&mut self, bmark_create: BookmarkCreate) -> Vec<Bookmark> {
-        let id = if let Some(last_bookmark) = self.bookmarks.last() {
+    fn add(&self, bmark_create: BookmarkCreate) -> Option<Bookmark> {
+        let id = if let Some(last_bookmark) = self.bookmarks.write().unwrap().last() {
             last_bookmark.id + 1
         } else {
             0
@@ -123,18 +132,21 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             description: bmark_create.description.unwrap_or_default(),
             tags: bmark_create.tags.unwrap_or_default(),
             url: bmark_create.url,
+            image_id: bmark_create.image_id,
+            icon_id: bmark_create.icon_id,
         };
 
-        self.bookmarks.push(bookmark.clone());
+        self.bookmarks.write().unwrap().push(bookmark.clone());
 
         self.save();
 
-        vec![bookmark]
+        Some(bookmark)
     }
 
-    fn delete(&mut self, id: u64) -> Option<bool> {
-        let result = self.bookmarks.iter().position(|b| b.id == id).map(|idx| {
-            self.bookmarks.remove(idx);
+    fn delete(&self, id: u64) -> Option<bool> {
+        let mut bmarks = self.bookmarks.write().unwrap();
+        let result = bmarks.iter().position(|b| b.id == id).map(|idx| {
+            bmarks.remove(idx);
             true
         });
 
@@ -145,23 +157,36 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
         result
     }
 
-    fn update(&mut self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark> {
-        let result = self.bookmarks.iter_mut().find(|b| b.id == id).map(|b| {
-            if let Some(title) = bmark_update.title {
-                b.title = title;
-            }
-            if let Some(descr) = bmark_update.description {
-                b.description = descr;
-            }
-            if let Some(tags) = bmark_update.tags {
-                b.tags = tags;
-            }
-            if let Some(url) = bmark_update.url {
-                b.url = url;
-            }
+    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> Option<Bookmark> {
+        let result = self
+            .bookmarks
+            .write()
+            .unwrap()
+            .iter_mut()
+            .find(|b| b.id == id)
+            .map(|b| {
+                if let Some(title) = bmark_update.title {
+                    b.title = title;
+                }
+                if let Some(descr) = bmark_update.description {
+                    b.description = descr;
+                }
+                if let Some(tags) = bmark_update.tags {
+                    b.tags = tags;
+                }
+                if let Some(url) = bmark_update.url {
+                    b.url = url;
+                }
 
-            b.clone()
-        });
+                if let Some(image_id) = bmark_update.image_id {
+                    b.image_id = Some(image_id);
+                }
+                if let Some(icon_id) = bmark_update.icon_id {
+                    b.icon_id = Some(icon_id);
+                }
+
+                b.clone()
+            });
 
         if result.is_some() {
             self.save();
@@ -171,10 +196,12 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
     }
 
     fn search(&self, query: SearchQuery) -> Vec<Bookmark> {
+        let bmarks = self.bookmarks.read().unwrap();
+
         let mut query = query;
         query.lowercase();
 
-        self.bookmarks
+        bmarks
             .iter()
             .filter(|bookmark| {
                 if query.description.is_none()
