@@ -1,6 +1,6 @@
 use std::{
     collections::VecDeque,
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicU16, Arc, RwLock},
     thread::sleep,
     time::Duration,
 };
@@ -94,51 +94,83 @@ impl App {
         bookmark_mgr: Arc<dyn BookmarkMgrBackend>,
         storage_mgr: Arc<dyn StorageMgrBackend>,
     ) {
+        use std::sync::atomic::Ordering;
+
+        let counter = Arc::new(AtomicU16::new(0));
+
         loop {
             if queue.read().unwrap().is_empty() {
                 sleep(Duration::from_millis(200));
             }
 
-            match queue.write().unwrap().pop_back() {
+            while counter.load(Ordering::SeqCst) >= 6 {
+                sleep(Duration::from_millis(200));
+            }
+
+            let mut queue = queue.write().unwrap();
+
+            let job = queue.pop_back();
+
+            drop(queue);
+
+            match job {
                 Some(None) => break,
                 None => {}
                 Some(Some((id, url, opts))) => {
-                    println!("picked up a job...");
-                    let meta = match Self::fetch_metadata(&url, opts) {
-                        Ok(meta) => meta,
-                        Err(err) => {
+                    let storage_mgr = storage_mgr.clone();
+                    let bookmark_mgr = bookmark_mgr.clone();
+
+                    let counter = counter.clone();
+
+                    std::thread::spawn(move || {
+                        let counter = counter.clone();
+
+                        counter.fetch_add(1, Ordering::SeqCst);
+
+                        println!("picked up a job...");
+                        let meta = match Self::fetch_metadata(&url, opts) {
+                            Ok(meta) => meta,
+                            Err(err) => {
+                                eprintln!("{err}");
+                                counter.fetch_sub(1, Ordering::SeqCst);
+                                return;
+                            }
+                        };
+
+                        let bookmarks = match bookmark_mgr.search(SearchQuery {
+                            id: Some(id),
+                            ..Default::default()
+                        }) {
+                            Ok(b) => b,
+                            Err(err) => {
+                                eprintln!("{err}");
+                                counter.fetch_sub(1, Ordering::SeqCst);
+                                return;
+                            }
+                        };
+
+                        let bookmark = match bookmarks.first() {
+                            Some(b) => b,
+                            None => {
+                                eprintln!("bookmark {id} not found");
+                                counter.fetch_sub(1, Ordering::SeqCst);
+                                return;
+                            }
+                        };
+
+                        if let Err(err) = Self::merge_metadata(
+                            bookmark.clone(),
+                            meta,
+                            storage_mgr.clone(),
+                            bookmark_mgr.clone(),
+                        ) {
                             eprintln!("{err}");
-                            continue;
+                            counter.fetch_sub(1, Ordering::SeqCst);
+                            return;
                         }
-                    };
 
-                    let bookmarks = match bookmark_mgr.search(SearchQuery {
-                        id: Some(id),
-                        ..Default::default()
-                    }) {
-                        Ok(b) => b,
-                        Err(err) => {
-                            eprintln!("{err}");
-                            continue;
-                        }
-                    };
-
-                    let bookmark = match bookmarks.first() {
-                        Some(b) => b,
-                        None => {
-                            eprintln!("bookmark {id} not found");
-                            continue;
-                        }
-                    };
-
-                    if let Err(err) = Self::merge_metadata(
-                        bookmark.clone(),
-                        meta,
-                        storage_mgr.clone(),
-                        bookmark_mgr.clone(),
-                    ) {
-                        eprintln!("{err}");
-                    }
+                        counter.fetch_sub(1, Ordering::SeqCst);
+                    });
                 }
             }
         }

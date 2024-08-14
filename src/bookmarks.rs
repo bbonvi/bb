@@ -2,7 +2,7 @@ use anyhow::bail;
 use core::panic;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{read_to_string, write},
+    fs::{read_to_string, rename, write},
     io::ErrorKind,
     sync::{Arc, RwLock},
 };
@@ -88,7 +88,8 @@ impl BookmarkMgrJson {
     }
     pub fn save(&self) {
         let bmarks = self.bookmarks.read().unwrap();
-        write("bookmarks.json", serde_json::to_string(&*bmarks).unwrap()).unwrap();
+        write("bookmarks-.json", serde_json::to_string(&*bmarks).unwrap()).unwrap();
+        rename("bookmarks-.json", "bookmarks.json").unwrap();
     }
 }
 
@@ -121,7 +122,7 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
         };
 
         if let Some(b) = self.search(query)?.first() {
-            bail!("bookmark with this url already exists at index {0}", b.id);
+            // bail!("bookmark with this url already exists at index {0}", b.id);
         };
 
         let bookmark = Bookmark {
