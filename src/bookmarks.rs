@@ -189,6 +189,8 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
                 }
                 if let Some(tags) = bmark_update.tags {
                     b.tags = tags;
+                    let mut seen = HashSet::new();
+                    b.tags.retain(|item| seen.insert(item.clone()));
                 }
                 if let Some(url) = bmark_update.url {
                     b.url = url;

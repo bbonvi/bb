@@ -39,7 +39,7 @@ impl Rule {
 
         match (&self.url, &query.url) {
             (Some(match_url), Some(query_url)) => {
-                matched = query_url.contains(match_url);
+                matched = query_url.to_lowercase().contains(match_url);
                 // let regex = regex::Regex::new(&match_title).expect("incorrect regex for url match");
                 // matched = regex.is_match(&query_title);
                 if !matched {
@@ -51,7 +51,7 @@ impl Rule {
 
         match (&self.title, &query.title) {
             (Some(match_title), Some(query_title)) => {
-                matched = query_title.contains(match_title);
+                matched = query_title.to_lowercase().contains(match_title);
                 if !matched {
                     return false;
                 }
@@ -61,7 +61,7 @@ impl Rule {
 
         match (&self.description, &query.description) {
             (Some(match_description), Some(query_description)) => {
-                matched = query_description.contains(match_description);
+                matched = query_description.to_lowercase().contains(match_description);
                 if !matched {
                     return false;
                 }
@@ -81,7 +81,10 @@ impl Rule {
                 let mut iter = query_tags.iter();
 
                 for tag in match_tags.iter() {
-                    if iter.find(|t| *t == tag).is_none() {
+                    if iter
+                        .find(|t| *t.to_lowercase() == tag.to_lowercase())
+                        .is_none()
+                    {
                         return false;
                     }
                 }
