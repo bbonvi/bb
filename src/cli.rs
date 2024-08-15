@@ -1,4 +1,4 @@
-use clap::{Args as ClapArgs, Parser, Subcommand};
+use clap::{Args as ClapArgs, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -57,6 +57,51 @@ pub enum ActionArgs {
         #[clap(short, long, default_value = "false")]
         force: bool,
     },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RuleAction {
+    Update {
+        /// Bookmark title
+        #[clap(long)]
+        title: Option<String>,
+
+        /// Bookmark description
+        #[clap(long)]
+        description: Option<String>,
+
+        /// Bookmark tags
+        // #[clap(long, value_delimiter = ',', num_args = 1..)]
+        #[clap(long)]
+        tags: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RulesArgs {
+    Add {
+        /// A regex matching bookmark url
+        #[clap(long)]
+        url: Option<String>,
+
+        /// A regex matching bookmark title
+        #[clap(long)]
+        title: Option<String>,
+
+        /// A regex matching bookmark description
+        #[clap(long)]
+        description: Option<String>,
+
+        /// A list of tags bookmark will be matched by (all tags has to match)
+        #[clap(long)]
+        tags: Option<String>,
+
+        /// A list of tags bookmark will be matched by (all tags has to match)
+        #[clap(subcommand)]
+        action: RuleAction,
+    },
+    Delete {},
+    List {},
 }
 
 /// Doc comment
@@ -128,5 +173,10 @@ pub enum Command {
 
         #[clap(flatten)]
         meta_args: MetaArgs,
+    },
+    /// Query website meta data
+    Rule {
+        #[clap(subcommand)]
+        action: RulesArgs,
     },
 }

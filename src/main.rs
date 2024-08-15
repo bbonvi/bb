@@ -4,13 +4,15 @@ use clap::Parser;
 mod app;
 mod bookmarks;
 mod cli;
+mod config;
 mod eid;
 mod metadata;
+mod rules;
 mod scrape;
 mod storage;
 mod web;
-use bookmarks::SearchQuery;
-use cli::{ActionArgs, MetaArgs};
+use bookmarks::{BookmarkUpdate, SearchQuery};
+use cli::{ActionArgs, MetaArgs, RulesArgs};
 use inquire::error::InquireResult;
 use metadata::MetaOptions;
 
@@ -18,7 +20,7 @@ pub fn parse_tags(tags: String) -> Vec<String> {
     tags.split(',')
         .map(|value| value.split(&[' ', ' ']).filter(|value| !value.is_empty()))
         .flatten()
-        .map(|s| s.to_string())
+        .map(|s| s.to_lowercase().to_string())
         .collect::<Vec<_>>()
 }
 
@@ -61,7 +63,7 @@ fn main() -> anyhow::Result<()> {
             match action {
                 // print results
                 None => {
-                    println!("{}", serde_json::to_string(&bookmarks).unwrap());
+                    println!("{}", serde_json::to_string_pretty(&bookmarks).unwrap());
                     Ok(())
                 }
 
@@ -148,7 +150,7 @@ fn main() -> anyhow::Result<()> {
             };
 
             let bookmark = app_mgr.add(bmark_create, add_opts)?;
-            println!("{}", serde_json::to_string(&bookmark).unwrap());
+            println!("{}", serde_json::to_string_pretty(&bookmark).unwrap());
             Ok(())
         }
         cli::Command::Meta {
@@ -179,7 +181,44 @@ fn main() -> anyhow::Result<()> {
                 std::fs::write("icon.png", &icon).unwrap();
             };
 
-            println!("{}", serde_json::to_string(&meta).unwrap());
+            println!("{}", serde_json::to_string_pretty(&meta).unwrap());
+            Ok(())
+        }
+
+        cli::Command::Rule { action } => {
+            let mut config = app_mgr.config.write().unwrap();
+            match action {
+                RulesArgs::Add {
+                    url,
+                    title,
+                    description,
+                    tags,
+                    action,
+                } => match action {
+                    cli::RuleAction::Update {
+                        title: update_title,
+                        description: update_description,
+                        tags: update_tags,
+                    } => {
+                        let rule = rules::Rule {
+                            url: url.map(|u| u.to_lowercase()),
+                            description: description.map(|d| d.to_lowercase()),
+                            title: title.map(|d| d.to_lowercase()),
+                            tags: tags.clone().map(parse_tags),
+                            action: rules::Action::UpdateBookmark {
+                                title: update_title.map(|u| u.to_lowercase()),
+                                description: update_description.map(|d| d.to_lowercase()),
+                                tags: update_tags.clone().map(parse_tags),
+                            },
+                        };
+                        config.rules.insert(0, rule);
+                        config.save();
+                    }
+                },
+                RulesArgs::Delete {} => todo!(),
+                RulesArgs::List {} => todo!(),
+            };
+
             Ok(())
         }
     }

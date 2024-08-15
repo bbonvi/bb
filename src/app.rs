@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     sync::{atomic::AtomicU16, Arc, RwLock},
     thread::sleep,
     time::Duration,
@@ -11,6 +11,7 @@ use crate::{
     bookmarks::{
         Bookmark, BookmarkCreate, BookmarkMgrBackend, BookmarkMgrJson, BookmarkUpdate, SearchQuery,
     },
+    config::Config,
     eid::Eid,
     metadata::{fetch_meta, MetaOptions, Metadata},
     storage::{StorageMgrBackend, StorageMgrLocal},
@@ -50,6 +51,7 @@ pub struct App {
 
     pub metadata_queue: Arc<RwLock<VecDeque<Option<(u64, String, FetchMetadataOpts)>>>>,
     pub queue_handle: Option<std::thread::JoinHandle<()>>,
+    pub config: Arc<RwLock<Config>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -70,6 +72,7 @@ impl App {
         let bmark_mgr = Arc::new(BookmarkMgrJson::load());
         let storage_mgr = Arc::new(StorageMgrLocal::new("./uploads"));
         let metadata_queue = Arc::new(RwLock::new(VecDeque::new()));
+        let config = Arc::new(RwLock::new(Config::load()));
 
         let handle = std::thread::spawn({
             let bmark_mgr = bmark_mgr.clone();
@@ -86,6 +89,7 @@ impl App {
             storage_mgr,
             metadata_queue,
             queue_handle: Some(handle),
+            config,
         }
     }
 
@@ -194,8 +198,52 @@ impl App {
         self.bmark_mgr.search(query)
     }
 
+    fn apply_rules(&self, bmark_create: &mut BookmarkCreate) {
+        let config = self.config.read().unwrap();
+
+        // for rule in config.rules.iter().filter(|r| r.is_match(&query)) {
+        for rule in config.rules.iter() {
+            // recreating query because it could've been changed by previous rule
+            let mut query = SearchQuery {
+                url: Some(bmark_create.url.clone()),
+                title: bmark_create.title.clone(),
+                description: bmark_create.description.clone(),
+                tags: bmark_create.tags.clone(),
+                ..Default::default()
+            };
+            if !rule.is_match(&query) {
+                continue;
+            }
+
+            match &rule.action {
+                crate::rules::Action::UpdateBookmark {
+                    title,
+                    description,
+                    tags,
+                } => {
+                    if title.is_some() {
+                        bmark_create.title = title.clone();
+                    }
+                    if description.is_some() {
+                        bmark_create.description = description.clone();
+                    }
+                    if let Some(tags) = tags {
+                        let mut curr_tags = bmark_create.tags.take().unwrap_or_default();
+                        curr_tags.append(&mut tags.clone());
+                        bmark_create.tags = Some(curr_tags);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn add(&self, bmark_create: BookmarkCreate, opts: AddOpts) -> anyhow::Result<Bookmark> {
+        let mut bmark_create = bmark_create;
         let url = bmark_create.url.clone();
+
+        // apply rules
+        self.apply_rules(&mut bmark_create);
+
         let bookmark = self.bmark_mgr.add(bmark_create)?;
 
         if let Some(meta_opts) = opts.meta_opts {

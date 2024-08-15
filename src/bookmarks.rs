@@ -2,6 +2,8 @@ use anyhow::bail;
 use core::panic;
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::BorrowMut,
+    collections::HashSet,
     fs::{read_to_string, rename, write},
     io::ErrorKind,
     sync::{Arc, RwLock},
@@ -22,25 +24,34 @@ pub struct Bookmark {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct BookmarkCreate {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
     pub url: String,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub icon_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct BookmarkUpdate {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub icon_id: Option<String>,
 }
 
@@ -123,6 +134,12 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
 
         if let Some(b) = self.search(query)?.first() {
             // bail!("bookmark with this url already exists at index {0}", b.id);
+        };
+
+        let mut bmark_create = bmark_create;
+        if let Some(ref mut tags) = bmark_create.tags {
+            let mut seen = HashSet::new();
+            tags.retain(|item| seen.insert(item.clone()));
         };
 
         let bookmark = Bookmark {
@@ -275,3 +292,45 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             .collect::<Vec<_>>())
     }
 }
+
+// #[derive(Debug, Clone)]
+// pub struct BookmarkMgrSqlite {
+//     conn: Arc<RwLock<rusqlite::Connection>>,
+// }
+// impl BookmarkMgrSqlite {
+//     pub fn conn() -> rustqlite::Connection {
+//     }
+//     pub fn new() -> Self {
+//         let path = "./bookmarks.sqlite3";
+//         let conn = rusqlite::Connection::open(path).unwrap();
+//         {
+//             let c = conn.write().unwrap();
+//             c.execute(
+//                 "CREATE TABLE IF NOT EXISTS bookmarks (
+//                     id    INTEGER PRIMARY KEY AUTOINCREMENT,
+//                     title TEXT NOT NULL,
+//                     description TEXT NOT NULL,
+//                     tags TEXT NOT NULL,
+//                     url TEXT NOT NULL UNIQUE,
+//                     image_id TEXT,
+//                     icon_id TEXT,
+//                 )",
+//                 (), // empty list of parameters.
+//             )
+//             .unwrap();
+//         }
+//
+//         Self { conn }
+//     }
+// }
+//
+// impl BookmarkMgrBackend for BookmarkMgrSqlite {
+//     fn add(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
+//         let conn = self.conn.write().unwrap();
+//         conn.execute(
+//             "INSERT INTO bookmarks (title, description, tags, url, image_id, icon_id) VALUES (?2, ?3, ?4, ?5, ?6, ?7)",
+//             (&bmark_create.title.unwrap_or_default(), &bmark_create.description.unwrap_or_default(), &bmark_create.tags.unwrap_or_default().join(",")),
+//         )?;
+//         todo!()
+//     }
+// }

@@ -2,6 +2,7 @@ use std::{path::PathBuf, str::FromStr};
 
 pub trait StorageMgrBackend: Send + Sync {
     fn read(&self, ident: &str) -> Vec<u8>;
+    fn exists(&self, ident: &str) -> bool;
     fn write(&self, ident: &str, data: &[u8]);
 }
 
@@ -19,6 +20,12 @@ impl StorageMgrLocal {
 }
 
 impl StorageMgrBackend for StorageMgrLocal {
+    fn exists(&self, ident: &str) -> bool {
+        let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
+
+        std::fs::metadata(&path).is_ok()
+    }
+
     fn read(&self, ident: &str) -> Vec<u8> {
         std::fs::create_dir_all(&self.base_dir).unwrap();
 
@@ -32,6 +39,7 @@ impl StorageMgrBackend for StorageMgrLocal {
 
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
         let temp_path = format!("{}/temp-{ident}", &self.base_dir.to_str().unwrap());
+        println!("{temp_path}");
 
         std::fs::write(&temp_path, data).unwrap();
 
