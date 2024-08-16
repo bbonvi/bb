@@ -3,6 +3,7 @@ use crate::{
     config::Config,
     eid::Eid,
     metadata::{fetch_meta, MetaOptions, Metadata},
+    rules,
     rules::Rule,
     scrape::guess_filetype,
     storage,
@@ -26,7 +27,7 @@ pub struct App {
 
 impl App {
     pub fn new(config: Arc<RwLock<Config>>) -> Self {
-        let bmark_mgr = Arc::new(bookmarks::BackendJson::load());
+        let bmark_mgr = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
         let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
 
         let (task_tx, task_rx) = mpsc::channel::<Task>();
@@ -291,14 +292,15 @@ impl App {
         // for rule in config.rules.iter().filter(|r| r.is_match(&query)) {
         for rule in rules.iter() {
             // recreating query because it could've been changed by previous rule
-            let query = bookmarks::SearchQuery {
-                url: bmark_update.url.clone(),
+            let record = rules::Record {
+                url: bmark_update.url.clone().unwrap_or(bmark.url.clone()),
                 title: bmark_update.title.clone(),
                 description: bmark_update.description.clone(),
                 tags: bmark_update.tags.clone(),
                 ..Default::default()
             };
-            if !rule.is_match(&query) {
+
+            if !rule.is_match(&record) {
                 continue;
             }
 

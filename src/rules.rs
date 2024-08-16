@@ -19,6 +19,14 @@ pub struct Rule {
     pub action: Action,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct Record {
+    pub url: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<Vec<String>>,
+}
+
 impl Rule {
     pub fn is_string_matches(match_query: &str, input: &str) -> bool {
         if match_query.starts_with("r/") && match_query.ends_with("/") {
@@ -32,16 +40,16 @@ impl Rule {
             let regex = regex::Regex::new(&match_query_chars.as_str()).expect("malformed regex");
             regex.is_match(&input)
         } else {
-            match_query.to_lowercase().contains(&input)
+            input.to_lowercase().contains(&match_query.to_lowercase())
         }
     }
 
-    pub fn is_match(&self, bookmark_match: &SearchQuery) -> bool {
+    pub fn is_match(&self, record: &Record) -> bool {
         let mut matched = false;
 
-        match (&self.url, &bookmark_match.url) {
-            (Some(match_url), Some(bookmark_url)) => {
-                matched = Rule::is_string_matches(match_url, bookmark_url);
+        match &self.url {
+            Some(match_url) => {
+                matched = Rule::is_string_matches(match_url, &record.url);
                 if !matched {
                     return false;
                 }
@@ -49,9 +57,9 @@ impl Rule {
             _ => {}
         };
 
-        match (&self.title, &bookmark_match.title) {
-            (Some(match_title), Some(bookmark_title)) => {
-                matched = Rule::is_string_matches(match_title, bookmark_title);
+        match (&self.title, &record.title) {
+            (Some(match_title), Some(record_title)) => {
+                matched = Rule::is_string_matches(match_title, record_title);
                 if !matched {
                     return false;
                 }
@@ -59,9 +67,9 @@ impl Rule {
             _ => {}
         };
 
-        match (&self.description, &bookmark_match.description) {
-            (Some(match_description), Some(bookmark_description)) => {
-                matched = Rule::is_string_matches(match_description, bookmark_description);
+        match (&self.description, &record.description) {
+            (Some(match_description), Some(record_description)) => {
+                matched = Rule::is_string_matches(match_description, record_description);
                 if !matched {
                     return false;
                 }
@@ -72,13 +80,13 @@ impl Rule {
         match &self.tags {
             Some(match_tags) => {
                 // matching absence of tags
-                let bookmark_tags = &bookmark_match.tags.clone().unwrap_or_default();
+                let record_tags = &record.tags.clone().unwrap_or_default();
 
-                if match_tags.is_empty() && bookmark_tags.is_empty() {
+                if match_tags.is_empty() && record_tags.is_empty() {
                     return true;
                 }
 
-                let mut iter = bookmark_tags.iter();
+                let mut iter = record_tags.iter();
 
                 for tag in match_tags.iter() {
                     if iter

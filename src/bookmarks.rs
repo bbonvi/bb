@@ -78,11 +78,12 @@ pub trait BookmarkManager: Send + Sync {
 #[derive(Debug, Clone, Default)]
 pub struct BackendJson {
     list: Arc<RwLock<Vec<Bookmark>>>,
+    path: String,
 }
 
 impl BackendJson {
-    pub fn load() -> Self {
-        let bookmarks_plain = match read_to_string("bookmarks.json") {
+    pub fn load(path: &str) -> Self {
+        let bookmarks_plain = match read_to_string(path) {
             Ok(b) => b,
             Err(err) => match err.kind() {
                 ErrorKind::NotFound => "[]".to_string(),
@@ -90,18 +91,30 @@ impl BackendJson {
             },
         };
         let bookmarks = serde_json::from_str(&bookmarks_plain).unwrap();
-        Self {
+        let mgr = Self {
             list: Arc::new(RwLock::new(bookmarks)),
-        }
+            path: path.to_string(),
+        };
+
+        mgr.save();
+
+        mgr
     }
 
     pub fn save(&self) {
         let bmarks = self.list.read().unwrap();
 
-        let temp_path = format!("bookmarks-{}.json", Eid::new());
+        let temp_path = format!("{}-{}", &self.path, Eid::new());
 
         write(&temp_path, serde_json::to_string(&*bmarks).unwrap()).unwrap();
-        rename(&temp_path, "bookmarks.json").unwrap();
+        rename(&temp_path, &self.path).unwrap();
+    }
+
+    #[cfg(test)]
+    pub fn wipe_database(self) -> Self {
+        let _ = std::fs::remove_file(&self.path);
+        *self.list.write().unwrap() = vec![];
+        self
     }
 }
 
@@ -151,6 +164,8 @@ impl BookmarkManager for BackendJson {
             bmarks.remove(idx);
             true
         });
+
+        drop(bmarks);
 
         if result.is_some() {
             self.save();
@@ -293,5 +308,13 @@ impl SearchQuery {
             .tags
             .as_ref()
             .map(|tags| tags.iter().map(|t| t.to_lowercase()).collect::<Vec<_>>());
+    }
+}
+
+#[cfg(test)]
+impl BackendJson {
+    #[cfg(test)]
+    pub fn list(&self) -> Arc<RwLock<Vec<Bookmark>>> {
+        self.list.clone()
     }
 }

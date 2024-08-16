@@ -12,8 +12,10 @@ mod metadata;
 mod rules;
 mod scrape;
 mod storage;
+#[cfg(test)]
+mod tests;
 mod web;
-use bookmarks::{BookmarkUpdate, SearchQuery};
+use bookmarks::SearchQuery;
 use cli::{ActionArgs, MetaArgs, RulesArgs};
 use config::Config;
 use inquire::error::InquireResult;
