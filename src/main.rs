@@ -214,6 +214,7 @@ fn main() -> anyhow::Result<()> {
                                 description: update_description.map(|d| d.to_lowercase()),
                                 tags: update_tags.clone().map(parse_tags),
                             },
+                            comment: None,
                         };
                         config.rules.insert(0, rule);
                         config.save();

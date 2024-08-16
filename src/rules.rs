@@ -13,18 +13,35 @@ pub struct Rule {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+
     pub action: Action,
 }
 
 impl Rule {
-    pub fn is_match(&self, query: &SearchQuery) -> bool {
+    pub fn is_string_matches(match_query: &str, input: &str) -> bool {
+        if match_query.starts_with("r/") && match_query.ends_with("/") {
+            let mut match_query_chars = match_query.chars();
+
+            // remove prefix and postfix
+            match_query_chars.next();
+            match_query_chars.next();
+            match_query_chars.next_back();
+
+            let regex = regex::Regex::new(&match_query_chars.as_str()).expect("malformed regex");
+            regex.is_match(&input)
+        } else {
+            match_query.to_lowercase().contains(&input)
+        }
+    }
+
+    pub fn is_match(&self, bookmark_match: &SearchQuery) -> bool {
         let mut matched = false;
 
-        match (&self.url, &query.url) {
-            (Some(match_url), Some(query_url)) => {
-                matched = query_url.to_lowercase().contains(match_url);
-                // let regex = regex::Regex::new(&match_title).expect("incorrect regex for url match");
-                // matched = regex.is_match(&query_title);
+        match (&self.url, &bookmark_match.url) {
+            (Some(match_url), Some(bookmark_url)) => {
+                matched = Rule::is_string_matches(match_url, bookmark_url);
                 if !matched {
                     return false;
                 }
@@ -32,9 +49,9 @@ impl Rule {
             _ => {}
         };
 
-        match (&self.title, &query.title) {
-            (Some(match_title), Some(query_title)) => {
-                matched = query_title.to_lowercase().contains(match_title);
+        match (&self.title, &bookmark_match.title) {
+            (Some(match_title), Some(bookmark_title)) => {
+                matched = Rule::is_string_matches(match_title, bookmark_title);
                 if !matched {
                     return false;
                 }
@@ -42,9 +59,9 @@ impl Rule {
             _ => {}
         };
 
-        match (&self.description, &query.description) {
-            (Some(match_description), Some(query_description)) => {
-                matched = query_description.to_lowercase().contains(match_description);
+        match (&self.description, &bookmark_match.description) {
+            (Some(match_description), Some(bookmark_description)) => {
+                matched = Rule::is_string_matches(match_description, bookmark_description);
                 if !matched {
                     return false;
                 }
@@ -55,13 +72,13 @@ impl Rule {
         match &self.tags {
             Some(match_tags) => {
                 // matching absence of tags
-                let query_tags = &query.tags.clone().unwrap_or_default();
+                let bookmark_tags = &bookmark_match.tags.clone().unwrap_or_default();
 
-                if match_tags.is_empty() && query_tags.is_empty() {
+                if match_tags.is_empty() && bookmark_tags.is_empty() {
                     return true;
                 }
 
-                let mut iter = query_tags.iter();
+                let mut iter = bookmark_tags.iter();
 
                 for tag in match_tags.iter() {
                     if iter
