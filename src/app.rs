@@ -1,13 +1,11 @@
 use crate::{
-    bookmarks::{
-        Bookmark, BookmarkCreate, BookmarkMgrBackend, BookmarkMgrJson, BookmarkUpdate, SearchQuery,
-    },
+    bookmarks,
     config::Config,
     eid::Eid,
     metadata::{fetch_meta, MetaOptions, Metadata},
     rules::Rule,
     scrape::guess_filetype,
-    storage::{StorageMgrBackend, StorageMgrLocal},
+    storage,
 };
 use anyhow::{anyhow, Context};
 use std::{
@@ -17,18 +15,19 @@ use std::{
 };
 
 pub struct App {
-    pub bmark_mgr: Arc<dyn BookmarkMgrBackend>,
-    pub storage_mgr: Arc<dyn StorageMgrBackend>,
+    bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+    storage_mgr: Arc<dyn storage::StorageManager>,
 
     task_tx: Arc<mpsc::Sender<Task>>,
     task_queue_handle: Option<std::thread::JoinHandle<()>>,
-    pub config: Arc<RwLock<Config>>,
+
+    config: Arc<RwLock<Config>>,
 }
 
 impl App {
     pub fn new(config: Arc<RwLock<Config>>) -> Self {
-        let bmark_mgr = Arc::new(BookmarkMgrJson::load());
-        let storage_mgr = Arc::new(StorageMgrLocal::new("./uploads"));
+        let bmark_mgr = Arc::new(bookmarks::Json::load());
+        let storage_mgr = Arc::new(storage::Local::new("./uploads"));
 
         let (tx, rx) = mpsc::channel::<Task>();
 
@@ -77,7 +76,11 @@ pub struct FetchMetadataOpts {
 }
 
 impl App {
-    pub fn create(&self, bmark_create: BookmarkCreate, opts: AddOpts) -> anyhow::Result<Bookmark> {
+    pub fn create(
+        &self,
+        bmark_create: bookmarks::BookmarkCreate,
+        opts: AddOpts,
+    ) -> anyhow::Result<bookmarks::Bookmark> {
         let url = bmark_create.url.clone();
 
         // create empty bookmark
@@ -112,7 +115,7 @@ impl App {
                     )?
                     .context("bmark not found")?;
 
-                    Ok(bmark) as anyhow::Result<Bookmark>
+                    Ok(bmark) as anyhow::Result<bookmarks::Bookmark>
                 };
 
                 // apply rules
@@ -135,8 +138,8 @@ impl App {
     pub fn update(
         &mut self,
         id: u64,
-        bmark_update: BookmarkUpdate,
-    ) -> anyhow::Result<Option<Bookmark>> {
+        bmark_update: bookmarks::BookmarkUpdate,
+    ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
         self.bmark_mgr.update(id, bmark_update)
     }
 
@@ -144,7 +147,10 @@ impl App {
         self.bmark_mgr.delete(id)
     }
 
-    pub fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
+    pub fn search(
+        &self,
+        query: bookmarks::SearchQuery,
+    ) -> anyhow::Result<Vec<bookmarks::Bookmark>> {
         let mut query = query;
 
         // TODO: do we prevent queries against empty strings?
@@ -188,7 +194,7 @@ impl App {
 
     pub fn schedule_fetch_and_update_metadata(
         &self,
-        bookmark: &Bookmark,
+        bookmark: &bookmarks::Bookmark,
         meta_opts: FetchMetadataOpts,
     ) {
         if let Err(err) = self.task_tx.send(Task::FetchMetadata {
@@ -202,12 +208,12 @@ impl App {
 
 impl App {
     fn merge_metadata(
-        bookmark: Bookmark,
+        bookmark: bookmarks::Bookmark,
         meta: Metadata,
-        storage_mgr: Arc<dyn StorageMgrBackend>,
-        bmark_mgr: Arc<dyn BookmarkMgrBackend>,
-    ) -> anyhow::Result<Option<Bookmark>> {
-        let mut bmark_update = BookmarkUpdate {
+        storage_mgr: Arc<dyn storage::StorageManager>,
+        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+    ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
+        let mut bmark_update = bookmarks::BookmarkUpdate {
             ..Default::default()
         };
         if bookmark.title.is_empty() {
@@ -249,10 +255,10 @@ impl App {
 
     fn apply_rules(
         id: u64,
-        bmark_mgr: Arc<dyn BookmarkMgrBackend>,
+        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
         rules: &Vec<Rule>,
-    ) -> anyhow::Result<Option<Bookmark>> {
-        let query = SearchQuery {
+    ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
+        let query = bookmarks::SearchQuery {
             id: Some(id),
             ..Default::default()
         };
@@ -262,7 +268,7 @@ impl App {
             .map(|b| b.first().cloned())?
             .ok_or_else(|| anyhow!("bookmark not found"))?;
 
-        let mut bmark_update = BookmarkUpdate {
+        let mut bmark_update = bookmarks::BookmarkUpdate {
             title: if bmark.title.is_empty() {
                 None
             } else {
@@ -285,7 +291,7 @@ impl App {
         // for rule in config.rules.iter().filter(|r| r.is_match(&query)) {
         for rule in rules.iter() {
             // recreating query because it could've been changed by previous rule
-            let query = SearchQuery {
+            let query = bookmarks::SearchQuery {
                 url: bmark_update.url.clone(),
                 title: bmark_update.title.clone(),
                 description: bmark_update.description.clone(),
@@ -324,8 +330,8 @@ impl App {
 impl App {
     fn start_queue(
         task_rx: mpsc::Receiver<Task>,
-        bmark_mgr: Arc<dyn BookmarkMgrBackend>,
-        storage_mgr: Arc<dyn StorageMgrBackend>,
+        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+        storage_mgr: Arc<dyn storage::StorageManager>,
         config: Arc<RwLock<Config>>,
     ) {
         use std::sync::atomic::Ordering;
@@ -364,7 +370,7 @@ impl App {
 
                             let handle_metadata = || {
                                 println!("picked up a job...");
-                                let bookmarks = bmark_mgr.search(SearchQuery {
+                                let bookmarks = bmark_mgr.search(bookmarks::SearchQuery {
                                     id: Some(bmark_id),
                                     ..Default::default()
                                 })?;
@@ -382,7 +388,7 @@ impl App {
                                 )?
                                 .context("bookmark {id} not found")?;
 
-                                Ok(bmark) as anyhow::Result<Bookmark>
+                                Ok(bmark) as anyhow::Result<bookmarks::Bookmark>
                             };
 
                             let _ = handle_metadata();

@@ -68,37 +68,35 @@ pub struct SearchQuery {
     pub no_exact_url: bool,
 }
 
-pub trait BookmarkMgrBackend: Send + Sync {
+pub trait BookmarkManager: Send + Sync {
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>>;
-    fn create(&self, bookmark: BookmarkCreate) -> anyhow::Result<Bookmark>;
+    fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark>;
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
     fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>>;
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct BookmarkMgrJson {
-    pub bookmarks: Arc<RwLock<Vec<Bookmark>>>,
+pub struct Json {
+    list: Arc<RwLock<Vec<Bookmark>>>,
 }
 
-impl BookmarkMgrJson {
+impl Json {
     pub fn load() -> Self {
         let bookmarks_plain = match read_to_string("bookmarks.json") {
             Ok(b) => b,
             Err(err) => match err.kind() {
                 ErrorKind::NotFound => "[]".to_string(),
-                _ => {
-                    panic!("{err}");
-                }
+                _ => panic!("{err}"),
             },
         };
         let bookmarks = serde_json::from_str(&bookmarks_plain).unwrap();
         Self {
-            bookmarks: Arc::new(RwLock::new(bookmarks)),
+            list: Arc::new(RwLock::new(bookmarks)),
         }
     }
 
     pub fn save(&self) {
-        let bmarks = self.bookmarks.read().unwrap();
+        let bmarks = self.list.read().unwrap();
 
         let temp_path = format!("bookmarks-{}.json", Eid::new());
 
@@ -107,24 +105,9 @@ impl BookmarkMgrJson {
     }
 }
 
-impl SearchQuery {
-    pub fn lowercase(&mut self) {
-        self.title = self.title.as_ref().map(|title| title.to_lowercase());
-        self.description = self
-            .description
-            .as_ref()
-            .map(|description| description.to_lowercase());
-        self.url = self.url.as_ref().map(|url| url.to_lowercase());
-        self.tags = self
-            .tags
-            .as_ref()
-            .map(|tags| tags.iter().map(|t| t.to_lowercase()).collect::<Vec<_>>());
-    }
-}
-
-impl BookmarkMgrBackend for BookmarkMgrJson {
+impl BookmarkManager for Json {
     fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
-        let id = if let Some(last_bookmark) = self.bookmarks.write().unwrap().last() {
+        let id = if let Some(last_bookmark) = self.list.write().unwrap().last() {
             last_bookmark.id + 1
         } else {
             0
@@ -155,7 +138,7 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             icon_id: bmark_create.icon_id,
         };
 
-        self.bookmarks.write().unwrap().push(bmark.clone());
+        self.list.write().unwrap().push(bmark.clone());
 
         self.save();
 
@@ -163,7 +146,7 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
     }
 
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
-        let mut bmarks = self.bookmarks.write().unwrap();
+        let mut bmarks = self.list.write().unwrap();
         let result = bmarks.iter().position(|b| b.id == id).map(|idx| {
             bmarks.remove(idx);
             true
@@ -178,7 +161,7 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
 
     fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>> {
         let result = self
-            .bookmarks
+            .list
             .write()
             .unwrap()
             .iter_mut()
@@ -217,7 +200,7 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
     }
 
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
-        let bmarks = self.bookmarks.read().unwrap();
+        let bmarks = self.list.read().unwrap();
 
         let mut query = query;
         query.lowercase();
@@ -295,5 +278,20 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             })
             .map(|b| b.clone())
             .collect::<Vec<_>>())
+    }
+}
+
+impl SearchQuery {
+    pub fn lowercase(&mut self) {
+        self.title = self.title.as_ref().map(|title| title.to_lowercase());
+        self.description = self
+            .description
+            .as_ref()
+            .map(|description| description.to_lowercase());
+        self.url = self.url.as_ref().map(|url| url.to_lowercase());
+        self.tags = self
+            .tags
+            .as_ref()
+            .map(|tags| tags.iter().map(|t| t.to_lowercase()).collect::<Vec<_>>());
     }
 }

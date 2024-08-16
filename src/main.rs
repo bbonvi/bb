@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
 
     let config = Arc::new(RwLock::new(Config::load()));
-    let mut app_mgr = app::App::new(config);
+    let mut app_mgr = app::App::new(config.clone());
 
     match args.command {
         cli::Command::Daemon { .. } => {
@@ -190,7 +190,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         cli::Command::Rule { action } => {
-            let mut config = app_mgr.config.write().unwrap();
+            let mut config = config.write().unwrap();
             match action {
                 RulesArgs::Add {
                     url,

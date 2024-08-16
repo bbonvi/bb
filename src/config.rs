@@ -1,6 +1,6 @@
 use crate::{
     rules::Rule,
-    storage::{self, StorageMgrBackend},
+    storage::{self, StorageManager},
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ fn task_queue_max_threads() -> u16 {
 
 impl Config {
     pub fn load() -> Self {
-        let store = storage::StorageMgrLocal::new("./");
+        let store = storage::Local::new("./");
         if !store.exists("config.yaml") {
             let config = Self::default();
             let config_str = serde_yml::to_string(&config).unwrap();
@@ -34,7 +34,7 @@ impl Config {
     }
 
     pub fn save(&self) {
-        let store = storage::StorageMgrLocal::new("./");
+        let store = storage::Local::new("./");
 
         let config_str = serde_yml::to_string(&self).unwrap();
         store.write("config.yaml", &config_str.as_bytes());

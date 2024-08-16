@@ -1,25 +1,25 @@
 use std::{path::PathBuf, str::FromStr};
 
-pub trait StorageMgrBackend: Send + Sync {
+pub trait StorageManager: Send + Sync {
     fn read(&self, ident: &str) -> Vec<u8>;
     fn exists(&self, ident: &str) -> bool;
     fn write(&self, ident: &str, data: &[u8]);
 }
 
 #[derive(Clone)]
-pub struct StorageMgrLocal {
+pub struct Local {
     pub base_dir: PathBuf,
 }
 
-impl StorageMgrLocal {
+impl Local {
     pub fn new(storage_dir: &str) -> Self {
-        StorageMgrLocal {
+        Local {
             base_dir: PathBuf::from_str(&storage_dir).unwrap(),
         }
     }
 }
 
-impl StorageMgrBackend for StorageMgrLocal {
+impl StorageManager for Local {
     fn exists(&self, ident: &str) -> bool {
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
 
