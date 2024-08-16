@@ -59,8 +59,8 @@ async fn start_app(app: App) {
     let app = Router::new()
         .route("/api/bookmarks", get(list_bookmarks))
         .route("/api/bookmarks", put(create_bookmark))
-        .route("/api/bookmarks/:bookmark_id", post(update_bookmark))
-        .route("/api/bookmarks/:bookmark_id", delete(delete_bookmark))
+        .route("/api/bookmarks/:bmark_id", post(update_bookmark))
+        .route("/api/bookmarks/:bmark_id", delete(delete_bookmark))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
@@ -199,7 +199,7 @@ async fn create_bookmark(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.add(bmark_create, opts)
+        app.create(bmark_create, opts)
             .map(Into::into)
             .map_err(Into::into)
     })
@@ -228,7 +228,7 @@ pub struct BookmarkUpdateRequest {
 
 async fn update_bookmark(
     State(state): State<Arc<SharedState>>,
-    Path(bookmark_id): Path<u64>,
+    Path(bmark_id): Path<u64>,
     Json(payload): Json<BookmarkUpdateRequest>,
 ) -> Result<axum::Json<Bookmark>, AppError> {
     let mut app = state.app.write().await;
@@ -242,7 +242,7 @@ async fn update_bookmark(
     };
 
     tokio::task::block_in_place(move || {
-        app.update(bookmark_id, bmark_update)?
+        app.update(bmark_id, bmark_update)?
             .ok_or_else(|| anyhow!("bookmark not found"))
             .map(Into::into)
             .map_err(Into::into)
@@ -251,11 +251,11 @@ async fn update_bookmark(
 
 async fn delete_bookmark(
     State(state): State<Arc<SharedState>>,
-    Path(bookmark_id): Path<u64>,
+    Path(bmark_id): Path<u64>,
 ) -> Result<axum::Json<bool>, AppError> {
     let mut app = state.app.write().await;
     tokio::task::block_in_place(move || {
-        app.delete(bookmark_id)?
+        app.delete(bmark_id)?
             .ok_or_else(|| anyhow!("bookmark not found"))
             .map(Into::into)
             .map_err(Into::into)

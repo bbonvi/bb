@@ -153,7 +153,7 @@ fn main() -> anyhow::Result<()> {
                 }),
             };
 
-            let bmark = app_mgr.add(bmark_create, add_opts)?;
+            let bmark = app_mgr.create(bmark_create, add_opts)?;
             println!("{}", serde_json::to_string_pretty(&bmark).unwrap());
             Ok(())
         }

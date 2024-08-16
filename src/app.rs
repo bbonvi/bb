@@ -55,7 +55,7 @@ impl App {
 pub enum Task {
     /// request to refetch metadata for a given bookmark
     FetchMetadata {
-        bookmark_id: u64,
+        bmark_id: u64,
         opts: FetchMetadataOpts,
     },
 
@@ -77,30 +77,11 @@ pub struct FetchMetadataOpts {
 }
 
 impl App {
-    pub fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
-        let mut query = query;
-
-        // TODO: do we prevent queries against empty strings?
-        {
-            if query.title.clone().unwrap_or_default() == "" {
-                query.title = None;
-            };
-            if query.description.clone().unwrap_or_default() == "" {
-                query.description = None;
-            };
-            if query.url.clone().unwrap_or_default() == "" {
-                query.url = None;
-            };
-        }
-
-        self.bmark_mgr.search(query)
-    }
-
-    pub fn add(&self, bmark_create: BookmarkCreate, opts: AddOpts) -> anyhow::Result<Bookmark> {
+    pub fn create(&self, bmark_create: BookmarkCreate, opts: AddOpts) -> anyhow::Result<Bookmark> {
         let url = bmark_create.url.clone();
 
         // create empty bookmark
-        let bmark = self.bmark_mgr.add(bmark_create)?;
+        let bmark = self.bmark_mgr.create(bmark_create)?;
 
         // add metadata
         if let Some(meta_opts) = opts.meta_opts {
@@ -163,6 +144,25 @@ impl App {
         self.bmark_mgr.delete(id)
     }
 
+    pub fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
+        let mut query = query;
+
+        // TODO: do we prevent queries against empty strings?
+        {
+            if query.title.clone().unwrap_or_default() == "" {
+                query.title = None;
+            };
+            if query.description.clone().unwrap_or_default() == "" {
+                query.description = None;
+            };
+            if query.url.clone().unwrap_or_default() == "" {
+                query.url = None;
+            };
+        }
+
+        self.bmark_mgr.search(query)
+    }
+
     pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> anyhow::Result<Metadata> {
         let mut url_parsed = reqwest::Url::parse(&url).unwrap();
         let mut tried_https = false;
@@ -192,7 +192,7 @@ impl App {
         meta_opts: FetchMetadataOpts,
     ) {
         if let Err(err) = self.task_tx.send(Task::FetchMetadata {
-            bookmark_id: bookmark.id,
+            bmark_id: bookmark.id,
             opts: meta_opts,
         }) {
             eprintln!("{err}");
@@ -324,7 +324,7 @@ impl App {
 impl App {
     fn start_queue(
         task_rx: mpsc::Receiver<Task>,
-        bookmark_mgr: Arc<dyn BookmarkMgrBackend>,
+        bmark_mgr: Arc<dyn BookmarkMgrBackend>,
         storage_mgr: Arc<dyn StorageMgrBackend>,
         config: Arc<RwLock<Config>>,
     ) {
@@ -335,7 +335,7 @@ impl App {
 
         while let Ok(task) = task_rx.recv() {
             let storage_mgr = storage_mgr.clone();
-            let bookmark_mgr = bookmark_mgr.clone();
+            let bmark_mgr = bmark_mgr.clone();
             let thread_counter = thread_ctr.clone();
 
             let config = config.clone();
@@ -359,18 +359,18 @@ impl App {
                 let thread_counter = thread_counter.clone();
                 move || {
                     match task {
-                        Task::FetchMetadata { bookmark_id, opts } => {
+                        Task::FetchMetadata { bmark_id, opts } => {
                             thread_counter.fetch_add(1, Ordering::Relaxed);
 
                             let handle_metadata = || {
                                 println!("picked up a job...");
-                                let bookmarks = bookmark_mgr.search(SearchQuery {
-                                    id: Some(bookmark_id),
+                                let bookmarks = bmark_mgr.search(SearchQuery {
+                                    id: Some(bmark_id),
                                     ..Default::default()
                                 })?;
                                 let bmark = bookmarks
                                     .first()
-                                    .ok_or_else(|| anyhow!("bookmark {bookmark_id} not found"))?;
+                                    .ok_or_else(|| anyhow!("bookmark {bmark_id} not found"))?;
 
                                 let meta = Self::fetch_metadata(&bmark.url, opts)?;
 
@@ -378,7 +378,7 @@ impl App {
                                     bmark.clone(),
                                     meta,
                                     storage_mgr.clone(),
-                                    bookmark_mgr.clone(),
+                                    bmark_mgr.clone(),
                                 )?
                                 .context("bookmark {id} not found")?;
 
@@ -387,7 +387,7 @@ impl App {
 
                             let _ = handle_metadata();
                             let rules = &config.read().unwrap().rules;
-                            let _ = Self::apply_rules(bookmark_id, bookmark_mgr.clone(), &rules)
+                            let _ = Self::apply_rules(bmark_id, bmark_mgr.clone(), &rules)
                                 .map_err(|err| eprintln!("{err}"));
 
                             thread_counter.fetch_sub(1, Ordering::Relaxed);

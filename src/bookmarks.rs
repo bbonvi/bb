@@ -1,15 +1,12 @@
-use anyhow::bail;
+use crate::eid::Eid;
 use core::panic;
 use serde::{Deserialize, Serialize};
 use std::{
-    borrow::BorrowMut,
     collections::HashSet,
     fs::{read_to_string, rename, write},
     io::ErrorKind,
     sync::{Arc, RwLock},
 };
-
-use crate::eid::Eid;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Bookmark {
@@ -73,7 +70,7 @@ pub struct SearchQuery {
 
 pub trait BookmarkMgrBackend: Send + Sync {
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>>;
-    fn add(&self, bookmark: BookmarkCreate) -> anyhow::Result<Bookmark>;
+    fn create(&self, bookmark: BookmarkCreate) -> anyhow::Result<Bookmark>;
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
     fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>>;
 }
@@ -125,7 +122,7 @@ impl SearchQuery {
 }
 
 impl BookmarkMgrBackend for BookmarkMgrJson {
-    fn add(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
+    fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
         let id = if let Some(last_bookmark) = self.bookmarks.write().unwrap().last() {
             last_bookmark.id + 1
         } else {
@@ -246,9 +243,9 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
                 };
 
                 if let Some(url) = &query.url {
-                    let bookmark_url = bookmark.url.to_lowercase();
-                    if !query.no_exact_url && bookmark_url == *url
-                        || query.no_exact_url && bookmark_url.contains(url)
+                    let bmark_url = bookmark.url.to_lowercase();
+                    if !query.no_exact_url && bmark_url == *url
+                        || query.no_exact_url && bmark_url.contains(url)
                     {
                         has_match = true;
                     } else {
@@ -257,9 +254,9 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
                 };
 
                 if let Some(description) = &query.description {
-                    let bookmark_description = bookmark.description.to_lowercase();
-                    if query.exact && bookmark_description == *description
-                        || !query.exact && bookmark_description.contains(description)
+                    let bmark_description = bookmark.description.to_lowercase();
+                    if query.exact && bmark_description == *description
+                        || !query.exact && bmark_description.contains(description)
                     {
                         has_match = true;
                     } else {
@@ -268,9 +265,9 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
                 };
 
                 if let Some(title) = &query.title {
-                    let bookmark_title = bookmark.title.to_lowercase();
-                    if query.exact && bookmark_title == *title
-                        || !query.exact && bookmark_title.contains(title)
+                    let bmark_title = bookmark.title.to_lowercase();
+                    if query.exact && bmark_title == *title
+                        || !query.exact && bmark_title.contains(title)
                     {
                         has_match = true;
                     } else {
@@ -279,9 +276,9 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
                 };
 
                 if let Some(tags) = &query.tags {
-                    let mut bookmark_tags = bookmark.tags.iter().map(|t| t.to_lowercase());
+                    let mut bmark_tags = bookmark.tags.iter().map(|t| t.to_lowercase());
                     for tag in tags {
-                        match bookmark_tags.find(|tag_b| tag == tag_b).is_none() {
+                        match bmark_tags.find(|tag_b| tag == tag_b).is_none() {
                             true => {
                                 has_match = false;
                                 break;
@@ -299,45 +296,3 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             .collect::<Vec<_>>())
     }
 }
-
-// #[derive(Debug, Clone)]
-// pub struct BookmarkMgrSqlite {
-//     conn: Arc<RwLock<rusqlite::Connection>>,
-// }
-// impl BookmarkMgrSqlite {
-//     pub fn conn() -> rustqlite::Connection {
-//     }
-//     pub fn new() -> Self {
-//         let path = "./bookmarks.sqlite3";
-//         let conn = rusqlite::Connection::open(path).unwrap();
-//         {
-//             let c = conn.write().unwrap();
-//             c.execute(
-//                 "CREATE TABLE IF NOT EXISTS bookmarks (
-//                     id    INTEGER PRIMARY KEY AUTOINCREMENT,
-//                     title TEXT NOT NULL,
-//                     description TEXT NOT NULL,
-//                     tags TEXT NOT NULL,
-//                     url TEXT NOT NULL UNIQUE,
-//                     image_id TEXT,
-//                     icon_id TEXT,
-//                 )",
-//                 (), // empty list of parameters.
-//             )
-//             .unwrap();
-//         }
-//
-//         Self { conn }
-//     }
-// }
-//
-// impl BookmarkMgrBackend for BookmarkMgrSqlite {
-//     fn add(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
-//         let conn = self.conn.write().unwrap();
-//         conn.execute(
-//             "INSERT INTO bookmarks (title, description, tags, url, image_id, icon_id) VALUES (?2, ?3, ?4, ?5, ?6, ?7)",
-//             (&bmark_create.title.unwrap_or_default(), &bmark_create.description.unwrap_or_default(), &bmark_create.tags.unwrap_or_default().join(",")),
-//         )?;
-//         todo!()
-//     }
-// }
