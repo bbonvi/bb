@@ -76,11 +76,11 @@ pub trait BookmarkManager: Send + Sync {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Json {
+pub struct BackendJson {
     list: Arc<RwLock<Vec<Bookmark>>>,
 }
 
-impl Json {
+impl BackendJson {
     pub fn load() -> Self {
         let bookmarks_plain = match read_to_string("bookmarks.json") {
             Ok(b) => b,
@@ -105,7 +105,7 @@ impl Json {
     }
 }
 
-impl BookmarkManager for Json {
+impl BookmarkManager for BackendJson {
     fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
         let id = if let Some(last_bookmark) = self.list.write().unwrap().last() {
             last_bookmark.id + 1

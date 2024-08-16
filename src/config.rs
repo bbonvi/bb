@@ -19,24 +19,23 @@ fn task_queue_max_threads() -> u16 {
 
 impl Config {
     pub fn load() -> Self {
-        let store = storage::Local::new("./");
-        if !store.exists("config.yaml") {
-            let config = Self::default();
-            let config_str = serde_yml::to_string(&config).unwrap();
-            store.write("config.yaml", &config_str.as_bytes());
-        }
+        let store = storage::BackendLocal::new("./");
 
         let config_str =
             String::from_utf8(store.read("config.yaml")).expect("config file is not valid utf8");
         let config: Self = serde_yml::from_str(&config_str).expect("config is malformed");
 
+        config.save();
+
         config
     }
 
     pub fn save(&self) {
-        let store = storage::Local::new("./");
+        let store = storage::BackendLocal::new("./");
 
         let config_str = serde_yml::to_string(&self).unwrap();
-        store.write("config.yaml", &config_str.as_bytes());
+        store.write("config-temp.yaml", &config_str.as_bytes());
+
+        std::fs::rename("config-temp.yaml", "config.yaml").unwrap();
     }
 }

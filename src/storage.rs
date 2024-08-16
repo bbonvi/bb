@@ -7,19 +7,19 @@ pub trait StorageManager: Send + Sync {
 }
 
 #[derive(Clone)]
-pub struct Local {
+pub struct BackendLocal {
     pub base_dir: PathBuf,
 }
 
-impl Local {
+impl BackendLocal {
     pub fn new(storage_dir: &str) -> Self {
-        Local {
+        BackendLocal {
             base_dir: PathBuf::from_str(&storage_dir).unwrap(),
         }
     }
 }
 
-impl StorageManager for Local {
+impl StorageManager for BackendLocal {
     fn exists(&self, ident: &str) -> bool {
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
 

@@ -26,25 +26,25 @@ pub struct App {
 
 impl App {
     pub fn new(config: Arc<RwLock<Config>>) -> Self {
-        let bmark_mgr = Arc::new(bookmarks::Json::load());
-        let storage_mgr = Arc::new(storage::Local::new("./uploads"));
+        let bmark_mgr = Arc::new(bookmarks::BackendJson::load());
+        let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
 
-        let (tx, rx) = mpsc::channel::<Task>();
+        let (task_tx, task_rx) = mpsc::channel::<Task>();
 
         let handle = std::thread::spawn({
             let bmark_mgr = bmark_mgr.clone();
             let storage_mgr = storage_mgr.clone();
-
             let config = config.clone();
+
             move || {
-                Self::start_queue(rx, bmark_mgr, storage_mgr, config);
+                Self::start_queue(task_rx, bmark_mgr, storage_mgr, config);
             }
         });
 
         Self {
             bmark_mgr,
             storage_mgr,
-            task_tx: Arc::new(tx),
+            task_tx: Arc::new(task_tx),
             task_queue_handle: Some(handle),
             config,
         }
