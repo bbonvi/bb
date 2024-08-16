@@ -96,6 +96,7 @@ impl BookmarkMgrJson {
             bookmarks: Arc::new(RwLock::new(bookmarks)),
         }
     }
+
     pub fn save(&self) {
         let bmarks = self.bookmarks.read().unwrap();
 

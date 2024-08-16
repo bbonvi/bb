@@ -39,7 +39,6 @@ impl StorageMgrBackend for StorageMgrLocal {
 
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
         let temp_path = format!("{}/temp-{ident}", &self.base_dir.to_str().unwrap());
-        println!("{temp_path}");
 
         std::fs::write(&temp_path, data).unwrap();
 
