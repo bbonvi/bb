@@ -9,6 +9,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use crate::eid::Eid;
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Bookmark {
     pub id: u64,
@@ -99,8 +101,11 @@ impl BookmarkMgrJson {
     }
     pub fn save(&self) {
         let bmarks = self.bookmarks.read().unwrap();
-        write("bookmarks-.json", serde_json::to_string(&*bmarks).unwrap()).unwrap();
-        rename("bookmarks-.json", "bookmarks.json").unwrap();
+
+        let temp_path = format!("bookmarks-{}.json", Eid::new());
+
+        write(&temp_path, serde_json::to_string(&*bmarks).unwrap()).unwrap();
+        rename(&temp_path, "bookmarks.json").unwrap();
     }
 }
 
@@ -142,7 +147,7 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             tags.retain(|item| seen.insert(item.clone()));
         };
 
-        let bookmark = Bookmark {
+        let bmark = Bookmark {
             id,
             title: bmark_create.title.unwrap_or_default(),
             description: bmark_create.description.unwrap_or_default(),
@@ -152,11 +157,11 @@ impl BookmarkMgrBackend for BookmarkMgrJson {
             icon_id: bmark_create.icon_id,
         };
 
-        self.bookmarks.write().unwrap().push(bookmark.clone());
+        self.bookmarks.write().unwrap().push(bmark.clone());
 
         self.save();
 
-        Ok(bookmark)
+        Ok(bmark)
     }
 
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {

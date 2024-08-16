@@ -44,20 +44,11 @@ async fn start_app(app: App) {
             _ = ctrl_c => {
                 let mut app = app.write().await;
                 loop {
-                    match app.metadata_queue.try_write() {
-                        Ok(mut metadata_queue) => {
-                            println!("signaling to stop queues");
-                            // signals to stop accepting queues.
-                            metadata_queue.push_front(None);
-                        }
-                        Err(_) => {
-                            continue;
-                        }
-                    };
+                    app.shutdown();
 
                     // join on queue thread handle
                     println!("waiting for queues to stop");
-                    app.queue_handle.take().unwrap().join().unwrap();
+                    app.wait_task_queue_finish();
                     break;
                 }
             },

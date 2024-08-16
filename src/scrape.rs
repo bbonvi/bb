@@ -189,7 +189,6 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
     let host = url_parsed.host_str().unwrap_or_default();
     let path = url_parsed.path();
     let iden = format!("{host}{path}");
-    let iden: String = iden.chars().take(30).collect();
 
     let mut force_proxy = false;
     loop {
@@ -385,8 +384,6 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         Ordering::Equal
     });
 
-    println!("icons: {:?}", icons);
-
     icon_url = icons.first().map(|icon| icon.0.clone());
 
     // try to get favicon from duckduckgo
@@ -435,4 +432,32 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         icon: None,
         dump: None,
     }
+}
+
+pub fn guess_filetype(url: &str) -> Option<String> {
+    if url.contains(".jpg") || url.contains(".jpeg") {
+        return Some(String::from("jpg"));
+    }
+
+    if url.contains(".webp") {
+        return Some(String::from("webp"));
+    }
+
+    if url.contains(".png") {
+        return Some(String::from("png"));
+    }
+
+    if url.contains(".svg") {
+        return Some(String::from("svg"));
+    }
+
+    if url.contains(".bmp") {
+        return Some(String::from("bmp"));
+    }
+
+    if url.contains(".gif") {
+        return Some(String::from("gif"));
+    }
+
+    None
 }

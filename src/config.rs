@@ -4,9 +4,17 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+const TASK_QUEUE_MAX_THREADS: u16 = 6;
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default = "task_queue_max_threads")]
+    pub task_queue_max_threads: u16,
     pub rules: Vec<Rule>,
+}
+
+fn task_queue_max_threads() -> u16 {
+    TASK_QUEUE_MAX_THREADS
 }
 
 impl Config {

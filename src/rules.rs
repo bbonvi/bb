@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery};
+use crate::bookmarks::SearchQuery;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Rule {
@@ -17,23 +17,6 @@ pub struct Rule {
 }
 
 impl Rule {
-    // pub fn run_actions_on_bmark_insert(&self, mut bmark_create: BookmarkCreate) -> BookmarkCreate {
-    //     // bookmark_mgr.update(id, bmark_update)
-    //     match &self.action {
-    //         Action::SetTitle(title) => bmark_create.title = Some(title.clone()),
-    //         Action::SetDescription(descr) => bmark_create.description = Some(descr.clone()),
-    //         Action::SetTags(tags) => bmark_create.tags = Some(tags.clone()),
-    //         Action::AppendTags(tags) => {
-    //             let mut tags = tags.clone();
-    //             let mut current_tags = bmark_create.tags.take().unwrap_or_default();
-    //             current_tags.append(&mut tags);
-    //             bmark_create.tags.replace(current_tags);
-    //         }
-    //     }
-    //
-    //     bmark_create
-    // }
-
     pub fn is_match(&self, query: &SearchQuery) -> bool {
         let mut matched = false;
 

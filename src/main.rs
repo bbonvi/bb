@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use anyhow::bail;
 use clap::Parser;
 
@@ -13,6 +15,7 @@ mod storage;
 mod web;
 use bookmarks::{BookmarkUpdate, SearchQuery};
 use cli::{ActionArgs, MetaArgs, RulesArgs};
+use config::Config;
 use inquire::error::InquireResult;
 use metadata::MetaOptions;
 
@@ -27,7 +30,8 @@ pub fn parse_tags(tags: String) -> Vec<String> {
 fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
 
-    let mut app_mgr = app::App::local();
+    let config = Arc::new(RwLock::new(Config::load()));
+    let mut app_mgr = app::App::new(config);
 
     match args.command {
         cli::Command::Daemon { .. } => {
@@ -149,8 +153,8 @@ fn main() -> anyhow::Result<()> {
                 }),
             };
 
-            let bookmark = app_mgr.add(bmark_create, add_opts)?;
-            println!("{}", serde_json::to_string_pretty(&bookmark).unwrap());
+            let bmark = app_mgr.add(bmark_create, add_opts)?;
+            println!("{}", serde_json::to_string_pretty(&bmark).unwrap());
             Ok(())
         }
         cli::Command::Meta {

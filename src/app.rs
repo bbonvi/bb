@@ -1,12 +1,3 @@
-use std::{
-    collections::{HashSet, VecDeque},
-    sync::{atomic::AtomicU16, Arc, RwLock},
-    thread::sleep,
-    time::Duration,
-};
-
-use anyhow::{anyhow, bail, Context};
-
 use crate::{
     bookmarks::{
         Bookmark, BookmarkCreate, BookmarkMgrBackend, BookmarkMgrJson, BookmarkUpdate, SearchQuery,
@@ -14,44 +5,62 @@ use crate::{
     config::Config,
     eid::Eid,
     metadata::{fetch_meta, MetaOptions, Metadata},
+    rules::Rule,
+    scrape::guess_filetype,
     storage::{StorageMgrBackend, StorageMgrLocal},
 };
-
-fn guess_filetype(url: &str) -> Option<String> {
-    if url.contains(".jpg") || url.contains(".jpeg") {
-        return Some(String::from("jpg"));
-    }
-
-    if url.contains(".webp") {
-        return Some(String::from("webp"));
-    }
-
-    if url.contains(".png") {
-        return Some(String::from("png"));
-    }
-
-    if url.contains(".svg") {
-        return Some(String::from("svg"));
-    }
-
-    if url.contains(".bmp") {
-        return Some(String::from("bmp"));
-    }
-
-    if url.contains(".gif") {
-        return Some(String::from("gif"));
-    }
-
-    None
-}
+use anyhow::{anyhow, Context};
+use std::{
+    sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
+    thread::sleep,
+    time::Duration,
+};
 
 pub struct App {
     pub bmark_mgr: Arc<dyn BookmarkMgrBackend>,
     pub storage_mgr: Arc<dyn StorageMgrBackend>,
 
-    pub metadata_queue: Arc<RwLock<VecDeque<Option<(u64, String, FetchMetadataOpts)>>>>,
-    pub queue_handle: Option<std::thread::JoinHandle<()>>,
+    task_tx: Arc<mpsc::Sender<Task>>,
+    task_queue_handle: Option<std::thread::JoinHandle<()>>,
     pub config: Arc<RwLock<Config>>,
+}
+
+impl App {
+    pub fn new(config: Arc<RwLock<Config>>) -> Self {
+        let bmark_mgr = Arc::new(BookmarkMgrJson::load());
+        let storage_mgr = Arc::new(StorageMgrLocal::new("./uploads"));
+
+        let (tx, rx) = mpsc::channel::<Task>();
+
+        let handle = std::thread::spawn({
+            let bmark_mgr = bmark_mgr.clone();
+            let storage_mgr = storage_mgr.clone();
+
+            let config = config.clone();
+            move || {
+                Self::start_queue(rx, bmark_mgr, storage_mgr, config);
+            }
+        });
+
+        Self {
+            bmark_mgr,
+            storage_mgr,
+            task_tx: Arc::new(tx),
+            task_queue_handle: Some(handle),
+            config,
+        }
+    }
+}
+
+pub enum Task {
+    /// request to refetch metadata for a given bookmark
+    FetchMetadata {
+        bookmark_id: u64,
+        opts: FetchMetadataOpts,
+    },
+
+    /// request to gracefully shutdown task queue
+    Shutdown,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -68,110 +77,10 @@ pub struct FetchMetadataOpts {
 }
 
 impl App {
-    pub fn local() -> Self {
-        let bmark_mgr = Arc::new(BookmarkMgrJson::load());
-        let storage_mgr = Arc::new(StorageMgrLocal::new("./uploads"));
-        let metadata_queue = Arc::new(RwLock::new(VecDeque::new()));
-        let config = Arc::new(RwLock::new(Config::load()));
-
-        let handle = std::thread::spawn({
-            let bmark_mgr = bmark_mgr.clone();
-            let storage_mgr = storage_mgr.clone();
-            let metadata_queue = metadata_queue.clone();
-
-            let config = config.clone();
-            move || {
-                Self::start_queue(metadata_queue, bmark_mgr, storage_mgr, config);
-            }
-        });
-
-        Self {
-            bmark_mgr,
-            storage_mgr,
-            metadata_queue,
-            queue_handle: Some(handle),
-            config,
-        }
-    }
-
-    pub fn start_queue(
-        queue: Arc<RwLock<VecDeque<Option<(u64, String, FetchMetadataOpts)>>>>,
-        bookmark_mgr: Arc<dyn BookmarkMgrBackend>,
-        storage_mgr: Arc<dyn StorageMgrBackend>,
-        config: Arc<RwLock<Config>>,
-    ) {
-        use std::sync::atomic::Ordering;
-
-        let counter = Arc::new(AtomicU16::new(0));
-
-        loop {
-            if queue.read().unwrap().is_empty() {
-                sleep(Duration::from_millis(200));
-            }
-
-            while counter.load(Ordering::SeqCst) >= 6 {
-                sleep(Duration::from_millis(200));
-            }
-
-            let mut queue = queue.write().unwrap();
-
-            let job = queue.pop_back();
-
-            drop(queue);
-
-            match job {
-                Some(None) => break,
-                None => {}
-                Some(Some((id, url, opts))) => {
-                    let storage_mgr = storage_mgr.clone();
-                    let bookmark_mgr = bookmark_mgr.clone();
-
-                    let counter = counter.clone();
-
-                    let config = config.clone();
-                    std::thread::spawn(move || {
-                        let counter = counter.clone();
-
-                        counter.fetch_add(1, Ordering::SeqCst);
-
-                        let handle_metadata = || {
-                            println!("picked up a job...");
-                            let meta = Self::fetch_metadata(&url, opts)?;
-
-                            let bookmarks = bookmark_mgr.search(SearchQuery {
-                                id: Some(id),
-                                ..Default::default()
-                            })?;
-
-                            let bookmark = bookmarks
-                                .first()
-                                .ok_or_else(|| anyhow!("bookmark {id} not found"))?;
-
-                            let bookmark = Self::merge_metadata(
-                                bookmark.clone(),
-                                meta,
-                                storage_mgr.clone(),
-                                bookmark_mgr.clone(),
-                            )?
-                            .context("bookmark {id} not found")?;
-
-                            Ok(bookmark) as anyhow::Result<Bookmark>
-                        };
-
-                        let _ = handle_metadata();
-                        let _ = Self::apply_rules(id, bookmark_mgr.clone(), config.clone())
-                            .map_err(|err| eprintln!("{err}"));
-
-                        counter.fetch_sub(1, Ordering::SeqCst);
-                    });
-                }
-            }
-        }
-    }
-
     pub fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
         let mut query = query;
-        // prevent query against empty strings
+
+        // TODO: do we prevent queries against empty strings?
         {
             if query.title.clone().unwrap_or_default() == "" {
                 query.title = None;
@@ -187,92 +96,17 @@ impl App {
         self.bmark_mgr.search(query)
     }
 
-    fn apply_rules(
-        id: u64,
-        bmark_mgr: Arc<dyn BookmarkMgrBackend>,
-        config: Arc<RwLock<Config>>,
-    ) -> anyhow::Result<Option<Bookmark>> {
-        let query = SearchQuery {
-            id: Some(id),
-            ..Default::default()
-        };
-
-        let bmark = bmark_mgr
-            .search(query)
-            .map(|b| b.first().cloned())?
-            .ok_or_else(|| anyhow!("bookmark not found"))?;
-
-        let config = config.read().unwrap();
-
-        let mut bmark_update = BookmarkUpdate {
-            title: if bmark.title.is_empty() {
-                None
-            } else {
-                Some(bmark.title.clone())
-            },
-            description: if bmark.description.is_empty() {
-                None
-            } else {
-                Some(bmark.description.clone())
-            },
-            url: Some(bmark.url.clone()),
-            tags: if bmark.tags.is_empty() {
-                None
-            } else {
-                Some(bmark.tags.clone())
-            },
-            ..Default::default()
-        };
-
-        // for rule in config.rules.iter().filter(|r| r.is_match(&query)) {
-        for rule in config.rules.iter() {
-            // recreating query because it could've been changed by previous rule
-            let query = SearchQuery {
-                url: bmark_update.url.clone(),
-                title: bmark_update.title.clone(),
-                description: bmark_update.description.clone(),
-                tags: bmark_update.tags.clone(),
-                ..Default::default()
-            };
-            if !rule.is_match(&query) {
-                continue;
-            }
-
-            match &rule.action {
-                crate::rules::Action::UpdateBookmark {
-                    title,
-                    description,
-                    tags,
-                } => {
-                    if title.is_some() {
-                        bmark_update.title = title.clone();
-                    }
-                    if description.is_some() {
-                        bmark_update.description = description.clone();
-                    }
-                    if let Some(tags) = tags {
-                        let mut curr_tags = bmark_update.tags.take().unwrap_or_default();
-                        curr_tags.append(&mut tags.clone());
-                        bmark_update.tags = Some(curr_tags);
-                    }
-                }
-            }
-        }
-
-        bmark_mgr.update(bmark.id, bmark_update)
-    }
-
     pub fn add(&self, bmark_create: BookmarkCreate, opts: AddOpts) -> anyhow::Result<Bookmark> {
         let url = bmark_create.url.clone();
 
         // create empty bookmark
-        let bookmark = self.bmark_mgr.add(bmark_create)?;
+        let bmark = self.bmark_mgr.add(bmark_create)?;
 
         // add metadata
         if let Some(meta_opts) = opts.meta_opts {
             if opts.async_meta {
                 self.schedule_fetch_and_update_metadata(
-                    &bookmark,
+                    &bmark,
                     FetchMetadataOpts {
                         no_https_upgrade: opts.no_https_upgrade,
                         meta_opts: meta_opts.clone(),
@@ -289,31 +123,32 @@ impl App {
                         },
                     )?;
 
-                    let bookmark = Self::merge_metadata(
-                        bookmark.clone(),
+                    let bmark = Self::merge_metadata(
+                        bmark.clone(),
                         meta,
                         self.storage_mgr.clone(),
                         self.bmark_mgr.clone(),
                     )?
-                    .context("bookmark not found")?;
+                    .context("bmark not found")?;
 
-                    Ok(bookmark) as anyhow::Result<Bookmark>
+                    Ok(bmark) as anyhow::Result<Bookmark>
                 };
 
                 // apply rules
-                let with_rules =
-                    Self::apply_rules(bookmark.id, self.bmark_mgr.clone(), self.config.clone())?
-                        .ok_or_else(|| anyhow!("bookmark not found"))?;
+                let rules = &self.config.read().unwrap().rules;
+                let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
+                    .ok_or_else(|| anyhow!("bmark not found"))?;
 
                 return with_meta.map(|_| with_rules);
             }
         } else {
             // if no metadata apply Rules.
-            return Self::apply_rules(bookmark.id, self.bmark_mgr.clone(), self.config.clone())?
-                .ok_or_else(|| anyhow!("bookmark not found"));
+            let rules = &self.config.read().unwrap().rules;
+            return Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
+                .ok_or_else(|| anyhow!("bmark not found"));
         }
 
-        Ok(bookmark)
+        Ok(bmark)
     }
 
     pub fn update(
@@ -356,13 +191,16 @@ impl App {
         bookmark: &Bookmark,
         meta_opts: FetchMetadataOpts,
     ) {
-        self.metadata_queue.write().unwrap().push_front(Some((
-            bookmark.id,
-            bookmark.url.clone(),
-            meta_opts,
-        )));
+        if let Err(err) = self.task_tx.send(Task::FetchMetadata {
+            bookmark_id: bookmark.id,
+            opts: meta_opts,
+        }) {
+            eprintln!("{err}");
+        };
     }
+}
 
+impl App {
     fn merge_metadata(
         bookmark: Bookmark,
         meta: Metadata,
@@ -407,5 +245,176 @@ impl App {
         };
 
         bmark_mgr.update(bookmark.id, bmark_update)
+    }
+
+    fn apply_rules(
+        id: u64,
+        bmark_mgr: Arc<dyn BookmarkMgrBackend>,
+        rules: &Vec<Rule>,
+    ) -> anyhow::Result<Option<Bookmark>> {
+        let query = SearchQuery {
+            id: Some(id),
+            ..Default::default()
+        };
+
+        let bmark = bmark_mgr
+            .search(query)
+            .map(|b| b.first().cloned())?
+            .ok_or_else(|| anyhow!("bookmark not found"))?;
+
+        let mut bmark_update = BookmarkUpdate {
+            title: if bmark.title.is_empty() {
+                None
+            } else {
+                Some(bmark.title.clone())
+            },
+            description: if bmark.description.is_empty() {
+                None
+            } else {
+                Some(bmark.description.clone())
+            },
+            url: Some(bmark.url.clone()),
+            tags: if bmark.tags.is_empty() {
+                None
+            } else {
+                Some(bmark.tags.clone())
+            },
+            ..Default::default()
+        };
+
+        // for rule in config.rules.iter().filter(|r| r.is_match(&query)) {
+        for rule in rules.iter() {
+            // recreating query because it could've been changed by previous rule
+            let query = SearchQuery {
+                url: bmark_update.url.clone(),
+                title: bmark_update.title.clone(),
+                description: bmark_update.description.clone(),
+                tags: bmark_update.tags.clone(),
+                ..Default::default()
+            };
+            if !rule.is_match(&query) {
+                continue;
+            }
+
+            match &rule.action {
+                crate::rules::Action::UpdateBookmark {
+                    title,
+                    description,
+                    tags,
+                } => {
+                    if title.is_some() {
+                        bmark_update.title = title.clone();
+                    }
+                    if description.is_some() {
+                        bmark_update.description = description.clone();
+                    }
+                    if let Some(tags) = tags {
+                        let mut curr_tags = bmark_update.tags.take().unwrap_or_default();
+                        curr_tags.append(&mut tags.clone());
+                        bmark_update.tags = Some(curr_tags);
+                    }
+                }
+            }
+        }
+
+        bmark_mgr.update(bmark.id, bmark_update)
+    }
+}
+
+impl App {
+    fn start_queue(
+        task_rx: mpsc::Receiver<Task>,
+        bookmark_mgr: Arc<dyn BookmarkMgrBackend>,
+        storage_mgr: Arc<dyn StorageMgrBackend>,
+        config: Arc<RwLock<Config>>,
+    ) {
+        use std::sync::atomic::Ordering;
+
+        let thread_ctr = Arc::new(AtomicU16::new(0));
+        let max_threads = config.read().unwrap().task_queue_max_threads;
+
+        while let Ok(task) = task_rx.recv() {
+            let storage_mgr = storage_mgr.clone();
+            let bookmark_mgr = bookmark_mgr.clone();
+            let thread_counter = thread_ctr.clone();
+
+            let config = config.clone();
+
+            // graceful shutdown
+            match &task {
+                Task::Shutdown => {
+                    while thread_counter.load(Ordering::Relaxed) > 0 {
+                        sleep(Duration::from_millis(100));
+                    }
+                    return;
+                }
+                _ => {}
+            };
+
+            while thread_counter.load(Ordering::Relaxed) >= max_threads {
+                sleep(Duration::from_millis(100));
+            }
+
+            let task_handle = std::thread::spawn({
+                let thread_counter = thread_counter.clone();
+                move || {
+                    match task {
+                        Task::FetchMetadata { bookmark_id, opts } => {
+                            thread_counter.fetch_add(1, Ordering::Relaxed);
+
+                            let handle_metadata = || {
+                                println!("picked up a job...");
+                                let bookmarks = bookmark_mgr.search(SearchQuery {
+                                    id: Some(bookmark_id),
+                                    ..Default::default()
+                                })?;
+                                let bmark = bookmarks
+                                    .first()
+                                    .ok_or_else(|| anyhow!("bookmark {bookmark_id} not found"))?;
+
+                                let meta = Self::fetch_metadata(&bmark.url, opts)?;
+
+                                let bmark = Self::merge_metadata(
+                                    bmark.clone(),
+                                    meta,
+                                    storage_mgr.clone(),
+                                    bookmark_mgr.clone(),
+                                )?
+                                .context("bookmark {id} not found")?;
+
+                                Ok(bmark) as anyhow::Result<Bookmark>
+                            };
+
+                            let _ = handle_metadata();
+                            let rules = &config.read().unwrap().rules;
+                            let _ = Self::apply_rules(bookmark_id, bookmark_mgr.clone(), &rules)
+                                .map_err(|err| eprintln!("{err}"));
+
+                            thread_counter.fetch_sub(1, Ordering::Relaxed);
+                        }
+                        Task::Shutdown => unreachable!(),
+                    };
+                }
+            });
+
+            // handle thread panics
+            // TODO: get rid of unwraps and delete this code.
+            std::thread::spawn(move || {
+                if let Err(err) = task_handle.join() {
+                    eprintln!("{err:?}");
+                    thread_counter.fetch_sub(1, Ordering::Relaxed);
+                }
+            });
+        }
+    }
+
+    pub fn wait_task_queue_finish(&mut self) {
+        self.task_queue_handle.take().unwrap().join().unwrap();
+    }
+
+    pub fn shutdown(&self) {
+        if let Err(err) = self.task_tx.send(Task::Shutdown) {
+            eprintln!("{err}");
+        }
     }
 }
