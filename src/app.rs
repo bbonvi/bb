@@ -8,7 +8,7 @@ use crate::{
     scrape::guess_filetype,
     storage,
 };
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use std::{
     sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
     thread::sleep,
@@ -26,6 +26,22 @@ pub struct App {
 }
 
 impl App {
+    pub fn new_with(
+        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+        storage_mgr: Arc<dyn storage::StorageManager>,
+        task_tx: Arc<mpsc::Sender<Task>>,
+        task_queue_handle: Option<std::thread::JoinHandle<()>>,
+        config: Arc<RwLock<Config>>,
+    ) -> Self {
+        Self {
+            bmark_mgr,
+            storage_mgr,
+            task_tx,
+            task_queue_handle,
+            config,
+        }
+    }
+
     pub fn new(config: Arc<RwLock<Config>>) -> Self {
         let bmark_mgr = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
         let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
@@ -84,6 +100,17 @@ impl App {
     ) -> anyhow::Result<bookmarks::Bookmark> {
         let url = bmark_create.url.clone();
 
+        if !self.config.read().unwrap().allow_duplicates {
+            let query = bookmarks::SearchQuery {
+                url: Some(bmark_create.url.clone()),
+                ..Default::default()
+            };
+
+            if let Some(b) = self.search(query)?.first() {
+                bail!("bookmark with this url already exists at index {0}", b.id);
+            };
+        }
+
         // create empty bookmark
         let bmark = self.bmark_mgr.create(bmark_create)?;
 
@@ -137,7 +164,7 @@ impl App {
     }
 
     pub fn update(
-        &mut self,
+        &self,
         id: u64,
         bmark_update: bookmarks::BookmarkUpdate,
     ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
@@ -330,7 +357,7 @@ impl App {
 }
 
 impl App {
-    fn start_queue(
+    pub fn start_queue(
         task_rx: mpsc::Receiver<Task>,
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
         storage_mgr: Arc<dyn storage::StorageManager>,
@@ -424,5 +451,12 @@ impl App {
         if let Err(err) = self.task_tx.send(Task::Shutdown) {
             eprintln!("{err}");
         }
+    }
+}
+
+impl App {
+    #[cfg(test)]
+    pub fn config(&self) -> Arc<RwLock<Config>> {
+        self.config.clone()
     }
 }

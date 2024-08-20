@@ -126,15 +126,6 @@ impl BookmarkManager for BackendJson {
             0
         };
 
-        let query = SearchQuery {
-            url: Some(bmark_create.url.clone()),
-            ..Default::default()
-        };
-
-        if let Some(b) = self.search(query)?.first() {
-            // bail!("bookmark with this url already exists at index {0}", b.id);
-        };
-
         let mut bmark_create = bmark_create;
         if let Some(ref mut tags) = bmark_create.tags {
             let mut seen = HashSet::new();
