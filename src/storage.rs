@@ -1,5 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
+use crate::eid::Eid;
+
 pub trait StorageManager: Send + Sync {
     fn read(&self, ident: &str) -> Vec<u8>;
     fn exists(&self, ident: &str) -> bool;
@@ -34,7 +36,11 @@ impl StorageManager for BackendLocal {
 
     fn write(&self, ident: &str, data: &[u8]) {
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
-        let temp_path = format!("{}/temp-{ident}", &self.base_dir.to_str().unwrap());
+        let temp_path = format!(
+            "{}/{}-{ident}",
+            &self.base_dir.to_str().unwrap(),
+            Eid::new()
+        );
 
         std::fs::write(&temp_path, data).unwrap();
 

@@ -134,13 +134,13 @@ pub enum Command {
         #[clap(short, long)]
         id: Option<u64>,
 
-        /// Exact search on title and description. False by default.
+        /// Exact search. False by default.
         #[clap(short, long, default_value = "false")]
         exact: bool,
 
-        /// Turn off exact search on url. False by default
-        #[clap(short = 'x', long, default_value = "false")]
-        no_exact_url: bool,
+        /// Print the count
+        #[clap(short = 'c', long, default_value = "false")]
+        count: bool,
 
         #[clap(subcommand)]
         action: Option<ActionArgs>,

@@ -107,15 +107,9 @@ pub struct ListBookmarksRequest {
 
     /// Perform exact search.
     ///
-    /// *Exact search on all fields except url is turned off by default*
+    /// *Exact search is turned off by default*
     #[serde(default)]
     pub exact: bool,
-
-    /// Do not perform exact search on url.
-    ///
-    /// *Exact search on url is on by default*
-    #[serde(default)]
-    pub no_exact_url: bool,
 }
 
 async fn list_bookmarks(
@@ -131,7 +125,6 @@ async fn list_bookmarks(
         description: query.description,
         tags: query.tags.map(|tags| parse_tags(tags)),
         exact: query.exact,
-        no_exact_url: query.no_exact_url,
     };
 
     tokio::task::block_in_place(move || {

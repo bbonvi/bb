@@ -64,8 +64,6 @@ pub struct SearchQuery {
 
     #[serde(default)]
     pub exact: bool,
-    #[serde(default)]
-    pub no_exact_url: bool,
 }
 
 pub trait BookmarkManager: Send + Sync {
@@ -73,6 +71,13 @@ pub trait BookmarkManager: Send + Sync {
     fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark>;
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
     fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>>;
+
+    fn search_delete(&self, query: SearchQuery) -> anyhow::Result<usize>;
+    fn search_update(
+        &self,
+        query: SearchQuery,
+        bmark_update: BookmarkUpdate,
+    ) -> anyhow::Result<usize>;
 
     fn refresh(&self) -> anyhow::Result<()>;
 }
@@ -151,6 +156,68 @@ impl BookmarkManager for BackendJson {
         self.save();
 
         Ok(bmark)
+    }
+
+    fn search_delete(&self, query: SearchQuery) -> anyhow::Result<usize> {
+        let results = self.search(query)?;
+        let mut delete_ids = results;
+        let count = delete_ids.len();
+
+        let mut bmarks = self.list.write().unwrap();
+        *bmarks = bmarks
+            .iter()
+            .filter(|b| delete_ids.iter().find(|bb| b.id == bb.id).is_none())
+            .cloned()
+            .collect::<Vec<Bookmark>>();
+
+        drop(bmarks);
+
+        self.save();
+
+        Ok(count)
+    }
+
+    fn search_update(
+        &self,
+        query: SearchQuery,
+        bmark_update: BookmarkUpdate,
+    ) -> anyhow::Result<usize> {
+        let results = self.search(query)?;
+        let count = results.len();
+        let mut bmarks = self.list.write().unwrap();
+        for bmark in bmarks.iter_mut() {
+            if results.iter().find(|b| b.id == bmark.id).is_none() {
+                continue;
+            }
+
+            if let Some(ref title) = bmark_update.title {
+                bmark.title = title.to_string();
+            }
+            if let Some(ref descr) = bmark_update.description {
+                bmark.description = descr.to_string();
+            }
+            if let Some(ref tags) = bmark_update.tags {
+                bmark.tags = tags.to_vec();
+                let mut seen = HashSet::new();
+                bmark.tags.retain(|item| seen.insert(item.clone()));
+            }
+            if let Some(ref url) = bmark_update.url {
+                bmark.url = url.to_string();
+            }
+
+            if let Some(ref image_id) = bmark_update.image_id {
+                bmark.image_id = Some(image_id.to_string());
+            }
+            if let Some(ref icon_id) = bmark_update.icon_id {
+                bmark.icon_id = Some(icon_id.to_string());
+            }
+        }
+
+        drop(bmarks);
+
+        self.save();
+
+        Ok(count)
     }
 
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
@@ -238,9 +305,7 @@ impl BookmarkManager for BackendJson {
 
                 if let Some(url) = &query.url {
                     let bmark_url = bookmark.url.to_lowercase();
-                    if !query.no_exact_url && bmark_url == *url
-                        || query.no_exact_url && bmark_url.contains(url)
-                    {
+                    if query.exact && bmark_url == *url || !query.exact && bmark_url.contains(url) {
                         has_match = true;
                     } else {
                         return false;

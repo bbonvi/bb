@@ -19,7 +19,7 @@ pub struct App {
     bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
     storage_mgr: Arc<dyn storage::StorageManager>,
 
-    task_tx: Arc<mpsc::Sender<Task>>,
+    task_tx: Option<Arc<mpsc::Sender<Task>>>,
     task_queue_handle: Option<std::thread::JoinHandle<()>>,
 
     config: Arc<RwLock<Config>>,
@@ -36,33 +36,37 @@ impl App {
         Self {
             bmark_mgr,
             storage_mgr,
-            task_tx,
+            task_tx: Some(task_tx),
             task_queue_handle,
             config,
         }
     }
 
-    pub fn new(config: Arc<RwLock<Config>>) -> Self {
-        let bmark_mgr = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
-        let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
-
+    pub fn run_queue(&mut self) {
         let (task_tx, task_rx) = mpsc::channel::<Task>();
-
         let handle = std::thread::spawn({
-            let bmark_mgr = bmark_mgr.clone();
-            let storage_mgr = storage_mgr.clone();
-            let config = config.clone();
+            let bmark_mgr = self.bmark_mgr.clone();
+            let storage_mgr = self.storage_mgr.clone();
+            let config = self.config.clone();
 
             move || {
                 Self::start_queue(task_rx, bmark_mgr, storage_mgr, config);
             }
         });
 
+        self.task_queue_handle = Some(handle);
+        self.task_tx = Some(Arc::new(task_tx));
+    }
+
+    pub fn new(config: Arc<RwLock<Config>>) -> Self {
+        let bmark_mgr = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
+        let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
+
         Self {
             bmark_mgr,
             storage_mgr,
-            task_tx: Arc::new(task_tx),
-            task_queue_handle: Some(handle),
+            task_tx: None,
+            task_queue_handle: None,
             config,
         }
     }
@@ -175,6 +179,18 @@ impl App {
         self.bmark_mgr.delete(id)
     }
 
+    pub fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize> {
+        self.bmark_mgr.search_delete(query)
+    }
+
+    pub fn search_update(
+        &self,
+        query: bookmarks::SearchQuery,
+        bmark_update: bookmarks::BookmarkUpdate,
+    ) -> anyhow::Result<usize> {
+        self.bmark_mgr.search_update(query, bmark_update)
+    }
+
     pub fn search(
         &self,
         query: bookmarks::SearchQuery,
@@ -225,7 +241,7 @@ impl App {
         bookmark: &bookmarks::Bookmark,
         meta_opts: FetchMetadataOpts,
     ) {
-        if let Err(err) = self.task_tx.send(Task::FetchMetadata {
+        if let Err(err) = self.task_tx.as_ref().unwrap().send(Task::FetchMetadata {
             bmark_id: bookmark.id,
             opts: meta_opts,
         }) {
@@ -234,6 +250,7 @@ impl App {
     }
 
     pub fn refresh_backend(&self) -> anyhow::Result<()> {
+        // Ok(())
         self.bmark_mgr.refresh()
     }
 }
@@ -454,7 +471,7 @@ impl App {
     }
 
     pub fn shutdown(&self) {
-        if let Err(err) = self.task_tx.send(Task::Shutdown) {
+        if let Err(err) = self.task_tx.as_ref().unwrap().send(Task::Shutdown) {
             eprintln!("{err}");
         }
     }

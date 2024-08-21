@@ -37,6 +37,7 @@ fn main() -> anyhow::Result<()> {
 
     match args.command {
         cli::Command::Daemon { .. } => {
+            app_mgr.run_queue();
             web::start_daemon(app_mgr);
             return Ok(());
         }
@@ -48,28 +49,33 @@ fn main() -> anyhow::Result<()> {
             description,
             exact,
             url,
-            no_exact_url,
             action,
-            ..
+            count,
         } => {
-            let bookmarks = app_mgr.search(SearchQuery {
+            let query = SearchQuery {
                 id: id.clone(),
                 title: title.clone(),
                 url: url.clone(),
                 description: description.clone(),
                 tags: tags.clone().map(parse_tags),
                 exact,
-                no_exact_url,
-            })?;
+            };
+            let bmarks = app_mgr.search(query.clone())?;
 
-            if bookmarks.is_empty() {
-                bail!("not found");
+            if bmarks.is_empty() {
+                println!("{}", serde_json::to_string_pretty(&bmarks).unwrap());
+                return Ok(());
+            }
+
+            if count {
+                println!("{} bookmarks found", bmarks.len());
+                return Ok(());
             }
 
             match action {
                 // print results
                 None => {
-                    println!("{}", serde_json::to_string_pretty(&bookmarks).unwrap());
+                    println!("{}", serde_json::to_string_pretty(&bmarks).unwrap());
                     Ok(())
                 }
 
@@ -80,25 +86,61 @@ fn main() -> anyhow::Result<()> {
                     description,
                     tags,
                     meta_args,
-                }) => Ok(()),
+                }) => {
+                    let bmark_update = bookmarks::BookmarkUpdate {
+                        title,
+                        description,
+                        tags: tags.map(parse_tags),
+                        url,
+                        ..Default::default()
+                    };
+
+                    let is_entire_db = query.url.is_none()
+                        && query.title.is_none()
+                        && query.description.is_none()
+                        && query.tags.is_none()
+                        && query.id.is_none();
+
+                    if bmark_update.title.is_none()
+                        && bmark_update.description.is_none()
+                        && bmark_update.tags.is_none()
+                        && bmark_update.url.is_none()
+                    {
+                        println!("This update request does nothing");
+                        return Ok(());
+                    }
+
+                    if is_entire_db {
+                        match inquire::prompt_confirmation(
+                            format!("You are about to update every single bookmark ({} items). Are you really sure?", bmarks.len()),
+                        ) {
+                            InquireResult::Ok(true) => {}
+                            InquireResult::Ok(false) => return Ok(()),
+                            InquireResult::Err(err) => return bail!("An error occurred: {}", err),
+                        }
+                    }
+
+                    let count = app_mgr.search_update(query, bmark_update).unwrap();
+
+                    println!("{} items updated", count);
+
+                    Ok(())
+                }
 
                 // delete results
                 Some(ActionArgs::Delete { yes, force }) => {
                     let is_wipe = !force
-                        && url.is_none()
-                        && title.is_none()
-                        && description.is_none()
-                        && tags.is_none()
-                        && id.is_none();
-
-                    if !is_wipe {
-                        bookmarks.iter().for_each(|b| println!("{}", b.title));
-                    }
+                        && query.url.is_none()
+                        && query.title.is_none()
+                        && query.description.is_none()
+                        && query.tags.is_none()
+                        && query.id.is_none();
 
                     if !yes {
-                        match inquire::prompt_confirmation(
-                            "Are you sure you want to delete these bookmarks?",
-                        ) {
+                        match inquire::prompt_confirmation(format!(
+                            "Are you sure you want to delete {} bookmarks?",
+                            bmarks.len()
+                        )) {
                             InquireResult::Ok(true) => {}
                             InquireResult::Ok(false) => return Ok(()),
                             InquireResult::Err(err) => return bail!("An error occurred: {}", err),
@@ -115,11 +157,9 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
 
-                    for bookmark in &bookmarks {
-                        app_mgr.delete(bookmark.id).unwrap();
-                    }
+                    let count = app_mgr.search_delete(query).unwrap();
 
-                    println!("{} items removed", bookmarks.len());
+                    println!("{} items removed", count);
                     Ok(())
                 }
             }
@@ -223,7 +263,47 @@ fn main() -> anyhow::Result<()> {
                     }
                 },
                 RulesArgs::Delete {} => todo!(),
-                RulesArgs::List {} => todo!(),
+                RulesArgs::List {} => {
+                    for (idx, rule) in config.rules.iter().enumerate() {
+                        if let Some(comment) = &rule.comment {
+                            println!("Rule #{} // {comment}", idx + 1);
+                        } else {
+                            println!("Rule #{}", idx + 1);
+                        }
+                        if let Some(url) = &rule.url {
+                            println!("  url: {url:#?}");
+                        }
+                        if let Some(title) = &rule.title {
+                            println!("  title: {title:#?}");
+                        }
+                        if let Some(description) = &rule.description {
+                            println!("  description: {description:#?}");
+                        }
+                        if let Some(tags) = &rule.tags {
+                            println!("  tags: {tags:#?}");
+                        }
+
+                        match &rule.action {
+                            rules::Action::UpdateBookmark {
+                                title,
+                                description,
+                                tags,
+                            } => {
+                                println!("  UpdateBookmark:");
+                                if let Some(title) = &title {
+                                    println!("    title: {title}");
+                                }
+                                if let Some(description) = &description {
+                                    println!("    description: {description}");
+                                }
+                                if let Some(tags) = &tags {
+                                    println!("    tags: {tags:?}");
+                                }
+                            }
+                        }
+                        println!("");
+                    }
+                }
             };
 
             Ok(())
