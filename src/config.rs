@@ -29,25 +29,13 @@ impl Config {
         Self::load_with("config")
     }
 
-    pub fn load_with(conf_name: &str) -> Self {
-        let store = storage::BackendLocal::new("./");
-
-        let path = format!("{conf_name}.yaml");
-        let temp_path = format!("{conf_name}-temp.yaml");
-
-        // create new if does not exist
-        if !store.exists(&path) {
-            let config_str = serde_yml::to_string(&Self::default()).unwrap();
-            store.write(&temp_path, &config_str.as_bytes());
-            std::fs::rename(&temp_path, &path).unwrap();
+    fn validate(&mut self) {
+        if self.task_queue_max_threads == 0 {
+            self.task_queue_max_threads = 1
         }
 
-        let config_str =
-            String::from_utf8(store.read(&path)).expect("config file is not valid utf8");
-        let config: Self = serde_yml::from_str(&config_str).expect("config is malformed");
-
         // validate rules
-        for (idx, rule) in config.rules.iter().enumerate() {
+        for (idx, rule) in self.rules.iter().enumerate() {
             if rule.url.is_none()
                 && rule.title.is_none()
                 && rule.description.is_none()
@@ -61,6 +49,26 @@ impl Config {
             Rule::is_string_matches(&rule.title.clone().unwrap_or_default(), "");
             Rule::is_string_matches(&rule.description.clone().unwrap_or_default(), "");
         }
+    }
+
+    pub fn load_with(conf_name: &str) -> Self {
+        let store = storage::BackendLocal::new("./");
+
+        let path = format!("{conf_name}.yaml");
+
+        // create new if does not exist
+        if !store.exists(&path) {
+            store.write(
+                &path,
+                &serde_yml::to_string(&Self::default()).unwrap().as_bytes(),
+            );
+        }
+
+        let config_str =
+            String::from_utf8(store.read(&path)).expect("config file is not valid utf8");
+        let mut config: Self = serde_yml::from_str(&config_str).expect("config is malformed");
+
+        config.validate();
 
         // resave in case config version needs an upgrade
         if config_str != serde_yml::to_string(&config).unwrap() {
@@ -74,8 +82,6 @@ impl Config {
         let store = storage::BackendLocal::new("./");
 
         let config_str = serde_yml::to_string(&self).unwrap();
-        store.write("config-temp.yaml", &config_str.as_bytes());
-
-        std::fs::rename("config-temp.yaml", "config.yaml").unwrap();
+        store.write("config.yaml", &config_str.as_bytes());
     }
 }

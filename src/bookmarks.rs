@@ -1,4 +1,4 @@
-use crate::eid::Eid;
+use crate::{eid::Eid, storage::StorageManager};
 use core::panic;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -73,6 +73,8 @@ pub trait BookmarkManager: Send + Sync {
     fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark>;
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
     fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>>;
+
+    fn refresh(&self) -> anyhow::Result<()>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -102,12 +104,14 @@ impl BackendJson {
     }
 
     pub fn save(&self) {
+        let store = crate::storage::BackendLocal::new("./");
+
         let bmarks = self.list.read().unwrap();
 
-        let temp_path = format!("{}-{}", &self.path, Eid::new());
-
-        write(&temp_path, serde_json::to_string(&*bmarks).unwrap()).unwrap();
-        rename(&temp_path, &self.path).unwrap();
+        store.write(
+            &self.path,
+            &serde_json::to_string(&*bmarks).unwrap().as_bytes(),
+        );
     }
 
     #[cfg(test)]
@@ -284,6 +288,12 @@ impl BookmarkManager for BackendJson {
             })
             .map(|b| b.clone())
             .collect::<Vec<_>>())
+    }
+
+    fn refresh(&self) -> anyhow::Result<()> {
+        let backend = Self::load(&self.path);
+        *self.list.write().unwrap() = backend.list.write().unwrap().clone();
+        Ok(())
     }
 }
 

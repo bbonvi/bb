@@ -57,6 +57,7 @@ async fn start_app(app: App) {
     }
 
     let app = Router::new()
+        .nest_service("/api/file/", tower_http::services::ServeDir::new("uploads"))
         .route("/api/bookmarks", get(list_bookmarks))
         .route("/api/bookmarks", put(create_bookmark))
         .route("/api/bookmarks/:bmark_id", post(update_bookmark))
@@ -121,7 +122,7 @@ async fn list_bookmarks(
     State(state): State<Arc<SharedState>>,
     Query(query): Query<ListBookmarksRequest>,
 ) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
-    let app = state.app.read().await;
+    let app = state.app.clone();
 
     let search_query = SearchQuery {
         id: query.id,
@@ -134,6 +135,8 @@ async fn list_bookmarks(
     };
 
     tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.refresh_backend()?;
         app.search(search_query).map(Into::into).map_err(Into::into)
     })
 }
@@ -199,6 +202,7 @@ async fn create_bookmark(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
+        app.refresh_backend()?;
         app.create(bmark_create, opts)
             .map(Into::into)
             .map_err(Into::into)
@@ -231,7 +235,7 @@ async fn update_bookmark(
     Path(bmark_id): Path<u64>,
     Json(payload): Json<BookmarkUpdateRequest>,
 ) -> Result<axum::Json<Bookmark>, AppError> {
-    let mut app = state.app.write().await;
+    let app = state.app.clone();
 
     let bmark_update = BookmarkUpdate {
         title: payload.title,
@@ -242,6 +246,8 @@ async fn update_bookmark(
     };
 
     tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.refresh_backend()?;
         app.update(bmark_id, bmark_update)?
             .ok_or_else(|| anyhow!("bookmark not found"))
             .map(Into::into)
@@ -253,8 +259,11 @@ async fn delete_bookmark(
     State(state): State<Arc<SharedState>>,
     Path(bmark_id): Path<u64>,
 ) -> Result<axum::Json<bool>, AppError> {
-    let mut app = state.app.write().await;
+    let app = state.app.clone();
+
     tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.refresh_backend()?;
         app.delete(bmark_id)?
             .ok_or_else(|| anyhow!("bookmark not found"))
             .map(Into::into)

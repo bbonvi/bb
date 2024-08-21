@@ -13,9 +13,9 @@ pub struct BackendLocal {
 
 impl BackendLocal {
     pub fn new(storage_dir: &str) -> Self {
-        BackendLocal {
-            base_dir: PathBuf::from_str(&storage_dir).unwrap(),
-        }
+        let path = PathBuf::from_str(&storage_dir).unwrap();
+        std::fs::create_dir_all(&path).unwrap();
+        BackendLocal { base_dir: path }
     }
 }
 
@@ -27,16 +27,12 @@ impl StorageManager for BackendLocal {
     }
 
     fn read(&self, ident: &str) -> Vec<u8> {
-        std::fs::create_dir_all(&self.base_dir).unwrap();
-
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
 
         std::fs::read(&path).unwrap()
     }
 
     fn write(&self, ident: &str, data: &[u8]) {
-        std::fs::create_dir_all(&self.base_dir).unwrap();
-
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
         let temp_path = format!("{}/temp-{ident}", &self.base_dir.to_str().unwrap());
 

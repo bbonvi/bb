@@ -171,7 +171,7 @@ impl App {
         self.bmark_mgr.update(id, bmark_update)
     }
 
-    pub fn delete(&mut self, id: u64) -> anyhow::Result<Option<bool>> {
+    pub fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
         self.bmark_mgr.delete(id)
     }
 
@@ -231,6 +231,10 @@ impl App {
         }) {
             eprintln!("{err}");
         };
+    }
+
+    pub fn refresh_backend(&self) -> anyhow::Result<()> {
+        self.bmark_mgr.refresh()
     }
 }
 
@@ -368,7 +372,9 @@ impl App {
         let thread_ctr = Arc::new(AtomicU16::new(0));
         let max_threads = config.read().unwrap().task_queue_max_threads;
 
+        println!("waiting for job");
         while let Ok(task) = task_rx.recv() {
+            println!("got the job");
             let storage_mgr = storage_mgr.clone();
             let bmark_mgr = bmark_mgr.clone();
             let thread_counter = thread_ctr.clone();
