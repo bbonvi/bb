@@ -4,7 +4,10 @@ use headless_chrome::{
     LaunchOptionsBuilder, Tab,
 };
 use reqwest::StatusCode;
-use std::{cmp::Ordering, error::Error, sync::Arc, thread::sleep, time::Duration};
+use std::{
+    cmp::Ordering, error::Error, path::PathBuf, str::FromStr, sync::Arc, thread::sleep,
+    time::Duration,
+};
 
 const _USER_AGENT_GOOGLE: &'static str = "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 const USER_AGENT_DEFAULT: &'static str =
@@ -97,6 +100,12 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
         let browser = match headless_chrome::Browser::new(
             LaunchOptionsBuilder::default()
                 .proxy_server(proxy.as_deref())
+                .path(Some(
+                    PathBuf::from_str(
+                        &std::env::var("CHROME_PATH").unwrap_or("chromium".to_string()),
+                    )
+                    .unwrap(),
+                ))
                 .build()
                 .unwrap(),
         ) {

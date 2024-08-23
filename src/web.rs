@@ -110,6 +110,9 @@ pub struct ListBookmarksRequest {
     /// *Exact search is turned off by default*
     #[serde(default)]
     pub exact: bool,
+
+    #[serde(default)]
+    pub descending: bool,
 }
 
 async fn list_bookmarks(
@@ -123,14 +126,23 @@ async fn list_bookmarks(
         title: query.title,
         url: query.url,
         description: query.description,
-        tags: query.tags.map(|tags| parse_tags(tags)),
+        tags: dbg!(query.tags.map(|tags| parse_tags(tags))),
         exact: query.exact,
     };
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
         app.refresh_backend()?;
-        app.search(search_query).map(Into::into).map_err(Into::into)
+        app.search(search_query)
+            .map(|mut b| {
+                if query.descending {
+                    b.reverse();
+                }
+
+                b
+            })
+            .map(Into::into)
+            .map_err(Into::into)
     })
 }
 

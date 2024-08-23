@@ -335,16 +335,13 @@ impl BookmarkManager for BackendJson {
                 };
 
                 if let Some(tags) = &query.tags {
-                    let mut bmark_tags = bookmark.tags.iter().map(|t| t.to_lowercase());
+                    let bmark_tags = bookmark.tags.iter().map(|t| t.to_lowercase());
                     for tag in tags {
-                        match bmark_tags.find(|tag_b| tag == tag_b).is_none() {
-                            true => {
-                                has_match = false;
-                                break;
-                            }
-                            false => {
-                                has_match = true;
-                            }
+                        if bmark_tags.clone().find(|tag_b| tag == tag_b).is_none() {
+                            has_match = false;
+                            break;
+                        } else {
+                            has_match = true;
                         }
                     }
                 };
