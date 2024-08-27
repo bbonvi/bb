@@ -188,6 +188,85 @@ pub fn test_backend_json_search_by_tags() {
 }
 
 #[test]
+pub fn test_backend_json_search_by_subtags() {
+    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+
+    mgr.create(bookmarks::BookmarkCreate {
+        url: "http://example.com/1".to_string(),
+        tags: Some(vec!["tag/1".into()]),
+        ..Default::default()
+    })
+    .unwrap();
+
+    mgr.create(bookmarks::BookmarkCreate {
+        url: "http://example.com/2".to_string(),
+        tags: Some(vec!["tag/2".into()]),
+        ..Default::default()
+    })
+    .unwrap();
+
+    mgr.create(bookmarks::BookmarkCreate {
+        url: "http://example.com/3".to_string(),
+        tags: Some(vec!["tag".into()]),
+        ..Default::default()
+    })
+    .unwrap();
+
+    mgr.create(bookmarks::BookmarkCreate {
+        url: "http://example.com/4".to_string(),
+        tags: Some(vec!["tags".into()]),
+        ..Default::default()
+    })
+    .unwrap();
+
+    //
+
+    assert_eq!(
+        mgr.search(bookmarks::SearchQuery {
+            tags: Some(vec!["tags".into()]),
+            ..Default::default()
+        })
+        .unwrap()
+        .len(),
+        1
+    );
+
+    assert_eq!(
+        mgr.search(bookmarks::SearchQuery {
+            tags: Some(vec!["tag".into()]),
+            ..Default::default()
+        })
+        .unwrap()
+        .len(),
+        3
+    );
+
+    assert_eq!(
+        mgr.search(bookmarks::SearchQuery {
+            tags: Some(vec!["tag/1".into()]),
+            ..Default::default()
+        })
+        .unwrap()
+        .len(),
+        1
+    );
+
+    assert_eq!(
+        &mgr.search(bookmarks::SearchQuery {
+            tags: Some(vec!["-tag".into()]),
+            ..Default::default()
+        })
+        .unwrap()
+        .first()
+        .unwrap()
+        .url,
+        "http://example.com/4"
+    );
+
+    mgr.wipe_database();
+}
+
+#[test]
 pub fn test_backend_json_delete() {
     let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
 

@@ -4,11 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     fs::{read_to_string, rename, write},
+    hash::Hash,
     io::ErrorKind,
     sync::{Arc, RwLock},
 };
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, Default, Serialize, Deserialize)]
 pub struct Bookmark {
     pub id: u64,
 
@@ -19,6 +20,18 @@ pub struct Bookmark {
 
     pub image_id: Option<String>,
     pub icon_id: Option<String>,
+}
+
+impl Hash for Bookmark {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
+}
+
+impl PartialEq for Bookmark {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -97,8 +110,10 @@ impl BackendJson {
                 _ => panic!("{err}"),
             },
         };
-        let bookmarks = serde_json::from_str(&bookmarks_plain).unwrap();
-        let mgr = Self {
+        let mut bookmarks: Vec<Bookmark> = serde_json::from_str(&bookmarks_plain).unwrap();
+        // let mut seen = HashSet::new();
+        // bookmarks.retain(|item| seen.insert(item.clone()));
+        let mgr = BackendJson {
             list: Arc::new(RwLock::new(bookmarks)),
             path: path.to_string(),
         };
@@ -111,7 +126,7 @@ impl BackendJson {
     pub fn save(&self) {
         let store = crate::storage::BackendLocal::new("./");
 
-        let bmarks = self.list.read().unwrap();
+        let bmarks = self.list.write().unwrap();
 
         store.write(
             &self.path,
@@ -237,43 +252,40 @@ impl BookmarkManager for BackendJson {
     }
 
     fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>> {
-        let result = self
-            .list
-            .write()
-            .unwrap()
-            .iter_mut()
-            .find(|b| b.id == id)
-            .map(|b| {
-                if let Some(title) = bmark_update.title {
-                    b.title = title;
-                }
-                if let Some(descr) = bmark_update.description {
-                    b.description = descr;
-                }
-                if let Some(tags) = bmark_update.tags {
-                    b.tags = tags;
-                    let mut seen = HashSet::new();
-                    b.tags.retain(|item| seen.insert(item.clone()));
-                }
-                if let Some(url) = bmark_update.url {
-                    b.url = url;
-                }
+        let mut bmarks = self.list.write().unwrap();
 
-                if let Some(image_id) = bmark_update.image_id {
-                    b.image_id = Some(image_id);
-                }
-                if let Some(icon_id) = bmark_update.icon_id {
-                    b.icon_id = Some(icon_id);
-                }
+        let bmark = if let Some(bmark) = bmarks.iter_mut().find(|b| b.id == id) {
+            if let Some(title) = bmark_update.title {
+                bmark.title = title;
+            }
+            if let Some(descr) = bmark_update.description {
+                bmark.description = descr;
+            }
+            if let Some(tags) = bmark_update.tags {
+                bmark.tags = tags;
+                let mut seen = HashSet::new();
+                bmark.tags.retain(|item| seen.insert(item.clone()));
+            }
+            if let Some(url) = bmark_update.url {
+                bmark.url = url;
+            }
 
-                b.clone()
-            });
+            if let Some(image_id) = bmark_update.image_id {
+                bmark.image_id = Some(image_id);
+            }
+            if let Some(icon_id) = bmark_update.icon_id {
+                bmark.icon_id = Some(icon_id);
+            }
+            Some(bmark.clone())
+        } else {
+            None
+        };
 
-        if result.is_some() {
-            self.save();
-        }
+        drop(bmarks);
 
-        Ok(result)
+        self.save();
+
+        Ok(bmark)
     }
 
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
@@ -336,12 +348,42 @@ impl BookmarkManager for BackendJson {
 
                 if let Some(tags) = &query.tags {
                     let bmark_tags = bookmark.tags.iter().map(|t| t.to_lowercase());
+
                     for tag in tags {
-                        if bmark_tags.clone().find(|tag_b| tag == tag_b).is_none() {
-                            has_match = false;
-                            break;
+                        let unprefixed_tag = tag.strip_prefix("-");
+
+                        if let Some(unprefixed_tag) = unprefixed_tag {
+                            if bmark_tags
+                                .clone()
+                                .find(|tag_b| {
+                                    unprefixed_tag == tag_b
+                                        || tag_b.contains(&format!("{unprefixed_tag}/"))
+                                })
+                                .is_some()
+                            {
+                                has_match = false;
+                                break;
+                            } else {
+                                has_match = true;
+                            }
                         } else {
-                            has_match = true;
+                            if bmark_tags
+                                .clone()
+                                .find(|tag_b| {
+                                    if let Some(unprefixed_tag) = unprefixed_tag {
+                                        return dbg!(unprefixed_tag) != dbg!(tag_b)
+                                            && !tag_b.contains(&format!("{}/", unprefixed_tag));
+                                    }
+                                    //
+                                    tag == tag_b || tag_b.contains(&format!("{tag}/"))
+                                })
+                                .is_none()
+                            {
+                                has_match = false;
+                                break;
+                            } else {
+                                has_match = true;
+                            }
                         }
                     }
                 };
@@ -353,8 +395,9 @@ impl BookmarkManager for BackendJson {
     }
 
     fn refresh(&self) -> anyhow::Result<()> {
+        let mut list = self.list.write().unwrap();
         let backend = Self::load(&self.path);
-        *self.list.write().unwrap() = backend.list.write().unwrap().clone();
+        *list = backend.list.write().unwrap().clone();
         Ok(())
     }
 }

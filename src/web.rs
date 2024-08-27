@@ -126,7 +126,7 @@ async fn list_bookmarks(
         title: query.title,
         url: query.url,
         description: query.description,
-        tags: dbg!(query.tags.map(|tags| parse_tags(tags))),
+        tags: query.tags.map(|tags| parse_tags(tags)),
         exact: query.exact,
     };
 
