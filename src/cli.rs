@@ -127,7 +127,7 @@ pub enum Command {
         description: Option<String>,
 
         /// Bookmark tags
-        #[clap(short = 'g', long)]
+        #[clap(short = 'g', long, allow_hyphen_values = true)]
         tags: Option<String>,
 
         /// id
