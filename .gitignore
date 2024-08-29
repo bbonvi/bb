@@ -1,6 +1,10 @@
 /target
 *.DS_Store
 *.vim
-bookmarks.json
+bookmarks*json
+*bookmarks*json
+bookmarks*csv
+*bookmarks*csv
+buku.json
 config.yaml
 uploads/

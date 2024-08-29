@@ -32,8 +32,15 @@ pub struct App {
 
 pub fn bmarks_modtime() -> SystemTime {
     use std::path::Path;
-    let bookmarks_metadata =
-        std::fs::metadata(Path::new("bookmarks.json")).expect("couldnt read bookmarks.json");
+    let meta = std::fs::metadata(Path::new("bookmarks.json"));
+    if let Err(err) = &meta {
+        match err.kind() {
+            std::io::ErrorKind::NotFound => return SystemTime::now(),
+            _ => {}
+        }
+    };
+
+    let bookmarks_metadata = meta.expect("couldnt read bookmarks.json");
     bookmarks_metadata
         .modified()
         .expect("couldnt get bookmarks.json modtime")
@@ -74,7 +81,19 @@ impl App {
     }
 
     pub fn new(config: Arc<RwLock<Config>>) -> Self {
-        let bmark_mgr = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
+        let bmark_mgr = Arc::new(bookmarks::BackendCsv::load("bookmarks.csv").unwrap());
+        {
+            let bmark_mgr_json = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
+
+            let json_list = bmark_mgr_json.list().clone();
+            let csv_list = bmark_mgr.list().clone();
+
+            let json_list = json_list.write().unwrap();
+            let mut csv_list = csv_list.write().unwrap();
+
+            *csv_list = json_list.clone();
+        }
+
         bmark_mgr.save();
         let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
 

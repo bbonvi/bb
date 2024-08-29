@@ -7,10 +7,10 @@ use crate::bookmarks;
 use crate::storage;
 
 pub fn create_app() -> App {
-    let _ = std::fs::remove_file("bookmarks-test.json");
-    let _ = std::fs::remove_file("config-test.json");
+    let _ = std::fs::remove_file("bookmarks-test.csv");
+    let _ = std::fs::remove_file("config-test.yaml");
 
-    let bmark_mgr = Arc::new(bookmarks::BackendJson::load("bookmarks-test.json"));
+    let bmark_mgr = Arc::new(bookmarks::BackendCsv::load("bookmarks-test.csv").unwrap());
     let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
 
     let (task_tx, task_rx) = mpsc::channel::<Task>();

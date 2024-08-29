@@ -3,7 +3,9 @@ use crate::bookmarks::BookmarkManager;
 
 #[test]
 pub fn test_backend_json_create() {
-    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
+        .unwrap()
+        .wipe_database();
 
     let created = mgr
         .create(bookmarks::BookmarkCreate {
@@ -25,7 +27,9 @@ pub fn test_backend_json_create() {
 
 #[test]
 pub fn test_backend_json_search_by_title() {
-    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
+        .unwrap()
+        .wipe_database();
 
     mgr.create(bookmarks::BookmarkCreate {
         title: Some("Some kind of TITLE over here".to_string()),
@@ -63,7 +67,9 @@ pub fn test_backend_json_search_by_title() {
 
 #[test]
 pub fn test_backend_json_search_by_description() {
-    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
+        .unwrap()
+        .wipe_database();
 
     mgr.create(bookmarks::BookmarkCreate {
         title: Some("Some kind of TITLE over here".to_string()),
@@ -104,7 +110,9 @@ pub fn test_backend_json_search_by_description() {
 
 #[test]
 pub fn test_backend_json_search_by_description_and_title() {
-    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
+        .unwrap()
+        .wipe_database();
 
     mgr.create(bookmarks::BookmarkCreate {
         title: Some("Some kind of TITLE over here".to_string()),
@@ -145,7 +153,9 @@ pub fn test_backend_json_search_by_description_and_title() {
 
 #[test]
 pub fn test_backend_json_search_by_tags() {
-    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
+        .unwrap()
+        .wipe_database();
 
     mgr.create(bookmarks::BookmarkCreate {
         title: Some("Some kind of TITLE over here".to_string()),
@@ -189,7 +199,9 @@ pub fn test_backend_json_search_by_tags() {
 
 #[test]
 pub fn test_backend_json_search_by_subtags() {
-    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
+        .unwrap()
+        .wipe_database();
 
     mgr.create(bookmarks::BookmarkCreate {
         url: "http://example.com/1".to_string(),
@@ -268,7 +280,9 @@ pub fn test_backend_json_search_by_subtags() {
 
 #[test]
 pub fn test_backend_json_delete() {
-    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
+        .unwrap()
+        .wipe_database();
 
     let created = mgr
         .create(bookmarks::BookmarkCreate {
@@ -297,7 +311,9 @@ pub fn test_backend_json_delete() {
 
 #[test]
 pub fn test_backend_json_update() {
-    let mgr = bookmarks::BackendJson::load("test-bookmarks.json").wipe_database();
+    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
+        .unwrap()
+        .wipe_database();
 
     let _ = mgr
         .create(bookmarks::BookmarkCreate {
