@@ -115,10 +115,16 @@ pub struct ListBookmarksRequest {
     pub descending: bool,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ListBookmarksResponse {
+    bookmarks: Vec<Bookmark>,
+    total: usize,
+}
+
 async fn list_bookmarks(
     State(state): State<Arc<SharedState>>,
     Query(query): Query<ListBookmarksRequest>,
-) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
+) -> Result<axum::Json<ListBookmarksResponse>, AppError> {
     let app = state.app.clone();
 
     let search_query = SearchQuery {
@@ -128,18 +134,22 @@ async fn list_bookmarks(
         description: query.description,
         tags: query.tags.map(|tags| parse_tags(tags)),
         exact: query.exact,
+        limit: None,
     };
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.refresh_backend()?;
+        app.lazy_refresh_backend()?;
+
+        let total = app.total()?;
+
         app.search(search_query)
-            .map(|mut b| {
+            .map(|mut bookmarks| {
                 if query.descending {
-                    b.reverse();
+                    bookmarks.reverse();
                 }
 
-                b
+                ListBookmarksResponse { bookmarks, total }
             })
             .map(Into::into)
             .map_err(Into::into)
@@ -207,7 +217,7 @@ async fn create_bookmark(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.refresh_backend()?;
+        app.lazy_refresh_backend()?;
         app.create(bmark_create, opts)
             .map(Into::into)
             .map_err(Into::into)
@@ -252,7 +262,7 @@ async fn update_bookmark(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.refresh_backend()?;
+        app.lazy_refresh_backend()?;
         app.update(bmark_id, bmark_update)?
             .ok_or_else(|| anyhow!("bookmark not found"))
             .map(Into::into)
@@ -268,7 +278,7 @@ async fn delete_bookmark(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.refresh_backend()?;
+        app.lazy_refresh_backend()?;
         app.delete(bmark_id)?
             .ok_or_else(|| anyhow!("bookmark not found"))
             .map(Into::into)

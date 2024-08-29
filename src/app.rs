@@ -10,9 +10,12 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Context};
 use std::{
-    sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, AtomicU16},
+        mpsc, Arc, RwLock,
+    },
     thread::sleep,
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 pub struct App {
@@ -23,6 +26,17 @@ pub struct App {
     task_queue_handle: Option<std::thread::JoinHandle<()>>,
 
     config: Arc<RwLock<Config>>,
+
+    bmarks_last_modified: Arc<RwLock<SystemTime>>,
+}
+
+pub fn bmarks_modtime() -> SystemTime {
+    use std::path::Path;
+    let bookmarks_metadata =
+        std::fs::metadata(Path::new("bookmarks.json")).expect("couldnt read bookmarks.json");
+    bookmarks_metadata
+        .modified()
+        .expect("couldnt get bookmarks.json modtime")
 }
 
 impl App {
@@ -39,6 +53,7 @@ impl App {
             task_tx: Some(task_tx),
             task_queue_handle,
             config,
+            bmarks_last_modified: Arc::new(RwLock::new(bmarks_modtime())),
         }
     }
 
@@ -60,6 +75,7 @@ impl App {
 
     pub fn new(config: Arc<RwLock<Config>>) -> Self {
         let bmark_mgr = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
+        bmark_mgr.save();
         let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
 
         Self {
@@ -68,6 +84,7 @@ impl App {
             task_tx: None,
             task_queue_handle: None,
             config,
+            bmarks_last_modified: Arc::new(RwLock::new(bmarks_modtime())),
         }
     }
 }
@@ -107,6 +124,8 @@ impl App {
         if !self.config.read().unwrap().allow_duplicates {
             let query = bookmarks::SearchQuery {
                 url: Some(bmark_create.url.clone()),
+                exact: true,
+                limit: Some(1),
                 ..Default::default()
             };
 
@@ -191,6 +210,10 @@ impl App {
         self.bmark_mgr.search_update(query, bmark_update)
     }
 
+    pub fn total(&self) -> anyhow::Result<usize> {
+        self.bmark_mgr.total()
+    }
+
     pub fn search(
         &self,
         query: bookmarks::SearchQuery,
@@ -247,6 +270,20 @@ impl App {
         }) {
             eprintln!("{err}");
         };
+    }
+
+    pub fn lazy_refresh_backend(&self) -> anyhow::Result<()> {
+        let modtime = bmarks_modtime();
+        let mut last_modified = self.bmarks_last_modified.write().unwrap();
+        if *last_modified != modtime {
+            *last_modified = modtime;
+            println!("refreshing...");
+            if let Err(err) = self.bmark_mgr.refresh() {
+                eprintln!("external_changes watcher: {err}");
+            }
+        }
+
+        Ok(())
     }
 
     pub fn refresh_backend(&self) -> anyhow::Result<()> {

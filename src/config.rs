@@ -15,6 +15,9 @@ pub struct Config {
     pub allow_duplicates: bool,
     #[serde(default)]
     pub rules: Vec<Rule>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    conf_name: String,
 }
 
 fn task_queue_max_threads() -> u16 {
@@ -68,6 +71,8 @@ impl Config {
             String::from_utf8(store.read(&path)).expect("config file is not valid utf8");
         let mut config: Self = serde_yml::from_str(&config_str).expect("config is malformed");
 
+        config.conf_name = conf_name.to_string();
+
         config.validate();
 
         // resave in case config version needs an upgrade
@@ -82,6 +87,7 @@ impl Config {
         let store = storage::BackendLocal::new("./");
 
         let config_str = serde_yml::to_string(&self).unwrap();
-        store.write("config.yaml", &config_str.as_bytes());
+        let path = format!("{}.yaml", self.conf_name);
+        store.write(&path, &config_str.as_bytes());
     }
 }

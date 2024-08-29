@@ -107,6 +107,7 @@ pub enum RulesArgs {
 /// Doc comment
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    MigrateBuku {},
     /// Start bb as a service.
     Daemon {
         // #[clap(trailing_var_arg=true, value_parser = ["database", "scraper"])]

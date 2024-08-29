@@ -5,6 +5,7 @@ use clap::Parser;
 
 mod app;
 mod bookmarks;
+mod buku_migrate;
 mod cli;
 mod config;
 mod eid;
@@ -36,6 +37,11 @@ fn main() -> anyhow::Result<()> {
     let mut app_mgr = app::App::new(config.clone());
 
     match args.command {
+        cli::Command::MigrateBuku {} => {
+            buku_migrate::migrate();
+            return Ok(());
+        }
+
         cli::Command::Daemon { .. } => {
             app_mgr.run_queue();
             web::start_daemon(app_mgr);
@@ -59,6 +65,7 @@ fn main() -> anyhow::Result<()> {
                 description: description.clone(),
                 tags: tags.clone().map(parse_tags),
                 exact,
+                limit: None,
             };
             let bmarks = app_mgr.search(query.clone())?;
 

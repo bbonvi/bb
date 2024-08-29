@@ -77,10 +77,14 @@ pub struct SearchQuery {
 
     #[serde(default)]
     pub exact: bool,
+
+    #[serde(default)]
+    pub limit: Option<usize>,
 }
 
 pub trait BookmarkManager: Send + Sync {
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>>;
+    fn total(&self) -> anyhow::Result<usize>;
     fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark>;
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
     fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>>;
@@ -110,7 +114,7 @@ impl BackendJson {
                 _ => panic!("{err}"),
             },
         };
-        let mut bookmarks: Vec<Bookmark> = serde_json::from_str(&bookmarks_plain).unwrap();
+        let bookmarks: Vec<Bookmark> = serde_json::from_str(&bookmarks_plain).unwrap();
         // let mut seen = HashSet::new();
         // bookmarks.retain(|item| seen.insert(item.clone()));
         let mgr = BackendJson {
@@ -118,7 +122,7 @@ impl BackendJson {
             path: path.to_string(),
         };
 
-        mgr.save();
+        // mgr.save();
 
         mgr
     }
@@ -288,110 +292,128 @@ impl BookmarkManager for BackendJson {
         Ok(bmark)
     }
 
+    fn total(&self) -> anyhow::Result<usize> {
+        let bmarks = self.list.read().unwrap();
+        Ok(bmarks.len())
+    }
+
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
         let bmarks = self.list.read().unwrap();
 
         let mut query = query;
         query.lowercase();
 
-        Ok(bmarks
-            .iter()
-            .filter(|bookmark| {
-                if query.description.is_none()
-                    && query.url.is_none()
-                    && query.title.is_none()
-                    && (query.tags.is_none() || query.tags.clone().unwrap_or_default().is_empty())
-                    && query.id.is_none()
-                {
-                    return true;
+        let mut output = vec![];
+
+        // return all
+        if query.description.is_none()
+            && query.url.is_none()
+            && query.title.is_none()
+            && (query.tags.is_none() || query.tags.clone().unwrap_or_default().is_empty())
+            && query.id.is_none()
+        {
+            return Ok(bmarks.clone());
+        }
+
+        let query_tags = query.tags.map(|tags| {
+            let tags = tags.clone();
+            tags.iter()
+                .cloned()
+                .map(|tag| {
+                    let unprefixed = tag.strip_prefix("-").map(String::from);
+                    (
+                        tag.clone(),
+                        format!("{tag}/"),
+                        unprefixed.clone(),
+                        format!("{}/", unprefixed.unwrap_or_default()),
+                    )
+                })
+                .collect::<Vec<_>>()
+        });
+
+        for bookmark in bmarks.iter() {
+            let mut has_match = false;
+
+            if let Some(id) = &query.id {
+                if bookmark.id == *id {
+                    has_match = true;
+                } else {
+                    continue;
                 }
+            };
 
-                let mut has_match = false;
-                if let Some(id) = &query.id {
-                    if bookmark.id == *id {
-                        has_match = true;
-                    } else {
-                        return false;
-                    }
-                };
+            if let Some(url) = &query.url {
+                if query.exact && bookmark.url.eq_ignore_ascii_case(url)
+                    || !query.exact && bookmark.url.to_lowercase().contains(url)
+                {
+                    has_match = true;
+                } else {
+                    continue;
+                }
+            };
 
-                if let Some(url) = &query.url {
-                    let bmark_url = bookmark.url.to_lowercase();
-                    if query.exact && bmark_url == *url || !query.exact && bmark_url.contains(url) {
-                        has_match = true;
-                    } else {
-                        return false;
-                    }
-                };
+            if let Some(description) = &query.description {
+                if query.exact && bookmark.description.eq_ignore_ascii_case(description)
+                    || !query.exact && bookmark.description.to_lowercase().contains(description)
+                {
+                    has_match = true;
+                } else {
+                    continue;
+                }
+            };
 
-                if let Some(description) = &query.description {
-                    let bmark_description = bookmark.description.to_lowercase();
-                    if query.exact && bmark_description == *description
-                        || !query.exact && bmark_description.contains(description)
-                    {
-                        has_match = true;
-                    } else {
-                        return false;
-                    }
-                };
+            if let Some(title) = &query.title {
+                if query.exact && bookmark.title.eq_ignore_ascii_case(title)
+                    || !query.exact && bookmark.title.to_lowercase().contains(title)
+                {
+                    has_match = true;
+                } else {
+                    continue;
+                }
+            };
 
-                if let Some(title) = &query.title {
-                    let bmark_title = bookmark.title.to_lowercase();
-                    if query.exact && bmark_title == *title
-                        || !query.exact && bmark_title.contains(title)
-                    {
-                        has_match = true;
-                    } else {
-                        return false;
-                    }
-                };
+            let bmark_tags = bookmark
+                .tags
+                .iter()
+                .map(|t| t.to_lowercase())
+                .collect::<Vec<_>>();
 
-                if let Some(tags) = &query.tags {
-                    let bmark_tags = bookmark.tags.iter().map(|t| t.to_lowercase());
-
-                    for tag in tags {
-                        let unprefixed_tag = tag.strip_prefix("-");
-
-                        if let Some(unprefixed_tag) = unprefixed_tag {
-                            if bmark_tags
-                                .clone()
-                                .find(|tag_b| {
-                                    unprefixed_tag == tag_b
-                                        || tag_b.contains(&format!("{unprefixed_tag}/"))
-                                })
-                                .is_some()
-                            {
-                                has_match = false;
-                                break;
-                            } else {
-                                has_match = true;
-                            }
+            if let Some(tags) = &query_tags {
+                for (tag, teg_delim, neg_tag, neg_tag_delim) in tags {
+                    let mut bmark_tags = bmark_tags.iter();
+                    if let Some(neg_tag) = neg_tag {
+                        if bmark_tags.any(|tag_b| neg_tag == tag_b || tag_b.contains(neg_tag_delim))
+                        {
+                            has_match = false;
+                            break;
                         } else {
-                            if bmark_tags
-                                .clone()
-                                .find(|tag_b| {
-                                    if let Some(unprefixed_tag) = unprefixed_tag {
-                                        return dbg!(unprefixed_tag) != dbg!(tag_b)
-                                            && !tag_b.contains(&format!("{}/", unprefixed_tag));
-                                    }
-                                    //
-                                    tag == tag_b || tag_b.contains(&format!("{tag}/"))
-                                })
-                                .is_none()
-                            {
-                                has_match = false;
-                                break;
-                            } else {
-                                has_match = true;
-                            }
+                            has_match = true;
+                        }
+                    } else {
+                        if !bmark_tags.any(|tag_b| tag == tag_b || tag_b.contains(teg_delim)) {
+                            has_match = false;
+                            break;
+                        } else {
+                            has_match = true;
                         }
                     }
-                };
+                }
+            };
 
-                return has_match;
-            })
-            .map(|b| b.clone())
-            .collect::<Vec<_>>())
+            if has_match {
+                output.push(bookmark.clone());
+            }
+
+            // early return because we know there will be no matches after that point
+            // if has_match && (query.id.is_some() || (query.url.is_some() && query.exact))
+            if has_match && query.id.is_some()
+                || query.limit.is_some() && query.limit.unwrap_or_default() >= output.len()
+            {
+                break;
+            }
+        }
+
+        Ok(output)
     }
 
     fn refresh(&self) -> anyhow::Result<()> {
