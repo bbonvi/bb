@@ -277,17 +277,13 @@ impl App {
         let mut last_modified = self.bmarks_last_modified.write().unwrap();
         if *last_modified != modtime {
             *last_modified = modtime;
-            println!("refreshing...");
-            if let Err(err) = self.bmark_mgr.refresh() {
-                eprintln!("external_changes watcher: {err}");
-            }
+            self.bmark_mgr.refresh()?;
         }
 
         Ok(())
     }
 
     pub fn refresh_backend(&self) -> anyhow::Result<()> {
-        // Ok(())
         self.bmark_mgr.refresh()
     }
 }
