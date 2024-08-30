@@ -92,7 +92,7 @@ fn main() -> anyhow::Result<()> {
                     title,
                     description,
                     tags,
-                    meta_args,
+                    meta_args: _,
                 }) => {
                     let bmark_update = bookmarks::BookmarkUpdate {
                         title,
@@ -123,7 +123,7 @@ fn main() -> anyhow::Result<()> {
                         ) {
                             InquireResult::Ok(true) => {}
                             InquireResult::Ok(false) => return Ok(()),
-                            InquireResult::Err(err) => return bail!("An error occurred: {}", err),
+                            InquireResult::Err(err) => bail!("An error occurred: {}", err),
                         }
                     }
 
@@ -150,7 +150,7 @@ fn main() -> anyhow::Result<()> {
                         )) {
                             InquireResult::Ok(true) => {}
                             InquireResult::Ok(false) => return Ok(()),
-                            InquireResult::Err(err) => return bail!("An error occurred: {}", err),
+                            InquireResult::Err(err) => bail!("An error occurred: {}", err),
                         }
                     }
 
@@ -160,7 +160,7 @@ fn main() -> anyhow::Result<()> {
                         ) {
                             InquireResult::Ok(true) => {}
                             InquireResult::Ok(false) => return Ok(()),
-                            InquireResult::Err(err) => return bail!("An error occurred: {}", err),
+                            InquireResult::Err(err) => bail!("An error occurred: {}", err),
                         }
                     }
 
@@ -180,7 +180,6 @@ fn main() -> anyhow::Result<()> {
                 MetaArgs {
                     no_https_upgrade,
                     no_headless,
-                    no_duck,
                     ..
                 },
             ..
@@ -196,10 +195,7 @@ fn main() -> anyhow::Result<()> {
             let add_opts = app::AddOpts {
                 no_https_upgrade,
                 async_meta: false,
-                meta_opts: Some(MetaOptions {
-                    no_headless,
-                    no_duck,
-                }),
+                meta_opts: Some(MetaOptions { no_headless }),
             };
 
             let bmark = app_mgr.create(bmark_create, add_opts)?;
@@ -212,17 +208,13 @@ fn main() -> anyhow::Result<()> {
                 MetaArgs {
                     no_https_upgrade,
                     no_headless,
-                    no_duck,
                     ..
                 },
             ..
         } => {
             let fetch_meta_opts = app::FetchMetadataOpts {
                 no_https_upgrade,
-                meta_opts: MetaOptions {
-                    no_headless,
-                    no_duck,
-                },
+                meta_opts: MetaOptions { no_headless },
             };
             let meta = app::App::fetch_metadata(&url, fetch_meta_opts)?;
 

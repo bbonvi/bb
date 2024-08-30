@@ -20,7 +20,6 @@ pub struct Metadata {
 #[derive(Debug, Clone, Default)]
 pub struct MetaOptions {
     pub no_headless: bool,
-    pub no_duck: bool,
 }
 
 pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {

@@ -292,6 +292,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     let mut keywords = None;
     let mut title = None;
     let mut image_url = None;
+
     let mut icon_url = None;
     let mut canonical_url = None;
 
@@ -372,8 +373,8 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     }
 
     icons.sort_by(|a, b| {
-        let (a_link_href, a_link_rel, a_link_type, a_link_sizes) = a;
-        let (b_link_href, b_link_rel, b_link_type, b_link_sizes) = b;
+        let (a_link_href, _, _, _) = a;
+        let (b_link_href, _, _, _) = b;
         if a_link_href.contains(".ico") && !b_link_href.contains(".ico") {
             return Ordering::Greater;
         }
@@ -406,8 +407,6 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
             ));
         }
     }
-    //
-    // if let Some(icn_url) = icon_url {}
 
     for element in head.select(&title_selector) {
         let title_text = element.text().next().unwrap_or_default();

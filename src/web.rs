@@ -4,7 +4,7 @@ use crate::{
     metadata::MetaOptions,
     parse_tags,
 };
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use axum::{
     extract::{Path, Query, State},
     response::IntoResponse,
@@ -178,10 +178,6 @@ pub struct BookmarkCreateRequest {
     /// Do not use headless browser for metadata scrape
     #[serde(default)]
     pub no_headless: bool,
-
-    /// Do not use duckduckgo for metadata scrape
-    #[serde(default)]
-    pub no_duck: bool,
 }
 
 async fn create_bookmark(
@@ -194,7 +190,6 @@ async fn create_bookmark(
         } else {
             Some(MetaOptions {
                 no_headless: payload.no_headless,
-                no_duck: payload.no_duck,
             })
         }
     };

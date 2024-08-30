@@ -10,10 +10,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Context};
 use std::{
-    sync::{
-        atomic::{AtomicBool, AtomicU16},
-        mpsc, Arc, RwLock,
-    },
+    sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
     thread::sleep,
     time::{Duration, SystemTime},
 };
@@ -47,23 +44,6 @@ pub fn bmarks_modtime() -> SystemTime {
 }
 
 impl App {
-    pub fn new_with(
-        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
-        storage_mgr: Arc<dyn storage::StorageManager>,
-        task_tx: Arc<mpsc::Sender<Task>>,
-        task_queue_handle: Option<std::thread::JoinHandle<()>>,
-        config: Arc<RwLock<Config>>,
-    ) -> Self {
-        Self {
-            bmark_mgr,
-            storage_mgr,
-            task_tx: Some(task_tx),
-            task_queue_handle,
-            config,
-            bmarks_last_modified: Arc::new(RwLock::new(bmarks_modtime())),
-        }
-    }
-
     pub fn run_queue(&mut self) {
         let (task_tx, task_rx) = mpsc::channel::<Task>();
         let handle = std::thread::spawn({
@@ -82,17 +62,17 @@ impl App {
 
     pub fn new(config: Arc<RwLock<Config>>) -> Self {
         let bmark_mgr = Arc::new(bookmarks::BackendCsv::load("bookmarks.csv").unwrap());
-        {
-            let bmark_mgr_json = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
-
-            let json_list = bmark_mgr_json.list().clone();
-            let csv_list = bmark_mgr.list().clone();
-
-            let json_list = json_list.write().unwrap();
-            let mut csv_list = csv_list.write().unwrap();
-
-            *csv_list = json_list.clone();
-        }
+        // {
+        //     let bmark_mgr_json = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
+        //
+        //     let json_list = bmark_mgr_json.list().clone();
+        //     let csv_list = bmark_mgr.list().clone();
+        //
+        //     let json_list = json_list.write().unwrap();
+        //     let mut csv_list = csv_list.write().unwrap();
+        //
+        //     *csv_list = json_list.clone();
+        // }
 
         bmark_mgr.save();
         let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
@@ -300,10 +280,6 @@ impl App {
         }
 
         Ok(())
-    }
-
-    pub fn refresh_backend(&self) -> anyhow::Result<()> {
-        self.bmark_mgr.refresh()
     }
 }
 
@@ -530,6 +506,24 @@ impl App {
 }
 
 impl App {
+    #[cfg(test)]
+    pub fn new_with(
+        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+        storage_mgr: Arc<dyn storage::StorageManager>,
+        task_tx: Arc<mpsc::Sender<Task>>,
+        task_queue_handle: Option<std::thread::JoinHandle<()>>,
+        config: Arc<RwLock<Config>>,
+    ) -> Self {
+        Self {
+            bmark_mgr,
+            storage_mgr,
+            task_tx: Some(task_tx),
+            task_queue_handle,
+            config,
+            bmarks_last_modified: Arc::new(RwLock::new(bmarks_modtime())),
+        }
+    }
+
     #[cfg(test)]
     pub fn config(&self) -> Arc<RwLock<Config>> {
         self.config.clone()
