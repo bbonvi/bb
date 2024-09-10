@@ -3,12 +3,13 @@ use crate::{
     config::Config,
     eid::Eid,
     metadata::{fetch_meta, MetaOptions, Metadata},
-    rules,
-    rules::Rule,
+    parse_tags,
+    rules::{self, Rule},
     scrape::guess_filetype,
     storage,
 };
 use anyhow::{anyhow, bail, Context};
+use serde_json::json;
 use std::{
     sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
     thread::sleep,
@@ -40,15 +41,9 @@ pub trait AppBackend: Send + Sync {
     ) -> anyhow::Result<usize>;
     fn total(&self) -> anyhow::Result<usize>;
     fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>>;
-    fn fetch_metadata(url: &str, opts: FetchMetadataOpts);
-    fn schedule_fetch_and_update_metadata(
-        &self,
-        bookmark: &bookmarks::Bookmark,
-        meta_opts: FetchMetadataOpts,
-    );
 }
 
-pub struct App {
+pub struct AppDaemon {
     pub bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
     storage_mgr: Arc<dyn storage::StorageManager>,
 
@@ -76,7 +71,7 @@ pub fn bmarks_modtime() -> SystemTime {
         .expect("couldnt get bookmarks.json modtime")
 }
 
-impl App {
+impl AppDaemon {
     pub fn run_queue(&mut self) {
         let (task_tx, task_rx) = mpsc::channel::<Task>();
         let handle = std::thread::spawn({
@@ -142,8 +137,8 @@ pub struct FetchMetadataOpts {
     pub meta_opts: MetaOptions,
 }
 
-impl App {
-    pub fn create(
+impl AppBackend for AppDaemon {
+    fn create(
         &self,
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
@@ -215,7 +210,7 @@ impl App {
         Ok(bmark)
     }
 
-    pub fn update(
+    fn update(
         &self,
         id: u64,
         bmark_update: bookmarks::BookmarkUpdate,
@@ -223,15 +218,15 @@ impl App {
         self.bmark_mgr.update(id, bmark_update)
     }
 
-    pub fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
+    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
         self.bmark_mgr.delete(id)
     }
 
-    pub fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize> {
+    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize> {
         self.bmark_mgr.search_delete(query)
     }
 
-    pub fn search_update(
+    fn search_update(
         &self,
         query: bookmarks::SearchQuery,
         bmark_update: bookmarks::BookmarkUpdate,
@@ -239,14 +234,11 @@ impl App {
         self.bmark_mgr.search_update(query, bmark_update)
     }
 
-    pub fn total(&self) -> anyhow::Result<usize> {
+    fn total(&self) -> anyhow::Result<usize> {
         self.bmark_mgr.total()
     }
 
-    pub fn search(
-        &self,
-        query: bookmarks::SearchQuery,
-    ) -> anyhow::Result<Vec<bookmarks::Bookmark>> {
+    fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>> {
         let mut query = query;
 
         // TODO: do we prevent queries against empty strings?
@@ -263,6 +255,19 @@ impl App {
         }
 
         self.bmark_mgr.search(query)
+    }
+}
+
+impl AppDaemon {
+    pub fn lazy_refresh_backend(&self) -> anyhow::Result<()> {
+        let modtime = bmarks_modtime();
+        let mut last_modified = self.bmarks_last_modified.write().unwrap();
+        if *last_modified != modtime {
+            *last_modified = modtime;
+            self.bmark_mgr.refresh()?;
+        }
+
+        Ok(())
     }
 
     pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> anyhow::Result<Metadata> {
@@ -288,32 +293,6 @@ impl App {
         return err;
     }
 
-    pub fn schedule_fetch_and_update_metadata(
-        &self,
-        bookmark: &bookmarks::Bookmark,
-        meta_opts: FetchMetadataOpts,
-    ) {
-        if let Err(err) = self.task_tx.as_ref().unwrap().send(Task::FetchMetadata {
-            bmark_id: bookmark.id,
-            opts: meta_opts,
-        }) {
-            eprintln!("{err}");
-        };
-    }
-
-    pub fn lazy_refresh_backend(&self) -> anyhow::Result<()> {
-        let modtime = bmarks_modtime();
-        let mut last_modified = self.bmarks_last_modified.write().unwrap();
-        if *last_modified != modtime {
-            *last_modified = modtime;
-            self.bmark_mgr.refresh()?;
-        }
-
-        Ok(())
-    }
-}
-
-impl App {
     fn merge_metadata(
         bookmark: bookmarks::Bookmark,
         meta: Metadata,
@@ -395,7 +374,6 @@ impl App {
             ..Default::default()
         };
 
-        // for rule in config.rules.iter().filter(|r| r.is_match(&query)) {
         for rule in rules.iter() {
             // recreating query because it could've been changed by previous rule
             let record = rules::Record {
@@ -433,9 +411,7 @@ impl App {
 
         bmark_mgr.update(bmark.id, bmark_update)
     }
-}
 
-impl App {
     pub fn start_queue(
         task_rx: mpsc::Receiver<Task>,
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
@@ -533,9 +509,22 @@ impl App {
             eprintln!("{err}");
         }
     }
+
+    fn schedule_fetch_and_update_metadata(
+        &self,
+        bookmark: &bookmarks::Bookmark,
+        meta_opts: FetchMetadataOpts,
+    ) {
+        if let Err(err) = self.task_tx.as_ref().unwrap().send(Task::FetchMetadata {
+            bmark_id: bookmark.id,
+            opts: meta_opts,
+        }) {
+            eprintln!("{err}");
+        };
+    }
 }
 
-impl App {
+impl AppDaemon {
     #[cfg(test)]
     pub fn new_with(
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
@@ -557,5 +546,123 @@ impl App {
     #[cfg(test)]
     pub fn config(&self) -> Arc<RwLock<Config>> {
         self.config.clone()
+    }
+}
+
+pub struct AppRemote {
+    remote_addr: String,
+}
+
+impl AppRemote {
+    pub fn new(addr: &str) -> AppRemote {
+        let remote_addr = addr.strip_suffix("/").unwrap_or(addr).to_string();
+
+        AppRemote { remote_addr }
+    }
+}
+
+impl AppBackend for AppRemote {
+    fn create(
+        &self,
+        bmark_create: bookmarks::BookmarkCreate,
+        opts: AddOpts,
+    ) -> anyhow::Result<bookmarks::Bookmark> {
+        let bmark: bookmarks::Bookmark = reqwest::blocking::Client::new()
+            .put(format!("{}/api/bookmarks", self.remote_addr))
+            .json(&json!({
+                "title": bmark_create.title,
+                "description": bmark_create.description,
+                "tags": bmark_create.tags.map(|t| t.join(",")),
+                "url": bmark_create.url,
+                "async_meta": opts.async_meta,
+                "no_meta": opts.meta_opts.is_some(),
+                "no_headless": opts.meta_opts.unwrap_or_default().no_headless,
+            }))
+            .send()?
+            .json()?;
+
+        Ok(bmark)
+    }
+
+    fn update(
+        &self,
+        id: u64,
+        bmark_update: bookmarks::BookmarkUpdate,
+    ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
+        let bmark: bookmarks::Bookmark = reqwest::blocking::Client::new()
+            .post(format!("{}/api/bookmarks/{}", self.remote_addr, id))
+            .json(&json!({
+                "title": bmark_update.title,
+                "description": bmark_update.description,
+                "tags": bmark_update.tags.map(|t| t.join(",")),
+                "url": bmark_update.url,
+            }))
+            .send()?
+            .json()?;
+
+        Ok(Some(bmark))
+    }
+
+    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
+        reqwest::blocking::Client::new()
+            .delete(format!("{}/api/bookmarks/{}", self.remote_addr, id))
+            .send()?
+            .json()?;
+
+        Ok(Some(true))
+    }
+
+    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize> {
+        let count: usize = reqwest::blocking::Client::new()
+            .post(format!("{}//api/bookmarks/search_delete", self.remote_addr))
+            .json(&query)
+            .send()?
+            .json()?;
+
+        Ok(count)
+    }
+
+    fn search_update(
+        &self,
+        query: bookmarks::SearchQuery,
+        bmark_update: bookmarks::BookmarkUpdate,
+    ) -> anyhow::Result<usize> {
+        let count: usize = reqwest::blocking::Client::new()
+            .post(format!("{}//api/bookmarks/search_delete", self.remote_addr))
+            .json(&json!({
+                "query": query,
+                "update": bmark_update,
+            }))
+            .send()?
+            .json()?;
+
+        Ok(count)
+    }
+
+    fn total(&self) -> anyhow::Result<usize> {
+        let count: usize = reqwest::blocking::Client::new()
+            .get(format!("{}//api/bookmarks/total", self.remote_addr))
+            .send()?
+            .json()?;
+
+        Ok(count)
+    }
+
+    fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>> {
+        let bmarks: Vec<bookmarks::Bookmark> = reqwest::blocking::Client::new()
+            .get(format!("{}//api/bookmarks", self.remote_addr))
+            .json(&json!({
+                "id": query.id,
+                "title": query.title,
+                "url": query.url,
+                "description": query.description,
+                "tags": query.tags.map(|tags| tags.join(",")),
+                "exact": query.exact,
+                "descending": false,
+            }))
+            .send()?
+            .json()?;
+
+        Ok(bmarks)
     }
 }

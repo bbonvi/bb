@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use anyhow::bail;
-use app::BmarkManagerBackend;
+use app::{AppBackend, BmarkManagerBackend};
 use clap::Parser;
 
 mod app;
@@ -45,7 +45,7 @@ fn main() -> anyhow::Result<()> {
             backend = app::BmarkManagerBackend::Remote(backend_addr);
         };
 
-        (app::App::new(config.clone(), backend), config.clone())
+        (app::AppDaemon::new(config.clone(), backend), config.clone())
     };
 
     match args.command {
@@ -140,7 +140,7 @@ fn main() -> anyhow::Result<()> {
 fn handle_action(
     bmarks: Vec<bookmarks::Bookmark>,
     query: SearchQuery,
-    app_mgr: app::App,
+    app_mgr: app::AppDaemon,
     action: Option<ActionArgs>,
 ) -> anyhow::Result<()> {
     match action {
@@ -245,7 +245,7 @@ fn handle_search(
     exact: bool,
     count: bool,
     action: Option<ActionArgs>,
-    app_mgr: app::App,
+    app_mgr: app::AppDaemon,
 ) -> anyhow::Result<()> {
     let query = SearchQuery {
         id: id.clone(),
@@ -279,7 +279,7 @@ fn handle_add(
     tags: Option<String>,
     no_https_upgrade: bool,
     no_headless: bool,
-    app_mgr: app::App,
+    app_mgr: app::AppDaemon,
 ) -> anyhow::Result<()> {
     let mut url = url;
     let mut title = title;
@@ -332,13 +332,13 @@ fn handle_meta(
     url: String,
     no_https_upgrade: bool,
     no_headless: bool,
-    app_mgr: app::App,
+    app_mgr: app::AppDaemon,
 ) -> anyhow::Result<()> {
     let fetch_meta_opts = app::FetchMetadataOpts {
         no_https_upgrade,
         meta_opts: MetaOptions { no_headless },
     };
-    let meta = app::App::fetch_metadata(&url, fetch_meta_opts)?;
+    let meta = app::AppDaemon::fetch_metadata(&url, fetch_meta_opts)?;
 
     if let Some(ref image) = meta.image {
         std::fs::write("screenshot.png", &image).unwrap();

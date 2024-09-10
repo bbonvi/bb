@@ -2,11 +2,11 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::app::{App, Task};
+use crate::app::{AppBackend, AppDaemon, Task};
 use crate::bookmarks;
 use crate::storage;
 
-pub fn create_app() -> App {
+pub fn create_app() -> AppDaemon {
     let _ = std::fs::remove_file("bookmarks-test.csv");
     let _ = std::fs::remove_file("config-test.yaml");
 
@@ -23,11 +23,11 @@ pub fn create_app() -> App {
         let config = config.clone();
 
         move || {
-            App::start_queue(task_rx, bmark_mgr, storage_mgr, config);
+            AppDaemon::start_queue(task_rx, bmark_mgr, storage_mgr, config);
         }
     });
 
-    App::new_with(
+    AppDaemon::new_with(
         bmark_mgr,
         storage_mgr,
         Arc::new(task_tx),

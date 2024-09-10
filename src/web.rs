@@ -1,6 +1,6 @@
 use crate::{
-    app::App,
-    bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery},
+    app::{AppBackend, AppDaemon},
+    bookmarks::{Bookmark, BookmarkUpdate, SearchQuery},
     metadata::MetaOptions,
     parse_tags,
 };
@@ -17,16 +17,16 @@ use tokio::{signal, sync::RwLock};
 
 #[derive(Clone)]
 struct SharedState {
-    app: Arc<RwLock<App>>,
+    app: Arc<RwLock<AppDaemon>>,
 }
 
-async fn start_app(app: App) {
+async fn start_app(app: AppDaemon) {
     let app = Arc::new(RwLock::new(app));
 
     let signal = shutdown_signal(app.clone());
     let shared_state = Arc::new(SharedState { app: app.clone() });
 
-    async fn shutdown_signal(app: Arc<RwLock<App>>) {
+    async fn shutdown_signal(app: Arc<RwLock<AppDaemon>>) {
         let ctrl_c = async {
             signal::ctrl_c()
                 .await
@@ -62,14 +62,9 @@ async fn start_app(app: App) {
         .route("/api/bookmarks", put(create_bookmark))
         .route("/api/bookmarks/:bmark_id", post(update_bookmark))
         .route("/api/bookmarks/:bmark_id", delete(delete_bookmark))
-        .route("/api/manager/search", post(mgr_search))
-        .route("/api/manager/total", post(mgr_total))
-        .route("/api/manager/create", post(mgr_create))
-        .route("/api/manager/delete", post(mgr_delete))
-        .route("/api/manager/update", post(mgr_update))
-        .route("/api/manager/search_delete", post(mgr_search_delete))
-        .route("/api/manager/search_update", post(mgr_search_update))
-        .route("/api/manager/refresh", post(mgr_refresh))
+        .route("/api/bookmarks/search_update", post(search_update))
+        .route("/api/bookmarks/search_delete", post(search_delete))
+        .route("/api/bookmarks/total", get(total))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
@@ -289,7 +284,7 @@ async fn delete_bookmark(
     })
 }
 
-pub fn start_daemon(app: App) {
+pub fn start_daemon(app: AppDaemon) {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -297,93 +292,16 @@ pub fn start_daemon(app: App) {
         .block_on(async { start_app(app).await });
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct MgrSearchRequest {
-    query: SearchQuery,
-}
-
-async fn mgr_search(
-    State(state): State<Arc<SharedState>>,
-    Json(params): Json<MgrSearchRequest>,
-) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
+async fn total(State(state): State<Arc<SharedState>>) -> Result<axum::Json<usize>, AppError> {
     let app = state.app.clone();
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.bmark_mgr
-            .search(params.query)
-            .map(Into::into)
-            .map_err(Into::into)
+        app.total().map(Into::into).map_err(Into::into)
     })
 }
 
-async fn mgr_total(State(state): State<Arc<SharedState>>) -> Result<axum::Json<usize>, AppError> {
-    let app = state.app.clone();
-
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.bmark_mgr.total().map(Into::into).map_err(Into::into)
-    })
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct MgrDeleteRequest {
-    pub id: u64,
-}
-
-async fn mgr_delete(
-    State(state): State<Arc<SharedState>>,
-    Json(params): Json<MgrDeleteRequest>,
-) -> Result<axum::Json<Option<bool>>, AppError> {
-    let app = state.app.clone();
-
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.bmark_mgr
-            .delete(params.id)
-            .map(Into::into)
-            .map_err(Into::into)
-    })
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-pub struct MgrUpdateRequest {
-    pub id: u64,
-
-    update: BookmarkUpdate,
-}
-
-async fn mgr_update(
-    State(state): State<Arc<SharedState>>,
-    Json(params): Json<MgrUpdateRequest>,
-) -> Result<axum::Json<Option<Bookmark>>, AppError> {
-    let app = state.app.clone();
-
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.bmark_mgr
-            .update(params.id, params.update)
-            .map(Into::into)
-            .map_err(Into::into)
-    })
-}
-
-async fn mgr_create(
-    State(state): State<Arc<SharedState>>,
-    Json(params): Json<BookmarkCreate>,
-) -> Result<axum::Json<Bookmark>, AppError> {
-    let app = state.app.clone();
-
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.bmark_mgr
-            .create(params)
-            .map(Into::into)
-            .map_err(Into::into)
-    })
-}
-
-async fn mgr_search_delete(
+async fn search_delete(
     State(state): State<Arc<SharedState>>,
     Json(params): Json<SearchQuery>,
 ) -> Result<axum::Json<usize>, AppError> {
@@ -399,31 +317,21 @@ async fn mgr_search_delete(
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-pub struct MgrSearchUpdateRequest {
+pub struct SearchUpdateRequest {
     query: SearchQuery,
     update: BookmarkUpdate,
 }
 
-async fn mgr_search_update(
+async fn search_update(
     State(state): State<Arc<SharedState>>,
-    Json(params): Json<MgrSearchUpdateRequest>,
+    Json(params): Json<SearchUpdateRequest>,
 ) -> Result<axum::Json<usize>, AppError> {
     let app = state.app.clone();
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.bmark_mgr
-            .search_update(params.query, params.update)
+        app.search_update(params.query, params.update)
             .map(Into::into)
             .map_err(Into::into)
-    })
-}
-
-async fn mgr_refresh(State(state): State<Arc<SharedState>>) -> Result<(), AppError> {
-    let app = state.app.clone();
-
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.bmark_mgr.refresh().map_err(Into::into)
     })
 }
