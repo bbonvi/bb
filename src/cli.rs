@@ -147,9 +147,12 @@ pub enum Command {
         action: Option<ActionArgs>,
     },
     Add {
+        #[clap(long, default_value = "false")]
+        editor: bool,
+
         /// a url
         #[clap(allow_hyphen_values = true, hide = true)]
-        url: String,
+        url: Option<String>,
 
         /// Bookmark title
         #[clap(short, long)]

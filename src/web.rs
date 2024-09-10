@@ -1,6 +1,6 @@
 use crate::{
     app::App,
-    bookmarks::{Bookmark, BookmarkUpdate, SearchQuery},
+    bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery},
     metadata::MetaOptions,
     parse_tags,
 };
@@ -62,6 +62,14 @@ async fn start_app(app: App) {
         .route("/api/bookmarks", put(create_bookmark))
         .route("/api/bookmarks/:bmark_id", post(update_bookmark))
         .route("/api/bookmarks/:bmark_id", delete(delete_bookmark))
+        .route("/api/manager/search", post(mgr_search))
+        .route("/api/manager/total", post(mgr_total))
+        .route("/api/manager/create", post(mgr_create))
+        .route("/api/manager/delete", post(mgr_delete))
+        .route("/api/manager/update", post(mgr_update))
+        .route("/api/manager/search_delete", post(mgr_search_delete))
+        .route("/api/manager/search_update", post(mgr_search_update))
+        .route("/api/manager/refresh", post(mgr_refresh))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
@@ -287,4 +295,135 @@ pub fn start_daemon(app: App) {
         .build()
         .unwrap()
         .block_on(async { start_app(app).await });
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MgrSearchRequest {
+    query: SearchQuery,
+}
+
+async fn mgr_search(
+    State(state): State<Arc<SharedState>>,
+    Json(params): Json<MgrSearchRequest>,
+) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.bmark_mgr
+            .search(params.query)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+}
+
+async fn mgr_total(State(state): State<Arc<SharedState>>) -> Result<axum::Json<usize>, AppError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.bmark_mgr.total().map(Into::into).map_err(Into::into)
+    })
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MgrDeleteRequest {
+    pub id: u64,
+}
+
+async fn mgr_delete(
+    State(state): State<Arc<SharedState>>,
+    Json(params): Json<MgrDeleteRequest>,
+) -> Result<axum::Json<Option<bool>>, AppError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.bmark_mgr
+            .delete(params.id)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MgrUpdateRequest {
+    pub id: u64,
+
+    update: BookmarkUpdate,
+}
+
+async fn mgr_update(
+    State(state): State<Arc<SharedState>>,
+    Json(params): Json<MgrUpdateRequest>,
+) -> Result<axum::Json<Option<Bookmark>>, AppError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.bmark_mgr
+            .update(params.id, params.update)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+}
+
+async fn mgr_create(
+    State(state): State<Arc<SharedState>>,
+    Json(params): Json<BookmarkCreate>,
+) -> Result<axum::Json<Bookmark>, AppError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.bmark_mgr
+            .create(params)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+}
+
+async fn mgr_search_delete(
+    State(state): State<Arc<SharedState>>,
+    Json(params): Json<SearchQuery>,
+) -> Result<axum::Json<usize>, AppError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.bmark_mgr
+            .search_delete(params)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MgrSearchUpdateRequest {
+    query: SearchQuery,
+    update: BookmarkUpdate,
+}
+
+async fn mgr_search_update(
+    State(state): State<Arc<SharedState>>,
+    Json(params): Json<MgrSearchUpdateRequest>,
+) -> Result<axum::Json<usize>, AppError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.bmark_mgr
+            .search_update(params.query, params.update)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+}
+
+async fn mgr_refresh(State(state): State<Arc<SharedState>>) -> Result<(), AppError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.bmark_mgr.refresh().map_err(Into::into)
+    })
 }

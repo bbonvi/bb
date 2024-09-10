@@ -15,8 +15,41 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+pub enum BmarkManagerBackend {
+    Local(String),
+    Remote(String),
+}
+
+pub trait AppBackend: Send + Sync {
+    fn create(
+        &self,
+        bmark_create: bookmarks::BookmarkCreate,
+        opts: AddOpts,
+    ) -> anyhow::Result<bookmarks::Bookmark>;
+    fn update(
+        &self,
+        id: u64,
+        bmark_update: bookmarks::BookmarkUpdate,
+    ) -> anyhow::Result<Option<bookmarks::Bookmark>>;
+    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
+    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize>;
+    fn search_update(
+        &self,
+        query: bookmarks::SearchQuery,
+        bmark_update: bookmarks::BookmarkUpdate,
+    ) -> anyhow::Result<usize>;
+    fn total(&self) -> anyhow::Result<usize>;
+    fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>>;
+    fn fetch_metadata(url: &str, opts: FetchMetadataOpts);
+    fn schedule_fetch_and_update_metadata(
+        &self,
+        bookmark: &bookmarks::Bookmark,
+        meta_opts: FetchMetadataOpts,
+    );
+}
+
 pub struct App {
-    bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+    pub bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
     storage_mgr: Arc<dyn storage::StorageManager>,
 
     task_tx: Option<Arc<mpsc::Sender<Task>>>,
@@ -60,21 +93,18 @@ impl App {
         self.task_tx = Some(Arc::new(task_tx));
     }
 
-    pub fn new(config: Arc<RwLock<Config>>) -> Self {
-        let bmark_mgr = Arc::new(bookmarks::BackendCsv::load("bookmarks.csv").unwrap());
-        // {
-        //     let bmark_mgr_json = Arc::new(bookmarks::BackendJson::load("bookmarks.json"));
-        //
-        //     let json_list = bmark_mgr_json.list().clone();
-        //     let csv_list = bmark_mgr.list().clone();
-        //
-        //     let json_list = json_list.write().unwrap();
-        //     let mut csv_list = csv_list.write().unwrap();
-        //
-        //     *csv_list = json_list.clone();
-        // }
+    pub fn new(config: Arc<RwLock<Config>>, backend: BmarkManagerBackend) -> Self {
+        let bmark_mgr: Arc<dyn bookmarks::BookmarkManager> = match backend {
+            BmarkManagerBackend::Local(path) => {
+                let mgr = Arc::new(bookmarks::BackendCsv::load(&path).unwrap());
+                mgr.save();
+                mgr
+            }
+            BmarkManagerBackend::Remote(addr) => {
+                Arc::new(bookmarks::BackendHttp::load(&addr).unwrap())
+            }
+        };
 
-        bmark_mgr.save();
         let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
 
         Self {
