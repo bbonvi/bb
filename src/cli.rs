@@ -166,6 +166,10 @@ pub enum Command {
         #[clap(short = 'g', long)]
         tags: Option<String>,
 
+        /// fetch metadata in background (only when used as client)
+        #[clap(long, default_value = "false")]
+        async_meta: bool,
+
         #[clap(flatten)]
         meta_args: MetaArgs,
     },

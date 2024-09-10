@@ -34,7 +34,7 @@ pub fn migrate() {
 
                 let mut image_id = None;
                 let http_client = reqwest::blocking::Client::new();
-                println!("{}", format!("http://buku.localhost/cached/{}", url));
+                log::info!("{}", format!("http://buku.localhost/cached/{}", url));
                 if let Ok(resp) = http_client
                     .get(format!("http://buku.localhost/cached/{}", url))
                     .basic_auth("bn", Some("cleanBeaverZ"))

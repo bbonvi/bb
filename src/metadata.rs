@@ -17,34 +17,34 @@ pub struct Metadata {
     pub dump: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MetaOptions {
     pub no_headless: bool,
 }
 
 pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
-    println!("trying plain request");
+    log::debug!("trying plain request");
 
     let meta = match scrape::fetch_page_with_reqwest(url) {
         Some(reqwest_result) => {
-            println!("plain request successful");
+            log::debug!("plain request successful");
 
             let mut meta = scrape::get_data_from_page(reqwest_result.html, url);
 
             if let Some(ref image_url) = meta.image_url {
-                println!("fetching cover");
+                log::debug!("fetching cover");
 
                 if let Some((status, bytes)) = scrape::reqwest_with_retries(image_url) {
                     if status.is_success() {
-                        println!("cover is fetched");
+                        log::debug!("cover is fetched");
                         meta.image = Some(bytes);
                     }
                 }
             } else {
                 if !opts.no_headless {
-                    println!("cover not found, taking screencapture");
+                    log::debug!("cover not found, taking screencapture");
                     if let Some(chrome_result) = scrape::fetch_page_with_chrome(url) {
-                        println!("screencapture is taken");
+                        log::debug!("screencapture is taken");
 
                         // now that we've captured the page with browser, we might as well
                         // update the meta data, since the capture is generally more accurate.
@@ -65,7 +65,7 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
                                     scrape::reqwest_with_retries(&image_url)
                                 {
                                     if status.is_success() {
-                                        println!("cover is fetched");
+                                        log::debug!("cover is fetched");
                                         meta.image = Some(bytes);
                                     }
                                 }
@@ -80,10 +80,10 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
             }
 
             if let Some(ref icon_url) = meta.icon_url {
-                println!("fetching icon");
+                log::debug!("fetching icon");
                 if let Some((status, bytes)) = scrape::reqwest_with_retries(icon_url) {
                     if status.is_success() {
-                        println!("icon is fetched");
+                        log::debug!("icon is fetched");
 
                         meta.icon = Some(bytes.to_vec());
                     }
@@ -94,7 +94,7 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
         }
         None => {
             if !opts.no_headless {
-                println!("plain request failed. trying chromium.");
+                log::debug!("plain request failed. trying chromium.");
 
                 if let Some(chrome_result) = scrape::fetch_page_with_chrome(url) {
                     let mut meta = scrape::get_data_from_page(chrome_result.html, url);
@@ -102,11 +102,11 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
                     // TODO: UNCOMMENT
                     if let Some(ref image_url) = meta.image_url {
                         if meta.image.is_none() {
-                            println!("fetching cover");
+                            log::debug!("fetching cover");
 
                             if let Some((status, bytes)) = scrape::reqwest_with_retries(image_url) {
                                 if status.is_success() {
-                                    println!("cover is fetched");
+                                    log::debug!("cover is fetched");
 
                                     meta.image = Some(bytes);
                                 }
@@ -119,11 +119,11 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
                     }
 
                     if let Some(ref icon_url) = meta.icon_url {
-                        println!("fetching icon");
+                        log::debug!("fetching icon");
 
                         if let Some((status, bytes)) = scrape::reqwest_with_retries(icon_url) {
                             if status.is_success() {
-                                println!("icon is fetched");
+                                log::debug!("icon is fetched");
 
                                 meta.icon = Some(bytes.to_vec());
                             }
@@ -153,7 +153,7 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
 
                     if let Some((status, bytes)) = scrape::reqwest_with_retries(&icon_url) {
                         if status.is_success() {
-                            println!("icon is fetched");
+                            log::debug!("icon is fetched");
 
                             meta.icon = Some(bytes.to_vec());
                             meta.icon_url = Some(icon_url);

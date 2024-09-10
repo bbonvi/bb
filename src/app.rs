@@ -3,23 +3,18 @@ use crate::{
     config::Config,
     eid::Eid,
     metadata::{fetch_meta, MetaOptions, Metadata},
-    parse_tags,
     rules::{self, Rule},
     scrape::guess_filetype,
     storage,
 };
 use anyhow::{anyhow, bail, Context};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 use std::{
     sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
     thread::sleep,
     time::{Duration, SystemTime},
 };
-
-pub enum BmarkManagerBackend {
-    Local(String),
-    Remote(String),
-}
 
 pub trait AppBackend: Send + Sync {
     fn create(
@@ -43,7 +38,7 @@ pub trait AppBackend: Send + Sync {
     fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>>;
 }
 
-pub struct AppDaemon {
+pub struct AppLocal {
     pub bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
     storage_mgr: Arc<dyn storage::StorageManager>,
 
@@ -71,7 +66,7 @@ pub fn bmarks_modtime() -> SystemTime {
         .expect("couldnt get bookmarks.json modtime")
 }
 
-impl AppDaemon {
+impl AppLocal {
     pub fn run_queue(&mut self) {
         let (task_tx, task_rx) = mpsc::channel::<Task>();
         let handle = std::thread::spawn({
@@ -88,19 +83,11 @@ impl AppDaemon {
         self.task_tx = Some(Arc::new(task_tx));
     }
 
-    pub fn new(config: Arc<RwLock<Config>>, backend: BmarkManagerBackend) -> Self {
-        let bmark_mgr: Arc<dyn bookmarks::BookmarkManager> = match backend {
-            BmarkManagerBackend::Local(path) => {
-                let mgr = Arc::new(bookmarks::BackendCsv::load(&path).unwrap());
-                mgr.save();
-                mgr
-            }
-            BmarkManagerBackend::Remote(addr) => {
-                Arc::new(bookmarks::BackendHttp::load(&addr).unwrap())
-            }
-        };
+    pub fn new(config: Arc<RwLock<Config>>, path: &str) -> Self {
+        let bmark_mgr = Arc::new(bookmarks::BackendCsv::load(&path).unwrap());
 
         let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
+        bmark_mgr.save();
 
         Self {
             bmark_mgr,
@@ -131,13 +118,13 @@ pub struct AddOpts {
     pub meta_opts: Option<MetaOptions>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FetchMetadataOpts {
     pub no_https_upgrade: bool,
     pub meta_opts: MetaOptions,
 }
 
-impl AppBackend for AppDaemon {
+impl AppBackend for AppLocal {
     fn create(
         &self,
         bmark_create: bookmarks::BookmarkCreate,
@@ -258,7 +245,7 @@ impl AppBackend for AppDaemon {
     }
 }
 
-impl AppDaemon {
+impl AppLocal {
     pub fn lazy_refresh_backend(&self) -> anyhow::Result<()> {
         let modtime = bmarks_modtime();
         let mut last_modified = self.bmarks_last_modified.write().unwrap();
@@ -274,7 +261,7 @@ impl AppDaemon {
         let mut url_parsed = reqwest::Url::parse(&url).unwrap();
         let mut tried_https = false;
         if url_parsed.scheme() == "http" && !opts.no_https_upgrade {
-            println!("http url provided. trying https first");
+            log::warn!("http url provided. trying https first");
             url_parsed.set_scheme("https").unwrap();
             tried_https = true;
         }
@@ -285,7 +272,7 @@ impl AppDaemon {
         };
 
         if tried_https {
-            println!("https attempt failed. trying http.");
+            log::warn!("https attempt failed. trying http.");
             url_parsed.set_scheme("http").unwrap();
             return fetch_meta(&url_parsed.to_string(), opts.meta_opts.clone());
         }
@@ -423,9 +410,9 @@ impl AppDaemon {
         let thread_ctr = Arc::new(AtomicU16::new(0));
         let max_threads = config.read().unwrap().task_queue_max_threads;
 
-        println!("waiting for job");
+        log::debug!("waiting for job");
         while let Ok(task) = task_rx.recv() {
-            println!("got the job");
+            log::debug!("got the job");
             let storage_mgr = storage_mgr.clone();
             let bmark_mgr = bmark_mgr.clone();
             let thread_counter = thread_ctr.clone();
@@ -455,7 +442,7 @@ impl AppDaemon {
                             thread_counter.fetch_add(1, Ordering::Relaxed);
 
                             let handle_metadata = || {
-                                println!("picked up a job...");
+                                log::debug!("picked up a job...");
                                 let bookmarks = bmark_mgr.search(bookmarks::SearchQuery {
                                     id: Some(bmark_id),
                                     ..Default::default()
@@ -480,7 +467,7 @@ impl AppDaemon {
                             let _ = handle_metadata();
                             let rules = &config.read().unwrap().rules;
                             let _ = Self::apply_rules(bmark_id, bmark_mgr.clone(), &rules)
-                                .map_err(|err| eprintln!("{err}"));
+                                .map_err(|err| log::error!("{err}"));
 
                             thread_counter.fetch_sub(1, Ordering::Relaxed);
                         }
@@ -493,7 +480,7 @@ impl AppDaemon {
             // TODO: get rid of unwraps and delete this code.
             std::thread::spawn(move || {
                 if let Err(err) = task_handle.join() {
-                    eprintln!("{err:?}");
+                    log::error!("{err:?}");
                     thread_counter.fetch_sub(1, Ordering::Relaxed);
                 }
             });
@@ -506,7 +493,7 @@ impl AppDaemon {
 
     pub fn shutdown(&self) {
         if let Err(err) = self.task_tx.as_ref().unwrap().send(Task::Shutdown) {
-            eprintln!("{err}");
+            log::error!("{err}");
         }
     }
 
@@ -519,12 +506,12 @@ impl AppDaemon {
             bmark_id: bookmark.id,
             opts: meta_opts,
         }) {
-            eprintln!("{err}");
+            log::error!("{err}");
         };
     }
 }
 
-impl AppDaemon {
+impl AppLocal {
     #[cfg(test)]
     pub fn new_with(
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
@@ -551,13 +538,69 @@ impl AppDaemon {
 
 pub struct AppRemote {
     remote_addr: String,
+    basic_auth: Option<(String, Option<String>)>,
 }
 
 impl AppRemote {
-    pub fn new(addr: &str) -> AppRemote {
+    pub fn new(addr: &str, basic_auth: Option<(String, Option<String>)>) -> AppRemote {
         let remote_addr = addr.strip_suffix("/").unwrap_or(addr).to_string();
 
-        AppRemote { remote_addr }
+        AppRemote {
+            remote_addr,
+            basic_auth,
+        }
+    }
+
+    fn post(&self, url: &str) -> reqwest::blocking::RequestBuilder {
+        log::info!("{}{}", self.remote_addr, url);
+        let url = format!("{}{}", self.remote_addr, url);
+
+        match self.basic_auth.clone() {
+            Some((username, password)) => reqwest::blocking::Client::new()
+                .post(&url)
+                .basic_auth(username, password),
+            None => reqwest::blocking::Client::new().post(&url),
+        }
+    }
+
+    // pub fn fetch_metadata(&self, url: &str, opts: FetchMetadataOpts) -> anyhow::Result<Metadata> {
+    //     let metadata: Metadata = self
+    //         .post("/api/bookmarks/fetch_metadata")
+    //         .json(&json!({
+    //             "url": url,
+    //             "opts": opts,
+    //         }))
+    //         .send()?
+    //         .json()?;
+    //
+    //     Ok(metadata)
+    // }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum WebResponse<T> {
+    Error { error: String },
+    Data(T),
+}
+
+fn handle_response<T>(response: reqwest::blocking::Response) -> anyhow::Result<T>
+where
+    T: DeserializeOwned + Clone,
+{
+    let text = response.text()?;
+
+    let web_response = serde_json::from_str::<WebResponse<T>>(&text).map_err(|err| {
+        log::error!("{err}. tried to parse: {text:?}");
+        err
+    })?;
+
+    match web_response {
+        WebResponse::Data(data) => Ok(data),
+        WebResponse::Error { error } => {
+            // log::error!("{error}");
+            bail!(error)
+        }
     }
 }
 
@@ -567,21 +610,20 @@ impl AppBackend for AppRemote {
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
     ) -> anyhow::Result<bookmarks::Bookmark> {
-        let bmark: bookmarks::Bookmark = reqwest::blocking::Client::new()
-            .put(format!("{}/api/bookmarks", self.remote_addr))
+        let resp = self
+            .post("/api/bookmarks/create")
             .json(&json!({
                 "title": bmark_create.title,
                 "description": bmark_create.description,
                 "tags": bmark_create.tags.map(|t| t.join(",")),
                 "url": bmark_create.url,
                 "async_meta": opts.async_meta,
-                "no_meta": opts.meta_opts.is_some(),
+                "no_meta": opts.meta_opts.is_none(),
                 "no_headless": opts.meta_opts.unwrap_or_default().no_headless,
             }))
-            .send()?
-            .json()?;
+            .send()?;
 
-        Ok(bmark)
+        Ok(handle_response(resp)?)
     }
 
     fn update(
@@ -589,37 +631,38 @@ impl AppBackend for AppRemote {
         id: u64,
         bmark_update: bookmarks::BookmarkUpdate,
     ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
-        let bmark: bookmarks::Bookmark = reqwest::blocking::Client::new()
-            .post(format!("{}/api/bookmarks/{}", self.remote_addr, id))
+        let resp = self
+            .post("/api/bookmarks/update")
             .json(&json!({
+                "id": id,
                 "title": bmark_update.title,
                 "description": bmark_update.description,
                 "tags": bmark_update.tags.map(|t| t.join(",")),
                 "url": bmark_update.url,
             }))
-            .send()?
-            .json()?;
+            .send()?;
 
-        Ok(Some(bmark))
+        Ok(handle_response(resp)?)
     }
 
     fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
-        reqwest::blocking::Client::new()
-            .delete(format!("{}/api/bookmarks/{}", self.remote_addr, id))
-            .send()?
-            .json()?;
+        let resp = self
+            .post("/api/bookmarks/delete")
+            .json(&json!({
+                "id": id,
+            }))
+            .send()?;
 
-        Ok(Some(true))
+        Ok(handle_response(resp)?)
     }
 
     fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize> {
-        let count: usize = reqwest::blocking::Client::new()
-            .post(format!("{}//api/bookmarks/search_delete", self.remote_addr))
+        let resp = self
+            .post("/api/bookmarks/search_delete")
             .json(&query)
-            .send()?
-            .json()?;
+            .send()?;
 
-        Ok(count)
+        Ok(handle_response(resp)?)
     }
 
     fn search_update(
@@ -627,30 +670,26 @@ impl AppBackend for AppRemote {
         query: bookmarks::SearchQuery,
         bmark_update: bookmarks::BookmarkUpdate,
     ) -> anyhow::Result<usize> {
-        let count: usize = reqwest::blocking::Client::new()
-            .post(format!("{}//api/bookmarks/search_delete", self.remote_addr))
+        let resp = self
+            .post("/api/bookmarks/search_update")
             .json(&json!({
                 "query": query,
                 "update": bmark_update,
             }))
-            .send()?
-            .json()?;
+            .send()?;
 
-        Ok(count)
+        Ok(handle_response(resp)?)
     }
 
     fn total(&self) -> anyhow::Result<usize> {
-        let count: usize = reqwest::blocking::Client::new()
-            .get(format!("{}//api/bookmarks/total", self.remote_addr))
-            .send()?
-            .json()?;
-
-        Ok(count)
+        let resp = self.post("/api/bookmarks/total").send()?;
+        Ok(handle_response(resp)?)
     }
 
     fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>> {
-        let bmarks: Vec<bookmarks::Bookmark> = reqwest::blocking::Client::new()
-            .get(format!("{}//api/bookmarks", self.remote_addr))
+        log::debug!("search: {query:?}");
+        let resp = self
+            .post("/api/bookmarks/search")
             .json(&json!({
                 "id": query.id,
                 "title": query.title,
@@ -660,9 +699,8 @@ impl AppBackend for AppRemote {
                 "exact": query.exact,
                 "descending": false,
             }))
-            .send()?
-            .json()?;
+            .send()?;
 
-        Ok(bmarks)
+        Ok(handle_response(resp)?)
     }
 }

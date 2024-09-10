@@ -1,5 +1,3 @@
-use std::io::{Read, Write};
-
 use crate::eid::Eid;
 
 const TEMPLATE: &str = r###"# URL (one line):

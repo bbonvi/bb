@@ -1,8 +1,9 @@
 use std::sync::{Arc, RwLock};
 
 use anyhow::bail;
-use app::{AppBackend, BmarkManagerBackend};
+use app::AppBackend;
 use clap::Parser;
+use std::io::Write;
 
 mod app;
 mod bookmarks;
@@ -23,6 +24,7 @@ use cli::{ActionArgs, MetaArgs, RulesArgs};
 use config::Config;
 use inquire::error::InquireResult;
 use metadata::MetaOptions;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub fn parse_tags(tags: String) -> Vec<String> {
     tags.split(',')
@@ -32,20 +34,70 @@ pub fn parse_tags(tags: String) -> Vec<String> {
         .collect::<Vec<_>>()
 }
 
+macro_rules! println {
+  () => (print!("\n"));
+  ($fmt:expr) => ({
+    writeln!(std::io::stdout(), $fmt)
+  });
+  ($fmt:expr, $($arg:tt)*) => ({
+    writeln!(std::io::stdout(), $fmt, $($arg)*)
+  })
+}
+
+fn setup_logger() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                // axum logs rejections from built-in extractors with the `axum::rejection`
+                // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
+                format!(
+                    "{}=debug,tower_http=debug,axum::rejection=trace",
+                    env!("CARGO_CRATE_NAME")
+                )
+                .into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+}
+
 fn main() -> anyhow::Result<()> {
+    setup_logger();
+
     let args = cli::Args::parse();
 
-    let app_mgr = || {
+    let app_local = || {
         let config = Arc::new(RwLock::new(Config::load()));
+        let path = std::env::var("BB_PATH").unwrap_or(String::from("bookmarks.csv"));
+        (app::AppLocal::new(config.clone(), &path), config)
+    };
 
-        let local_backend_path = std::env::var("BB_PATH").unwrap_or(String::from("bookmarks.csv"));
-        let mut backend = app::BmarkManagerBackend::Local(local_backend_path);
+    let app_mgr = || -> (Box<dyn AppBackend>, Arc<RwLock<Config>>) {
+        if let Ok(backend_addr) = std::env::var("BB_ADDR") {
+            let basic_auth = match std::env::var("BB_BASIC_AUTH") {
+                Ok(ba) => {
+                    if let Some(username) = ba.split(":").collect::<Vec<_>>().get(0) {
+                        let collect = &ba.split(":").collect::<Vec<_>>();
+                        let password = collect.get(1);
 
-        if let Ok(backend_addr) = std::env::var("BB_MGR_ADDR") {
-            backend = app::BmarkManagerBackend::Remote(backend_addr);
-        };
+                        Some((username.to_string(), password.map(|p| p.to_string())))
+                    } else {
+                        None
+                    }
+                }
+                Err(_) => None,
+            };
 
-        (app::AppDaemon::new(config.clone(), backend), config.clone())
+            let config = Arc::new(RwLock::new(Config::load()));
+            (
+                Box::new(app::AppRemote::new(&backend_addr, basic_auth)),
+                config,
+            )
+        } else {
+            let config = Arc::new(RwLock::new(Config::load()));
+            let path = std::env::var("BB_PATH").unwrap_or(String::from("bookmarks.csv"));
+            (Box::new(app::AppLocal::new(config.clone(), &path)), config)
+        }
     };
 
     match args.command {
@@ -55,7 +107,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         cli::Command::Daemon { .. } => {
-            let (mut app_mgr, _) = app_mgr();
+            let (mut app_mgr, _) = app_local();
             app_mgr.run_queue();
             web::start_daemon(app_mgr);
             return Ok(());
@@ -91,6 +143,7 @@ fn main() -> anyhow::Result<()> {
             description,
             url,
             editor: use_editor,
+            async_meta,
             meta_args:
                 MetaArgs {
                     no_https_upgrade,
@@ -109,6 +162,7 @@ fn main() -> anyhow::Result<()> {
                 tags,
                 no_https_upgrade,
                 no_headless,
+                async_meta,
                 app_mgr,
             )
         }
@@ -121,11 +175,7 @@ fn main() -> anyhow::Result<()> {
                     ..
                 },
             ..
-        } => {
-            let (app_mgr, _) = app_mgr();
-
-            handle_meta(url, no_https_upgrade, no_headless, app_mgr)
-        }
+        } => handle_meta(url, no_https_upgrade, no_headless),
 
         cli::Command::Rule { action } => {
             let (_, config) = app_mgr();
@@ -140,13 +190,13 @@ fn main() -> anyhow::Result<()> {
 fn handle_action(
     bmarks: Vec<bookmarks::Bookmark>,
     query: SearchQuery,
-    app_mgr: app::AppDaemon,
+    app_mgr: Box<dyn AppBackend>,
     action: Option<ActionArgs>,
 ) -> anyhow::Result<()> {
     match action {
         // print results
         None => {
-            println!("{}", serde_json::to_string_pretty(&bmarks).unwrap());
+            let _ = println!("{}", serde_json::to_string_pretty(&bmarks).unwrap());
             Ok(())
         }
 
@@ -177,7 +227,7 @@ fn handle_action(
                 && bmark_update.tags.is_none()
                 && bmark_update.url.is_none()
             {
-                println!("This update request does nothing");
+                let _ = println!("This update request does nothing");
                 return Ok(());
             }
 
@@ -193,7 +243,7 @@ fn handle_action(
 
             let count = app_mgr.search_update(query, bmark_update).unwrap();
 
-            println!("{} items updated", count);
+            let _ = println!("{} items updated", count);
 
             Ok(())
         }
@@ -230,7 +280,7 @@ fn handle_action(
 
             let count = app_mgr.search_delete(query).unwrap();
 
-            println!("{} items removed", count);
+            let _ = println!("{} items removed", count);
             Ok(())
         }
     }
@@ -245,7 +295,7 @@ fn handle_search(
     exact: bool,
     count: bool,
     action: Option<ActionArgs>,
-    app_mgr: app::AppDaemon,
+    app_mgr: Box<dyn AppBackend>,
 ) -> anyhow::Result<()> {
     let query = SearchQuery {
         id: id.clone(),
@@ -259,12 +309,12 @@ fn handle_search(
     let bmarks = app_mgr.search(query.clone())?;
 
     if bmarks.is_empty() {
-        println!("{}", serde_json::to_string_pretty(&bmarks).unwrap());
+        let _ = println!("{}", serde_json::to_string_pretty(&bmarks).unwrap());
         return Ok(());
     }
 
     if count {
-        println!("{} bookmarks found", bmarks.len());
+        let _ = println!("{} bookmarks found", bmarks.len());
         return Ok(());
     }
 
@@ -279,7 +329,8 @@ fn handle_add(
     tags: Option<String>,
     no_https_upgrade: bool,
     no_headless: bool,
-    app_mgr: app::AppDaemon,
+    async_meta: bool,
+    app_mgr: Box<dyn AppBackend>,
 ) -> anyhow::Result<()> {
     let mut url = url;
     let mut title = title;
@@ -319,26 +370,22 @@ fn handle_add(
 
     let add_opts = app::AddOpts {
         no_https_upgrade,
-        async_meta: false,
+        async_meta,
         meta_opts: Some(MetaOptions { no_headless }),
     };
 
     let bmark = app_mgr.create(bmark_create, add_opts)?;
-    println!("{}", serde_json::to_string_pretty(&bmark).unwrap());
+    let _ = println!("{}", serde_json::to_string_pretty(&bmark).unwrap());
     Ok(())
 }
 
-fn handle_meta(
-    url: String,
-    no_https_upgrade: bool,
-    no_headless: bool,
-    app_mgr: app::AppDaemon,
-) -> anyhow::Result<()> {
+fn handle_meta(url: String, no_https_upgrade: bool, no_headless: bool) -> anyhow::Result<()> {
     let fetch_meta_opts = app::FetchMetadataOpts {
         no_https_upgrade,
         meta_opts: MetaOptions { no_headless },
     };
-    let meta = app::AppDaemon::fetch_metadata(&url, fetch_meta_opts)?;
+
+    let meta = app::AppLocal::fetch_metadata(&url, fetch_meta_opts)?;
 
     if let Some(ref image) = meta.image {
         std::fs::write("screenshot.png", &image).unwrap();
@@ -348,7 +395,7 @@ fn handle_meta(
         std::fs::write("icon.png", &icon).unwrap();
     };
 
-    println!("{}", serde_json::to_string_pretty(&meta).unwrap());
+    let _ = println!("{}", serde_json::to_string_pretty(&meta).unwrap());
     Ok(())
 }
 
@@ -386,21 +433,21 @@ fn handle_rule(action: RulesArgs, config: &mut Config) -> anyhow::Result<()> {
         RulesArgs::List {} => {
             for (idx, rule) in config.rules.iter().enumerate() {
                 if let Some(comment) = &rule.comment {
-                    println!("Rule #{} // {comment}", idx + 1);
+                    let _ = println!("Rule #{} // {comment}", idx + 1);
                 } else {
-                    println!("Rule #{}", idx + 1);
+                    let _ = println!("Rule #{}", idx + 1);
                 }
                 if let Some(url) = &rule.url {
-                    println!("  url: {url:#?}");
+                    let _ = println!("  url: {url:#?}");
                 }
                 if let Some(title) = &rule.title {
-                    println!("  title: {title:#?}");
+                    let _ = println!("  title: {title:#?}");
                 }
                 if let Some(description) = &rule.description {
-                    println!("  description: {description:#?}");
+                    let _ = println!("  description: {description:#?}");
                 }
                 if let Some(tags) = &rule.tags {
-                    println!("  tags: {tags:#?}");
+                    let _ = println!("  tags: {tags:#?}");
                 }
 
                 match &rule.action {
@@ -409,19 +456,19 @@ fn handle_rule(action: RulesArgs, config: &mut Config) -> anyhow::Result<()> {
                         description,
                         tags,
                     } => {
-                        println!("  UpdateBookmark:");
+                        let _ = println!("  UpdateBookmark:");
                         if let Some(title) = &title {
-                            println!("    title: {title}");
+                            let _ = println!("    title: {title}");
                         }
                         if let Some(description) = &description {
-                            println!("    description: {description}");
+                            let _ = println!("    description: {description}");
                         }
                         if let Some(tags) = &tags {
-                            println!("    tags: {tags:?}");
+                            let _ = println!("    tags: {tags:?}");
                         }
                     }
                 }
-                println!("");
+                let _ = println!("");
             }
         }
     };

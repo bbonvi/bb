@@ -1,8 +1,6 @@
 use crate::parse_tags;
 use anyhow::anyhow;
-use reqwest;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::{
     collections::HashSet,
     hash::Hash,
@@ -135,7 +133,7 @@ const CSV_HEADERS: [&str; 7] = [
 impl BackendCsv {
     pub fn load(path: &str) -> anyhow::Result<Self> {
         if let Err(err) = std::fs::metadata(path) {
-            println!("{err}");
+            log::error!("{err}");
             match err.kind() {
                 ErrorKind::NotFound => {
                     let mut csv_wrt = csv::Writer::from_path(path)?;
@@ -205,7 +203,7 @@ impl BackendCsv {
             bmarks.push(bmark);
         }
 
-        println!(
+        log::debug!(
             "took {}ms to read csv",
             now.elapsed().as_micros() as f64 / 1000.0
         );
@@ -532,95 +530,5 @@ impl BackendCsv {
     #[cfg(test)]
     pub fn list(&self) -> Arc<RwLock<Vec<Bookmark>>> {
         self.list.clone()
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct BackendHttp {
-    backend_addr: String,
-}
-
-impl BackendHttp {
-    pub fn load(addr: &str) -> anyhow::Result<Self> {
-        let addr = addr.strip_suffix("/").unwrap_or(addr).to_string();
-
-        Ok(Self { backend_addr: addr })
-    }
-}
-
-impl BookmarkManager for BackendHttp {
-    fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
-        let bmark: Bookmark = reqwest::blocking::Client::new()
-            .post(format!("{}/api/manager/create", self.backend_addr))
-            .json(&bmark_create)
-            .send()?
-            .json()?;
-
-        Ok(bmark)
-    }
-
-    fn search_delete(&self, query: SearchQuery) -> anyhow::Result<usize> {
-        Ok(reqwest::blocking::Client::new()
-            .post(format!("{}/api/manager/search_delete", self.backend_addr))
-            .json(&query)
-            .send()?
-            .json()?)
-    }
-
-    fn search_update(
-        &self,
-        query: SearchQuery,
-        bmark_update: BookmarkUpdate,
-    ) -> anyhow::Result<usize> {
-        Ok(reqwest::blocking::Client::new()
-            .post(format!("{}/api/manager/search_update", self.backend_addr))
-            .json(&json!({
-                "query": &query,
-                "update": &bmark_update,
-            }))
-            .send()?
-            .json()?)
-    }
-
-    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
-        Ok(reqwest::blocking::Client::new()
-            .post(format!("{}/api/manager/delete", self.backend_addr))
-            .json(&json!({
-                "id": id,
-            }))
-            .send()?
-            .json()?)
-    }
-
-    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>> {
-        Ok(reqwest::blocking::Client::new()
-            .post(format!("{}/api/manager/update", self.backend_addr))
-            .json(&json!({
-                "id": id,
-                "update": &bmark_update,
-            }))
-            .send()?
-            .json()?)
-    }
-
-    fn total(&self) -> anyhow::Result<usize> {
-        Ok(reqwest::blocking::Client::new()
-            .post(format!("{}/api/manager/total", self.backend_addr))
-            .send()?
-            .json()?)
-    }
-
-    fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
-        Ok(reqwest::blocking::Client::new()
-            .post(format!("{}/api/manager/search", self.backend_addr))
-            .json(&json!({
-                "query": &query,
-            }))
-            .send()?
-            .json()?)
-    }
-
-    fn refresh(&self) -> anyhow::Result<()> {
-        Ok(())
     }
 }

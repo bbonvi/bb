@@ -1,32 +1,28 @@
 use crate::{
-    app::{AppBackend, AppDaemon},
+    app::{AppBackend, AppLocal, FetchMetadataOpts},
     bookmarks::{Bookmark, BookmarkUpdate, SearchQuery},
-    metadata::MetaOptions,
+    metadata::{self, MetaOptions},
     parse_tags,
 };
 use anyhow::anyhow;
-use axum::{
-    extract::{Path, Query, State},
-    response::IntoResponse,
-    routing::{delete, get, post, put},
-    Json, Router,
-};
+use axum::{extract::State, response::IntoResponse, routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::Arc;
 use tokio::{signal, sync::RwLock};
 
 #[derive(Clone)]
 struct SharedState {
-    app: Arc<RwLock<AppDaemon>>,
+    app: Arc<RwLock<AppLocal>>,
 }
 
-async fn start_app(app: AppDaemon) {
+async fn start_app(app: AppLocal) {
     let app = Arc::new(RwLock::new(app));
 
     let signal = shutdown_signal(app.clone());
     let shared_state = Arc::new(SharedState { app: app.clone() });
 
-    async fn shutdown_signal(app: Arc<RwLock<AppDaemon>>) {
+    async fn shutdown_signal(app: Arc<RwLock<AppLocal>>) {
         let ctrl_c = async {
             signal::ctrl_c()
                 .await
@@ -47,7 +43,7 @@ async fn start_app(app: AppDaemon) {
                     app.shutdown();
 
                     // join on queue thread handle
-                    println!("waiting for queues to stop");
+                    log::warn!("waiting for queues to stop");
                     app.wait_task_queue_finish();
                     break;
                 }
@@ -58,32 +54,52 @@ async fn start_app(app: AppDaemon) {
 
     let app = Router::new()
         .nest_service("/api/file/", tower_http::services::ServeDir::new("uploads"))
-        .route("/api/bookmarks", get(list_bookmarks))
-        .route("/api/bookmarks", put(create_bookmark))
-        .route("/api/bookmarks/:bmark_id", post(update_bookmark))
-        .route("/api/bookmarks/:bmark_id", delete(delete_bookmark))
+        .route("/api/bookmarks/search", post(search))
+        .route("/api/bookmarks/fetch_metadata", post(fetch_metadata))
+        .route("/api/bookmarks/create", post(create))
+        .route("/api/bookmarks/update", post(update))
+        .route("/api/bookmarks/delete", post(delete))
         .route("/api/bookmarks/search_update", post(search_update))
         .route("/api/bookmarks/search_delete", post(search_delete))
-        .route("/api/bookmarks/total", get(total))
+        .route("/api/bookmarks/total", post(total))
+        .layer(
+            tower_http::trace::TraceLayer::new_for_http()
+                .make_span_with(
+                    tower_http::trace::DefaultMakeSpan::new().level(tracing::Level::INFO),
+                )
+                .on_response(
+                    tower_http::trace::DefaultOnResponse::new().level(tracing::Level::INFO),
+                ),
+        )
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
-    println!("listening on 0.0.0.0:8080");
+    log::info!("listening on 0.0.0.0:8080");
     axum::serve(listener, app)
         .with_graceful_shutdown(signal)
         .await
         .unwrap();
 }
 
+pub fn start_daemon(app: AppLocal) {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async { start_app(app).await });
+}
+
 // Make our own error that wraps `anyhow::Error`.
+#[derive(Debug)]
 struct AppError(anyhow::Error);
 
 // Tell axum how to convert `AppError` into a response.
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
+        log::error!("{self:?}");
         (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("{}", self.0),
+            json!({"error": self.0.to_string()}).to_string(),
         )
             .into_response()
     }
@@ -118,25 +134,21 @@ pub struct ListBookmarksRequest {
     pub descending: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct ListBookmarksResponse {
-    bookmarks: Vec<Bookmark>,
-    total: usize,
-}
-
-async fn list_bookmarks(
+async fn search(
     State(state): State<Arc<SharedState>>,
-    Query(query): Query<ListBookmarksRequest>,
-) -> Result<axum::Json<ListBookmarksResponse>, AppError> {
+    Json(payload): Json<ListBookmarksRequest>,
+) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
     let app = state.app.clone();
 
+    log::debug!("payload: {payload:?}");
+
     let search_query = SearchQuery {
-        id: query.id,
-        title: query.title,
-        url: query.url,
-        description: query.description,
-        tags: query.tags.map(|tags| parse_tags(tags)),
-        exact: query.exact,
+        id: payload.id,
+        title: payload.title,
+        url: payload.url,
+        description: payload.description,
+        tags: payload.tags.map(|tags| parse_tags(tags)),
+        exact: payload.exact,
         limit: None,
     };
 
@@ -144,22 +156,19 @@ async fn list_bookmarks(
         let app = app.blocking_read();
         app.lazy_refresh_backend()?;
 
-        let total = app.total()?;
-
         app.search(search_query)
             .map(|mut bookmarks| {
-                if query.descending {
+                if payload.descending {
                     bookmarks.reverse();
                 }
-
-                ListBookmarksResponse { bookmarks, total }
+                bookmarks
             })
             .map(Into::into)
             .map_err(Into::into)
     })
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct BookmarkCreateRequest {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -183,10 +192,12 @@ pub struct BookmarkCreateRequest {
     pub no_headless: bool,
 }
 
-async fn create_bookmark(
+async fn create(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<BookmarkCreateRequest>,
 ) -> Result<axum::Json<Bookmark>, AppError> {
+    log::debug!("payload: {payload:?}");
+
     let meta_opts = {
         if payload.no_meta {
             None
@@ -222,32 +233,21 @@ async fn create_bookmark(
     })
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct BookmarkUpdateRequest {
+    pub id: u64,
     pub title: Option<String>,
     pub description: Option<String>,
     pub tags: Option<String>,
     pub url: Option<String>,
-    //
-    // TODO:
-    // /// dont fetch metadata
-    // #[serde(default)]
-    // pub no_meta: bool,
-    //
-    // /// dont use headless browser for metadata scrape
-    // #[serde(default)]
-    // pub no_headless: bool,
-    //
-    // /// dont use duckduckgo for metadata scrape
-    // #[serde(default)]
-    // pub no_duck: bool,
 }
 
-async fn update_bookmark(
+async fn update(
     State(state): State<Arc<SharedState>>,
-    Path(bmark_id): Path<u64>,
     Json(payload): Json<BookmarkUpdateRequest>,
 ) -> Result<axum::Json<Bookmark>, AppError> {
+    log::debug!("payload: {payload:?}");
+
     let app = state.app.clone();
 
     let bmark_update = BookmarkUpdate {
@@ -261,37 +261,35 @@ async fn update_bookmark(
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
         app.lazy_refresh_backend()?;
-        app.update(bmark_id, bmark_update)?
+        app.update(payload.id, bmark_update)?
             .ok_or_else(|| anyhow!("bookmark not found"))
             .map(Into::into)
             .map_err(Into::into)
     })
 }
 
-async fn delete_bookmark(
+#[derive(Deserialize, Serialize)]
+pub struct BookmarkDeleteRequest {
+    pub id: u64,
+}
+
+async fn delete(
     State(state): State<Arc<SharedState>>,
-    Path(bmark_id): Path<u64>,
+    Json(payload): Json<BookmarkUpdateRequest>,
 ) -> Result<axum::Json<bool>, AppError> {
+    log::debug!("payload: {payload:?}");
+
     let app = state.app.clone();
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
         app.lazy_refresh_backend()?;
-        app.delete(bmark_id)?
+        app.delete(payload.id)?
             .ok_or_else(|| anyhow!("bookmark not found"))
             .map(Into::into)
             .map_err(Into::into)
     })
 }
-
-pub fn start_daemon(app: AppDaemon) {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async { start_app(app).await });
-}
-
 async fn total(State(state): State<Arc<SharedState>>) -> Result<axum::Json<usize>, AppError> {
     let app = state.app.clone();
 
@@ -303,14 +301,16 @@ async fn total(State(state): State<Arc<SharedState>>) -> Result<axum::Json<usize
 
 async fn search_delete(
     State(state): State<Arc<SharedState>>,
-    Json(params): Json<SearchQuery>,
+    Json(payload): Json<SearchQuery>,
 ) -> Result<axum::Json<usize>, AppError> {
+    log::debug!("payload: {payload:?}");
+
     let app = state.app.clone();
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
         app.bmark_mgr
-            .search_delete(params)
+            .search_delete(payload)
             .map(Into::into)
             .map_err(Into::into)
     })
@@ -324,13 +324,33 @@ pub struct SearchUpdateRequest {
 
 async fn search_update(
     State(state): State<Arc<SharedState>>,
-    Json(params): Json<SearchUpdateRequest>,
+    Json(payload): Json<SearchUpdateRequest>,
 ) -> Result<axum::Json<usize>, AppError> {
+    log::debug!("payload: {payload:?}");
+
     let app = state.app.clone();
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
-        app.search_update(params.query, params.update)
+        app.search_update(payload.query, payload.update)
+            .map(Into::into)
+            .map_err(Into::into)
+    })
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct FetchMetaRequest {
+    url: String,
+    opts: FetchMetadataOpts,
+}
+
+async fn fetch_metadata(
+    Json(payload): Json<FetchMetaRequest>,
+) -> Result<axum::Json<metadata::Metadata>, AppError> {
+    log::debug!("payload: {payload:?}");
+
+    tokio::task::block_in_place(move || {
+        AppLocal::fetch_metadata(&payload.url, payload.opts)
             .map(Into::into)
             .map_err(Into::into)
     })

@@ -86,7 +86,7 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
         }
 
         if r > 0 {
-            println!("{host}: retrying");
+            log::debug!("{host}: retrying");
         }
 
         r += 1;
@@ -111,7 +111,7 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
         ) {
             Ok(b) => b,
             Err(err) => {
-                eprintln!("failed to start chrome: {}", err);
+                log::error!("failed to start chrome: {}", err);
                 return None;
             }
         };
@@ -133,13 +133,13 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
         tab.set_default_timeout(Duration::from_secs(10));
 
         if let Err(err) = tab.navigate_to(url) {
-            eprintln!("{host}: {}", err);
+            log::error!("{host}: {}", err);
             force_proxy = true;
             continue;
         }
 
         if let Err(err) = tab.wait_until_navigated() {
-            eprintln!("{host}: {}", err);
+            log::error!("{host}: {}", err);
             force_proxy = true;
             continue;
         }
@@ -206,7 +206,7 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
         }
 
         if r > 0 {
-            println!("{iden}: retrying");
+            log::debug!("{iden}: retrying");
         }
 
         r += 1;
@@ -219,19 +219,19 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
             .pool_idle_timeout(Duration::from_secs(10));
 
         if force_proxy && !opt_proxy.is_empty() {
-            println!("{iden}: using proxy {opt_proxy:#?}");
+            log::debug!("{iden}: using proxy {opt_proxy:#?}");
             client = client.proxy(reqwest::Proxy::all(&opt_proxy).unwrap());
         }
 
         let client = client.build().unwrap();
 
-        println!("{iden}: requesting");
+        log::debug!("{iden}: requesting");
 
         let resp = match client.get(url).send() {
             Ok(r) => r,
             Err(err) => {
                 force_proxy = true;
-                eprintln!("{iden}: {err}: {:#?}", get_error(&err));
+                log::error!("{iden}: {err}: {:#?}", get_error(&err));
                 continue;
             }
         };
@@ -239,7 +239,7 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
         let status = resp.status();
 
         if !status.is_success() {
-            println!("{iden}: {:?}", resp.status().to_string());
+            log::debug!("{iden}: {:?}", resp.status().to_string());
         }
 
         if status == StatusCode::OK {
@@ -248,7 +248,7 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
             let bytes = match resp.bytes() {
                 Ok(b) => b,
                 Err(err) => {
-                    println!("{iden}: {}", err.is_timeout());
+                    log::debug!("{iden}: {}", err.is_timeout());
                     force_proxy = true;
                     continue;
                 }
@@ -293,6 +293,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     let mut title = None;
     let mut image_url = None;
 
+    #[allow(unused_assignments)]
     let mut icon_url = None;
     let mut canonical_url = None;
 
@@ -359,7 +360,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
             let mut href = link_href.to_string();
             if !link_href.starts_with("http") {
                 if link_href.contains("base64,") {
-                    println!("base64 icons are not supported");
+                    log::debug!("base64 icons are not supported");
                     continue;
                 } else {
                     let mut url_parsed = reqwest::Url::parse(url).unwrap();
