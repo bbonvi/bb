@@ -5,7 +5,6 @@ use crate::{
     metadata::MetaOptions,
     parse_tags,
 };
-use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, routing::get, routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;

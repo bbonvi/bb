@@ -12,8 +12,7 @@ use anyhow::{anyhow, bail, Context};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 use std::{
-    borrow::Borrow,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
     thread::sleep,
     time::{Duration, SystemTime},

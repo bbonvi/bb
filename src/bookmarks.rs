@@ -1,5 +1,5 @@
 use crate::parse_tags;
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
