@@ -64,7 +64,8 @@ async fn start_app(app: AppLocal) {
         .route("/api/bookmarks/search_delete", post(search_delete))
         .route("/api/bookmarks/total", post(total))
         .route("/api/bookmarks/tags", post(tags))
-        .route("/api/config", get(config))
+        .route("/api/config", get(get_config))
+        .route("/api/config", post(update_config))
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
                 .make_span_with(
@@ -430,11 +431,26 @@ async fn tags(State(state): State<Arc<SharedState>>) -> Result<axum::Json<Vec<St
     })
 }
 
-async fn config(State(state): State<Arc<SharedState>>) -> Result<axum::Json<Config>, HttpError> {
+async fn get_config(
+    State(state): State<Arc<SharedState>>,
+) -> Result<axum::Json<Config>, HttpError> {
     let app = state.app.clone();
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
+        Ok(app.config().read().unwrap().clone().into())
+    })
+}
+
+async fn update_config(
+    State(state): State<Arc<SharedState>>,
+    Json(payload): Json<Config>,
+) -> Result<axum::Json<Config>, HttpError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        *app.config().write().unwrap() = payload.clone();
         Ok(app.config().read().unwrap().clone().into())
     })
 }
