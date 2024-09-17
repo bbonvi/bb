@@ -6,40 +6,69 @@ use crate::{
     rules::{self, Rule},
     scrape::guess_filetype,
     storage,
+    web::TotalResponse,
 };
 use anyhow::{anyhow, bail, Context};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 use std::{
+    borrow::Borrow,
+    collections::{HashMap, HashSet},
     sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
     thread::sleep,
     time::{Duration, SystemTime},
 };
+
+#[derive(thiserror::Error, Debug)]
+pub enum AppError {
+    #[error("bookmark not found")]
+    NotFound,
+
+    #[error("bookmark with this url already exists at id {0}")]
+    AlreadyExists(u64),
+
+    #[error("reqwest error: {0:?}")]
+    Reqwest(#[from] reqwest::Error),
+
+    #[error("io error: {0:?}")]
+    IO(#[from] std::io::Error),
+
+    #[error("unexpected error: {0:?}")]
+    Other(#[from] anyhow::Error),
+}
 
 pub trait AppBackend: Send + Sync {
     fn create(
         &self,
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
-    ) -> anyhow::Result<bookmarks::Bookmark>;
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError>;
+
+    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError>;
+
     fn update(
         &self,
         id: u64,
         bmark_update: bookmarks::BookmarkUpdate,
-    ) -> anyhow::Result<Option<bookmarks::Bookmark>>;
-    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
-    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize>;
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError>;
+    fn delete(&self, id: u64) -> anyhow::Result<(), AppError>;
+    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize, AppError>;
     fn search_update(
         &self,
         query: bookmarks::SearchQuery,
         bmark_update: bookmarks::BookmarkUpdate,
-    ) -> anyhow::Result<usize>;
-    fn total(&self) -> anyhow::Result<usize>;
-    fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>>;
+    ) -> anyhow::Result<usize, AppError>;
+    fn total(&self) -> anyhow::Result<usize, AppError>;
+    fn tags(&self) -> anyhow::Result<Vec<String>, AppError>;
+    fn search(
+        &self,
+        query: bookmarks::SearchQuery,
+    ) -> anyhow::Result<Vec<bookmarks::Bookmark>, AppError>;
 }
 
 pub struct AppLocal {
     pub bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+    tags_cache: Arc<RwLock<Vec<String>>>,
     storage_mgr: Arc<dyn storage::StorageManager>,
 
     task_tx: Option<Arc<mpsc::Sender<Task>>>,
@@ -93,6 +122,7 @@ impl AppLocal {
             bmark_mgr,
             storage_mgr,
             task_tx: None,
+            tags_cache: Arc::new(RwLock::new(Vec::new())),
             task_queue_handle: None,
             config,
             bmarks_last_modified: Arc::new(RwLock::new(bmarks_modtime())),
@@ -118,6 +148,12 @@ pub struct AddOpts {
     pub meta_opts: Option<MetaOptions>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct RefreshMetadataOpts {
+    pub async_meta: bool,
+    pub meta_opts: MetaOptions,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FetchMetadataOpts {
     pub no_https_upgrade: bool,
@@ -125,11 +161,57 @@ pub struct FetchMetadataOpts {
 }
 
 impl AppBackend for AppLocal {
+    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
+        let bmarks = self.bmark_mgr.search(bookmarks::SearchQuery {
+            id: Some(id),
+            ..Default::default()
+        })?;
+
+        let bmark = bmarks.first().ok_or(anyhow!("not found"))?;
+
+        if opts.async_meta {
+            self.schedule_fetch_and_update_metadata(
+                &bmark,
+                FetchMetadataOpts {
+                    no_https_upgrade: true,
+                    meta_opts: opts.meta_opts.clone(),
+                },
+            );
+        } else {
+            // attempt to fetch and merge metadata
+            {
+                let meta = Self::fetch_metadata(
+                    &bmark.url,
+                    FetchMetadataOpts {
+                        no_https_upgrade: true,
+                        meta_opts: opts.meta_opts.clone(),
+                    },
+                )?;
+
+                Self::merge_metadata(
+                    bmark.clone(),
+                    meta,
+                    self.storage_mgr.clone(),
+                    self.bmark_mgr.clone(),
+                )?
+                .context("bmark not found")?;
+            };
+
+            // apply rules
+            let rules = &self.config.read().unwrap().rules;
+            Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
+                .ok_or_else(|| anyhow!("bmark not found"))?;
+        };
+
+        Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
+
+        Ok(())
+    }
     fn create(
         &self,
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
-    ) -> anyhow::Result<bookmarks::Bookmark> {
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
         let url = bmark_create.url.clone();
 
         if !self.config.read().unwrap().allow_duplicates {
@@ -141,7 +223,7 @@ impl AppBackend for AppLocal {
             };
 
             if let Some(b) = self.search(query)?.first() {
-                bail!("bookmark with this url already exists at index {0}", b.id);
+                return Err(AppError::AlreadyExists(b.id));
             };
         }
 
@@ -185,14 +267,16 @@ impl AppBackend for AppLocal {
                 let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
                     .ok_or_else(|| anyhow!("bmark not found"))?;
 
-                return with_meta.map(|_| with_rules);
+                return Ok(with_meta.map(|_| with_rules)?);
             }
         } else {
             // if no metadata apply Rules.
             let rules = &self.config.read().unwrap().rules;
-            return Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
-                .ok_or_else(|| anyhow!("bmark not found"));
+            return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
+                .ok_or(AppError::NotFound)?);
         }
+
+        Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
 
         Ok(bmark)
     }
@@ -201,31 +285,67 @@ impl AppBackend for AppLocal {
         &self,
         id: u64,
         bmark_update: bookmarks::BookmarkUpdate,
-    ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
-        self.bmark_mgr.update(id, bmark_update)
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
+        if let Some(b) = self
+            .search(bookmarks::SearchQuery {
+                url: bmark_update.url.clone(),
+                ..Default::default()
+            })?
+            .iter()
+            .filter(|b| b.id != id)
+            .collect::<Vec<_>>()
+            .first()
+        {
+            return Err(AppError::AlreadyExists(b.id));
+        };
+
+        let bmark = self
+            .bmark_mgr
+            .update(id, bmark_update)?
+            .ok_or(AppError::NotFound)?;
+
+        Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
+
+        Ok(bmark)
     }
 
-    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
-        self.bmark_mgr.delete(id)
+    fn delete(&self, id: u64) -> anyhow::Result<(), AppError> {
+        self.bmark_mgr
+            .delete(id)?
+            .ok_or(AppError::NotFound)
+            .map(|_| ())?;
+
+        Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
+
+        Ok(())
     }
 
-    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize> {
-        self.bmark_mgr.search_delete(query)
+    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize, AppError> {
+        let search_delete = self.bmark_mgr.search_delete(query)?;
+        Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
+        Ok(search_delete)
     }
 
     fn search_update(
         &self,
         query: bookmarks::SearchQuery,
         bmark_update: bookmarks::BookmarkUpdate,
-    ) -> anyhow::Result<usize> {
-        self.bmark_mgr.search_update(query, bmark_update)
+    ) -> anyhow::Result<usize, AppError> {
+        let search_update = self.bmark_mgr.search_update(query, bmark_update)?;
+
+        Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
+
+        Ok(search_update)
     }
 
-    fn total(&self) -> anyhow::Result<usize> {
-        self.bmark_mgr.total()
+    fn total(&self) -> anyhow::Result<usize, AppError> {
+        Ok(self.bmark_mgr.total()?)
     }
 
-    fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>> {
+    fn search(
+        &self,
+        query: bookmarks::SearchQuery,
+    ) -> anyhow::Result<Vec<bookmarks::Bookmark>, AppError> {
         let mut query = query;
 
         // TODO: do we prevent queries against empty strings?
@@ -239,13 +359,85 @@ impl AppBackend for AppLocal {
             if query.url.clone().unwrap_or_default() == "" {
                 query.url = None;
             };
+
+            // hidden by default functionality
+            let config = self.config.read().unwrap();
+            let hidden_by_default = &config.hidden_by_default;
+            if !hidden_by_default.is_empty() {
+                let mut query_tags = query.tags.clone().unwrap_or_default();
+
+                let mut append = Vec::new();
+                for hidden_tag in hidden_by_default {
+                    if query_tags
+                        .iter()
+                        .find(|query_tag| {
+                            **query_tag == *hidden_tag
+                                || query_tag.starts_with(&format!("{hidden_tag}/"))
+                        })
+                        .is_none()
+                    {
+                        append.push(format!("-{hidden_tag}"))
+                    }
+                }
+
+                query_tags.append(&mut append);
+
+                query.tags = Some(query_tags);
+            }
         }
 
-        self.bmark_mgr.search(query)
+        Ok(self.bmark_mgr.search(query)?)
+    }
+
+    fn tags(&self) -> anyhow::Result<Vec<String>, AppError> {
+        if self.tags_cache.read().unwrap().is_empty() {
+            Self::tags_cache_reeval(self.bmark_mgr.clone(), self.tags_cache.clone())?;
+        }
+
+        Ok(self.tags_cache.read().unwrap().to_vec())
     }
 }
 
 impl AppLocal {
+    fn schedule_tags_cache_reval(
+        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+        tags_cache: Arc<RwLock<Vec<String>>>,
+    ) {
+        std::thread::spawn(move || {
+            if let Err(err) = Self::tags_cache_reeval(bmark_mgr, tags_cache) {
+                log::error!("{err}");
+            }
+        });
+    }
+
+    fn tags_cache_reeval(
+        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+        tags_cache: Arc<RwLock<Vec<String>>>,
+    ) -> anyhow::Result<(), AppError> {
+        log::info!("refreshing da cache");
+        let bmarks = bmark_mgr.search(bookmarks::SearchQuery {
+            ..Default::default()
+        })?;
+
+        let tags: Vec<String> = bmarks
+            .into_iter()
+            .map(|bmark| bmark.tags)
+            .flatten()
+            .collect();
+
+        let mut counts = HashMap::new();
+        for tag in &tags {
+            *counts.entry(tag.clone()).or_insert(0) += 1;
+        }
+
+        let mut unique_tags: Vec<String> = counts.keys().cloned().collect();
+        unique_tags.sort_by(|a, b| counts[b].cmp(&counts[a]));
+
+        *tags_cache.write().unwrap() = unique_tags;
+
+        Ok(())
+    }
+
     pub fn lazy_refresh_backend(&self) -> anyhow::Result<()> {
         let modtime = bmarks_modtime();
         let mut last_modified = self.bmarks_last_modified.write().unwrap();
@@ -524,13 +716,13 @@ impl AppLocal {
             bmark_mgr,
             storage_mgr,
             task_tx: Some(task_tx),
+            tags_cache: Arc::new(RwLock::new(Vec::new())),
             task_queue_handle,
             config,
             bmarks_last_modified: Arc::new(RwLock::new(bmarks_modtime())),
         }
     }
 
-    #[cfg(test)]
     pub fn config(&self) -> Arc<RwLock<Config>> {
         self.config.clone()
     }
@@ -605,11 +797,24 @@ where
 }
 
 impl AppBackend for AppRemote {
+    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
+        let resp = self
+            .post("/api/bookmarks/refresh_metadata")
+            .json(&json!({
+                "id": id,
+                "async_meta": opts.async_meta,
+                "no_headless": opts.meta_opts.no_headless,
+            }))
+            .send()?;
+
+        Ok(handle_response(resp)?)
+    }
+
     fn create(
         &self,
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
-    ) -> anyhow::Result<bookmarks::Bookmark> {
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
         let resp = self
             .post("/api/bookmarks/create")
             .json(&json!({
@@ -630,7 +835,7 @@ impl AppBackend for AppRemote {
         &self,
         id: u64,
         bmark_update: bookmarks::BookmarkUpdate,
-    ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
         let resp = self
             .post("/api/bookmarks/update")
             .json(&json!({
@@ -645,7 +850,7 @@ impl AppBackend for AppRemote {
         Ok(handle_response(resp)?)
     }
 
-    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
+    fn delete(&self, id: u64) -> anyhow::Result<(), AppError> {
         let resp = self
             .post("/api/bookmarks/delete")
             .json(&json!({
@@ -656,7 +861,7 @@ impl AppBackend for AppRemote {
         Ok(handle_response(resp)?)
     }
 
-    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize> {
+    fn search_delete(&self, query: bookmarks::SearchQuery) -> anyhow::Result<usize, AppError> {
         let resp = self
             .post("/api/bookmarks/search_delete")
             .json(&query)
@@ -669,7 +874,7 @@ impl AppBackend for AppRemote {
         &self,
         query: bookmarks::SearchQuery,
         bmark_update: bookmarks::BookmarkUpdate,
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<usize, AppError> {
         let resp = self
             .post("/api/bookmarks/search_update")
             .json(&json!({
@@ -681,12 +886,17 @@ impl AppBackend for AppRemote {
         Ok(handle_response(resp)?)
     }
 
-    fn total(&self) -> anyhow::Result<usize> {
+    fn total(&self) -> anyhow::Result<usize, AppError> {
         let resp = self.post("/api/bookmarks/total").send()?;
-        Ok(handle_response(resp)?)
+        let resp = handle_response::<TotalResponse>(resp)?;
+
+        Ok(resp.total)
     }
 
-    fn search(&self, query: bookmarks::SearchQuery) -> anyhow::Result<Vec<bookmarks::Bookmark>> {
+    fn search(
+        &self,
+        query: bookmarks::SearchQuery,
+    ) -> anyhow::Result<Vec<bookmarks::Bookmark>, AppError> {
         log::debug!("search: {query:?}");
         let resp = self
             .post("/api/bookmarks/search")
@@ -700,6 +910,12 @@ impl AppBackend for AppRemote {
                 "descending": false,
             }))
             .send()?;
+
+        Ok(handle_response(resp)?)
+    }
+
+    fn tags(&self) -> anyhow::Result<Vec<String>, AppError> {
+        let resp = self.post("/api/bookmarks/tags").send()?;
 
         Ok(handle_response(resp)?)
     }

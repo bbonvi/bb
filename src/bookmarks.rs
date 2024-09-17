@@ -1,5 +1,5 @@
 use crate::parse_tags;
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -54,10 +54,17 @@ pub struct BookmarkCreate {
 pub struct BookmarkUpdate {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub append_tags: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remove_tags: Option<Vec<String>>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 
@@ -278,6 +285,73 @@ impl BookmarkManager for BackendCsv {
         Ok(bmark)
     }
 
+    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
+        let mut bmarks = self.list.write().unwrap();
+        let result = bmarks.iter().position(|b| b.id == id).map(|idx| {
+            bmarks.remove(idx);
+            true
+        });
+
+        drop(bmarks);
+
+        if result.is_some() {
+            self.save();
+        }
+
+        Ok(result)
+    }
+
+    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>> {
+        let mut bmarks = self.list.write().unwrap();
+
+        let bmark = if let Some(bmark) = bmarks.iter_mut().find(|b| b.id == id) {
+            if let Some(title) = bmark_update.title {
+                bmark.title = title;
+            }
+            if let Some(descr) = bmark_update.description {
+                bmark.description = descr;
+            }
+
+            if let Some(tags) = bmark_update.tags {
+                bmark.tags = tags;
+                let mut seen = HashSet::new();
+                bmark.tags.retain(|item| seen.insert(item.clone()));
+            }
+
+            if let Some(delete_tags) = bmark_update.remove_tags {
+                bmark
+                    .tags
+                    .retain(|item| delete_tags.iter().find(|t| *t == item).is_none());
+            }
+
+            if let Some(mut tags) = bmark_update.append_tags {
+                bmark.tags.append(&mut tags);
+                let mut seen = HashSet::new();
+                bmark.tags.retain(|item| seen.insert(item.clone()));
+            }
+
+            if let Some(url) = bmark_update.url {
+                bmark.url = url;
+            }
+
+            if let Some(image_id) = bmark_update.image_id {
+                bmark.image_id = Some(image_id);
+            }
+            if let Some(icon_id) = bmark_update.icon_id {
+                bmark.icon_id = Some(icon_id);
+            }
+            Some(bmark.clone())
+        } else {
+            None
+        };
+
+        drop(bmarks);
+
+        self.save();
+
+        Ok(bmark)
+    }
+
     fn search_delete(&self, query: SearchQuery) -> anyhow::Result<usize> {
         let results = self.search(query)?;
         let delete_ids = results;
@@ -316,11 +390,26 @@ impl BookmarkManager for BackendCsv {
             if let Some(ref descr) = bmark_update.description {
                 bmark.description = descr.to_string();
             }
+
             if let Some(ref tags) = bmark_update.tags {
                 bmark.tags = tags.to_vec();
                 let mut seen = HashSet::new();
                 bmark.tags.retain(|item| seen.insert(item.clone()));
             }
+
+            if let Some(ref delete_tags) = bmark_update.remove_tags {
+                bmark
+                    .tags
+                    .retain(|item| delete_tags.iter().find(|t| *t == item).is_none());
+            }
+
+            if let Some(ref tags) = bmark_update.append_tags {
+                let mut t = tags.clone();
+                bmark.tags.append(&mut t);
+                let mut seen = HashSet::new();
+                bmark.tags.retain(|item| seen.insert(item.clone()));
+            }
+
             if let Some(ref url) = bmark_update.url {
                 bmark.url = url.to_string();
             }
@@ -338,59 +427,6 @@ impl BookmarkManager for BackendCsv {
         self.save();
 
         Ok(count)
-    }
-
-    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
-        let mut bmarks = self.list.write().unwrap();
-        let result = bmarks.iter().position(|b| b.id == id).map(|idx| {
-            bmarks.remove(idx);
-            true
-        });
-
-        drop(bmarks);
-
-        if result.is_some() {
-            self.save();
-        }
-
-        Ok(result)
-    }
-
-    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>> {
-        let mut bmarks = self.list.write().unwrap();
-
-        let bmark = if let Some(bmark) = bmarks.iter_mut().find(|b| b.id == id) {
-            if let Some(title) = bmark_update.title {
-                bmark.title = title;
-            }
-            if let Some(descr) = bmark_update.description {
-                bmark.description = descr;
-            }
-            if let Some(tags) = bmark_update.tags {
-                bmark.tags = tags;
-                let mut seen = HashSet::new();
-                bmark.tags.retain(|item| seen.insert(item.clone()));
-            }
-            if let Some(url) = bmark_update.url {
-                bmark.url = url;
-            }
-
-            if let Some(image_id) = bmark_update.image_id {
-                bmark.image_id = Some(image_id);
-            }
-            if let Some(icon_id) = bmark_update.icon_id {
-                bmark.icon_id = Some(icon_id);
-            }
-            Some(bmark.clone())
-        } else {
-            None
-        };
-
-        drop(bmarks);
-
-        self.save();
-
-        Ok(bmark)
     }
 
     fn total(&self) -> anyhow::Result<usize> {

@@ -1,11 +1,12 @@
 use crate::{
-    app::{AppBackend, AppLocal, FetchMetadataOpts},
+    app::{AppBackend, AppError, AppLocal, FetchMetadataOpts},
     bookmarks::{Bookmark, BookmarkUpdate, SearchQuery},
-    metadata::{self, MetaOptions},
+    config::Config,
+    metadata::MetaOptions,
     parse_tags,
 };
 use anyhow::anyhow;
-use axum::{extract::State, response::IntoResponse, routing::post, Json, Router};
+use axum::{extract::State, response::IntoResponse, routing::get, routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
@@ -55,13 +56,15 @@ async fn start_app(app: AppLocal) {
     let app = Router::new()
         .nest_service("/api/file/", tower_http::services::ServeDir::new("uploads"))
         .route("/api/bookmarks/search", post(search))
-        .route("/api/bookmarks/fetch_metadata", post(fetch_metadata))
+        .route("/api/bookmarks/refresh_metadata", post(refresh_metadata))
         .route("/api/bookmarks/create", post(create))
         .route("/api/bookmarks/update", post(update))
         .route("/api/bookmarks/delete", post(delete))
         .route("/api/bookmarks/search_update", post(search_update))
         .route("/api/bookmarks/search_delete", post(search_delete))
         .route("/api/bookmarks/total", post(total))
+        .route("/api/bookmarks/tags", post(tags))
+        .route("/api/config", get(config))
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
                 .make_span_with(
@@ -91,25 +94,51 @@ pub fn start_daemon(app: AppLocal) {
 
 // Make our own error that wraps `anyhow::Error`.
 #[derive(Debug)]
-struct AppError(anyhow::Error);
+struct HttpError(AppError);
 
 // Tell axum how to convert `AppError` into a response.
-impl IntoResponse for AppError {
+impl IntoResponse for HttpError {
     fn into_response(self) -> axum::response::Response {
-        log::error!("{self:?}");
-        (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            json!({"error": self.0.to_string()}).to_string(),
-        )
-            .into_response()
+        match self.0 {
+            AppError::NotFound => (
+                axum::http::StatusCode::NOT_FOUND,
+                json!({"error": self.0.to_string()}).to_string(),
+            ),
+            AppError::AlreadyExists(_) => (
+                axum::http::StatusCode::CONFLICT,
+                json!({"error": self.0.to_string()}).to_string(),
+            ),
+            AppError::Reqwest(_) => {
+                log::error!("{self:?}");
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    json!({"error": self.0.to_string()}).to_string(),
+                )
+            }
+            AppError::IO(_) => {
+                log::error!("{self:?}");
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    json!({"error": self.0.to_string()}).to_string(),
+                )
+            }
+            AppError::Other(_) => {
+                log::error!("{self:?}");
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    json!({"error": self.0.to_string()}).to_string(),
+                )
+            }
+        }
+        .into_response()
     }
 }
 
 // This enables using `?` on functions that return `Result<_, anyhow::Error>` to turn them into
 // `Result<_, AppError>`. That way you don't need to do that manually.
-impl<E> From<E> for AppError
+impl<E> From<E> for HttpError
 where
-    E: Into<anyhow::Error>,
+    E: Into<AppError>,
 {
     fn from(err: E) -> Self {
         Self(err.into())
@@ -137,7 +166,7 @@ pub struct ListBookmarksRequest {
 async fn search(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<ListBookmarksRequest>,
-) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
+) -> Result<axum::Json<Vec<Bookmark>>, HttpError> {
     let app = state.app.clone();
 
     log::debug!("payload: {payload:?}");
@@ -195,7 +224,7 @@ pub struct BookmarkCreateRequest {
 async fn create(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<BookmarkCreateRequest>,
-) -> Result<axum::Json<Bookmark>, AppError> {
+) -> Result<axum::Json<Bookmark>, HttpError> {
     log::debug!("payload: {payload:?}");
 
     let meta_opts = {
@@ -239,13 +268,15 @@ pub struct BookmarkUpdateRequest {
     pub title: Option<String>,
     pub description: Option<String>,
     pub tags: Option<String>,
+    pub append_tags: Option<String>,
+    pub remove_tags: Option<String>,
     pub url: Option<String>,
 }
 
 async fn update(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<BookmarkUpdateRequest>,
-) -> Result<axum::Json<Bookmark>, AppError> {
+) -> Result<axum::Json<Bookmark>, HttpError> {
     log::debug!("payload: {payload:?}");
 
     let app = state.app.clone();
@@ -253,7 +284,9 @@ async fn update(
     let bmark_update = BookmarkUpdate {
         title: payload.title,
         description: payload.description,
-        tags: payload.tags.map(|tags| parse_tags(tags)),
+        tags: payload.tags.map(parse_tags),
+        remove_tags: payload.remove_tags.map(parse_tags),
+        append_tags: payload.append_tags.map(parse_tags),
         url: payload.url,
         ..Default::default()
     };
@@ -261,8 +294,7 @@ async fn update(
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
         app.lazy_refresh_backend()?;
-        app.update(payload.id, bmark_update)?
-            .ok_or_else(|| anyhow!("bookmark not found"))
+        app.update(payload.id, bmark_update)
             .map(Into::into)
             .map_err(Into::into)
     })
@@ -276,7 +308,7 @@ pub struct BookmarkDeleteRequest {
 async fn delete(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<BookmarkUpdateRequest>,
-) -> Result<axum::Json<bool>, AppError> {
+) -> Result<(), HttpError> {
     log::debug!("payload: {payload:?}");
 
     let app = state.app.clone();
@@ -284,25 +316,14 @@ async fn delete(
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
         app.lazy_refresh_backend()?;
-        app.delete(payload.id)?
-            .ok_or_else(|| anyhow!("bookmark not found"))
-            .map(Into::into)
-            .map_err(Into::into)
-    })
-}
-async fn total(State(state): State<Arc<SharedState>>) -> Result<axum::Json<usize>, AppError> {
-    let app = state.app.clone();
-
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.total().map(Into::into).map_err(Into::into)
+        app.delete(payload.id).map(|_| ()).map_err(Into::into)
     })
 }
 
 async fn search_delete(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<SearchQuery>,
-) -> Result<axum::Json<usize>, AppError> {
+) -> Result<axum::Json<usize>, HttpError> {
     log::debug!("payload: {payload:?}");
 
     let app = state.app.clone();
@@ -325,7 +346,7 @@ pub struct SearchUpdateRequest {
 async fn search_update(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<SearchUpdateRequest>,
-) -> Result<axum::Json<usize>, AppError> {
+) -> Result<axum::Json<usize>, HttpError> {
     log::debug!("payload: {payload:?}");
 
     let app = state.app.clone();
@@ -344,14 +365,76 @@ pub struct FetchMetaRequest {
     opts: FetchMetadataOpts,
 }
 
-async fn fetch_metadata(
-    Json(payload): Json<FetchMetaRequest>,
-) -> Result<axum::Json<metadata::Metadata>, AppError> {
+#[derive(Deserialize, Serialize, Debug)]
+pub struct RefreshMetadataRequest {
+    pub id: u64,
+
+    /// Fetch metadata in background.
+    ///
+    /// *A bookmark will be added instantly*
+    #[serde(default)]
+    pub async_meta: bool,
+
+    /// Do not use headless browser for metadata scrape
+    #[serde(default)]
+    pub no_headless: bool,
+}
+
+async fn refresh_metadata(
+    State(state): State<Arc<SharedState>>,
+    Json(payload): Json<RefreshMetadataRequest>,
+) -> Result<axum::Json<()>, HttpError> {
     log::debug!("payload: {payload:?}");
 
+    let app = state.app.clone();
+
     tokio::task::block_in_place(move || {
-        AppLocal::fetch_metadata(&payload.url, payload.opts)
-            .map(Into::into)
+        let app = app.blocking_read();
+        app.refresh_metadata(
+            payload.id,
+            crate::app::RefreshMetadataOpts {
+                async_meta: payload.async_meta,
+                meta_opts: MetaOptions {
+                    no_headless: payload.no_headless,
+                },
+            },
+        )
+        .map(Into::into)
+        .map_err(Into::into)
+    })
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TotalResponse {
+    pub total: usize,
+}
+async fn total(
+    State(state): State<Arc<SharedState>>,
+) -> Result<axum::Json<TotalResponse>, HttpError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.total()
+            .map(|total| TotalResponse { total }.into())
             .map_err(Into::into)
+    })
+}
+
+async fn tags(State(state): State<Arc<SharedState>>) -> Result<axum::Json<Vec<String>>, HttpError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        app.tags().map(Into::into).map_err(Into::into)
+    })
+}
+
+async fn config(State(state): State<Arc<SharedState>>) -> Result<axum::Json<Config>, HttpError> {
+    let app = state.app.clone();
+
+    tokio::task::block_in_place(move || {
+        let app = app.blocking_read();
+        Ok(app.config().read().unwrap().clone().into())
     })
 }

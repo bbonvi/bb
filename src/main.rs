@@ -148,7 +148,7 @@ fn main() -> anyhow::Result<()> {
                 MetaArgs {
                     no_https_upgrade,
                     no_headless,
-                    ..
+                    no_meta,
                 },
             ..
         } => {
@@ -162,6 +162,7 @@ fn main() -> anyhow::Result<()> {
                 tags,
                 no_https_upgrade,
                 no_headless,
+                no_meta,
                 async_meta,
                 app_mgr,
             )
@@ -206,13 +207,16 @@ fn handle_action(
             title,
             description,
             tags,
-            meta_args: _,
+            append_tags,
+            remove_tags,
         }) => {
             let bmark_update = bookmarks::BookmarkUpdate {
                 title,
                 description,
                 tags: tags.map(parse_tags),
                 url,
+                append_tags: append_tags.map(parse_tags),
+                remove_tags: remove_tags.map(parse_tags),
                 ..Default::default()
             };
 
@@ -226,8 +230,10 @@ fn handle_action(
                 && bmark_update.description.is_none()
                 && bmark_update.tags.is_none()
                 && bmark_update.url.is_none()
+                && bmark_update.remove_tags.is_none()
+                && bmark_update.append_tags.is_none()
             {
-                let _ = println!("This update request does nothing");
+                let _ = println!("The update did nothing");
                 return Ok(());
             }
 
@@ -309,6 +315,10 @@ fn handle_search(
     let bmarks = app_mgr.search(query.clone())?;
 
     if bmarks.is_empty() {
+        if action.is_some() {
+            let _ = println!("0 items updated");
+            return Ok(());
+        }
         let _ = println!("{}", serde_json::to_string_pretty(&bmarks).unwrap());
         return Ok(());
     }
@@ -329,6 +339,7 @@ fn handle_add(
     tags: Option<String>,
     no_https_upgrade: bool,
     no_headless: bool,
+    no_meta: bool,
     async_meta: bool,
     app_mgr: Box<dyn AppBackend>,
 ) -> anyhow::Result<()> {
@@ -371,7 +382,11 @@ fn handle_add(
     let add_opts = app::AddOpts {
         no_https_upgrade,
         async_meta,
-        meta_opts: Some(MetaOptions { no_headless }),
+        meta_opts: if no_meta {
+            None
+        } else {
+            Some(MetaOptions { no_headless })
+        },
     };
 
     let bmark = app_mgr.create(bmark_create, add_opts)?;

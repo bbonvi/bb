@@ -6,7 +6,7 @@ const TEMPLATE: &str = r###"# URL (one line):
 
 # TAGS (one line, comma/space separated, leave "-" to prevent auto-fill)
 
-# DESCRIPTION (multi-line, comma/space separated, leave "-" to prevent auto-fill)
+# DESCRIPTION (multi-line, leave "-" to prevent auto-fill)
 
 "###;
 
@@ -177,7 +177,7 @@ pub mod tests {
         # TAGS (one line, comma/space separated, leave "-" to prevent auto-fill)
         tag1,tag2
 
-        # DESCRIPTION (multi-line, comma/space separated, leave "-" to prevent auto-fill)
+        # DESCRIPTION (multi-line, leave "-" to prevent auto-fill)
         dummy
         "###;
 
@@ -202,7 +202,7 @@ pub mod tests {
         # TAGS (one line, comma/space separated, leave "-" to prevent auto-fill)
         -
 
-        # DESCRIPTION (multi-line, comma/space separated, leave "-" to prevent auto-fill)
+        # DESCRIPTION (multi-line, leave "-" to prevent auto-fill)
         multiline
         description
 

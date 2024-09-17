@@ -18,9 +18,9 @@ pub struct MetaArgs {
     #[clap(long, default_value = "false")]
     pub no_headless: bool,
 
-    /// Don't use duckduckgo as a fallback for metadata scrape
+    /// Don't fetch meta at all
     #[clap(long, default_value = "false")]
-    pub no_duck: bool,
+    pub no_meta: bool,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -39,12 +39,17 @@ pub enum ActionArgs {
         #[clap(short, long)]
         description: Option<String>,
 
-        /// Bookmark tags
-        #[clap(short = 'g', long)]
+        /// Replace tags
+        #[clap(long)]
         tags: Option<String>,
 
-        #[clap(flatten)]
-        meta_args: MetaArgs,
+        /// Appends tags
+        #[clap(short = 'a', long)]
+        append_tags: Option<String>,
+
+        /// Delete tags
+        #[clap(short = 'r', long)]
+        remove_tags: Option<String>,
     },
     /// Delete found bookmarks
     Delete {

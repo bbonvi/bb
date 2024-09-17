@@ -14,6 +14,8 @@ pub struct Config {
     #[serde(default = "allow_duplicate_bmarks")]
     pub allow_duplicates: bool,
     #[serde(default)]
+    pub hidden_by_default: Vec<String>,
+    #[serde(default)]
     pub rules: Vec<Rule>,
 
     #[serde(skip_serializing, skip_deserializing)]
