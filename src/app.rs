@@ -254,18 +254,16 @@ impl AppBackend for AppLocal {
     ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
         let url = bmark_create.url.clone();
 
-        if !self.config.read().unwrap().allow_duplicates {
-            let query = bookmarks::SearchQuery {
-                url: Some(bmark_create.url.clone()),
-                exact: true,
-                limit: Some(1),
-                ..Default::default()
-            };
+        let query = bookmarks::SearchQuery {
+            url: Some(bmark_create.url.clone()),
+            exact: true,
+            limit: Some(1),
+            ..Default::default()
+        };
 
-            if let Some(b) = self.search(query)?.first() {
-                return Err(AppError::AlreadyExists(b.id));
-            };
-        }
+        if let Some(b) = self.search(query)?.first() {
+            return Err(AppError::AlreadyExists(b.id));
+        };
 
         // create empty bookmark
         let bmark = self.bmark_mgr.create(bmark_create)?;

@@ -5,14 +5,11 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 const TASK_QUEUE_MAX_THREADS: u16 = 4;
-const ALLOW_DUPLICATE_BOOKMARKS: bool = false;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default = "task_queue_max_threads")]
     pub task_queue_max_threads: u16,
-    #[serde(default = "allow_duplicate_bmarks")]
-    pub allow_duplicates: bool,
     #[serde(default)]
     pub hidden_by_default: Vec<String>,
     #[serde(default)]
@@ -24,9 +21,6 @@ pub struct Config {
 
 fn task_queue_max_threads() -> u16 {
     TASK_QUEUE_MAX_THREADS
-}
-fn allow_duplicate_bmarks() -> bool {
-    ALLOW_DUPLICATE_BOOKMARKS
 }
 
 impl Config {

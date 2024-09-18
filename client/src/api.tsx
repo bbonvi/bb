@@ -157,7 +157,6 @@ interface Action {
     }
 }
 
-
 export interface Rule {
     url?: string,
     description?: string,
@@ -165,11 +164,10 @@ export interface Rule {
     tags?: string[],
     comment?: string,
     action: Action,
-
 }
+
 export interface Config {
     task_queue_max_threads: number;
-    allow_duplicates: boolean;
     hidden_by_default: string[];
     rules: Rule[];
 }

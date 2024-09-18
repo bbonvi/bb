@@ -222,7 +222,5 @@ pub fn test_bookmark_dedup() {
 
     assert!(app.create(bmark_create.clone(), opts.clone()).is_err());
 
-    app.config().write().unwrap().allow_duplicates = true;
-
     assert!(app.create(bmark_create, opts).is_ok());
 }
