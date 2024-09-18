@@ -52,8 +52,10 @@ pub fn migrate() {
                                     .unwrap_or("png")
                                     .to_string();
 
-                                icon_id = Some(format!("{}.{}", Eid::new(), filetype));
-                                storage_mgr.write(&icon_id.clone().unwrap(), &file);
+                                if file.len() >= 5 {
+                                    icon_id = Some(format!("{}.{}", Eid::new(), filetype));
+                                    storage_mgr.write(&icon_id.clone().unwrap(), &file);
+                                }
                             }
                         };
                     }
@@ -65,21 +67,19 @@ pub fn migrate() {
                     .basic_auth("bn", Some("cleanBeaverZ"))
                     .send()
                 {
-                    if resp.status().as_u16() >= 400
-                        && resp.status().as_u16() != 400
-                        && resp.status().as_u16() != 404
-                    {
-                        log::error!("{resp:?}");
+                    if resp.status().as_u16() >= 200 || resp.status().as_u16() <= 399 {
+                        let file = resp.bytes().unwrap();
+
+                        if file.len() >= 10 {
+                            let filetype = infer::get(&file)
+                                .map(|ftype| ftype.extension())
+                                .unwrap_or("png")
+                                .to_string();
+
+                            image_id = Some(format!("{}.{}", Eid::new(), filetype));
+                            storage_mgr.write(&image_id.clone().unwrap(), &file);
+                        }
                     }
-
-                    let file = resp.bytes().unwrap();
-                    let filetype = infer::get(&file)
-                        .map(|ftype| ftype.extension())
-                        .unwrap_or("png")
-                        .to_string();
-
-                    image_id = Some(format!("{}.{}", Eid::new(), filetype));
-                    storage_mgr.write(&image_id.clone().unwrap(), &file);
                 };
 
                 bmarks
@@ -100,8 +100,8 @@ pub fn migrate() {
                                 .clone(),
                         ),
                         url: url.to_string(),
-                        image_id: image_id,
-                        icon_id: icon_id,
+                        image_id,
+                        icon_id,
                     })
                     .unwrap();
             }
