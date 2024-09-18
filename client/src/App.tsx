@@ -385,7 +385,11 @@ function App() {
                 const text = e.clipboardData.getData('text');
                 const url = new URL(text);
 
-                if (creating) {
+                const currentActive = document.activeElement?.tagName;
+                if (currentActive === "INPUT" || currentActive === "TEXTAREA") {
+                    return
+                }
+                if (creating || editingId) {
                     return
                 }
 
