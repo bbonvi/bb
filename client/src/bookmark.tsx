@@ -9,13 +9,13 @@ import { RootState } from "./store";
 
 const BLANK_IMG = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
+
 function Url(props: { url: string }) {
     const u = useMemo(() => {
         try {
             return new URL(props.url)
         } catch (err) {
             console.log(err)
-
         }
     }, [props.url]);
 
@@ -29,7 +29,7 @@ function Url(props: { url: string }) {
         {u.port && <span className="underline font-bold text-orange-400">:{u.port}</span>}
         <span className="underline text-orange-400">{u.pathname}</span>
         <span className="underline text-orange-500">{u.search}</span>
-        <span className="underline font-bold text-orange-400">{u.hash}</span>
+        <span className="underline font-bold text-orange-500">{u.hash}</span>
     </span>
 }
 
@@ -58,6 +58,17 @@ interface Props {
     focused: boolean;
     config: Config;
     tagList: string[];
+}
+
+const urlPattern = /(https?:\/\/[^\s]+)/g;
+
+function Description(props: { description: string }) {
+    const description = useMemo(() => {
+        return props.description.replace(urlPattern, '<a target="_blank" class="text-orange-500 hover:text-orange-300" href="$1">$1</a>');
+    }, [props.description]);
+
+    return <div dangerouslySetInnerHTML={{ __html: description }} />
+
 }
 
 function Bookmark(props: Props) {
@@ -364,7 +375,7 @@ function Bookmark(props: Props) {
                         onClick={() => showExpand ? onExpand() : null}
                         className={"text-sm " + (showExpand ? "cursor-pointer" : "")}
                     >
-                        {bmark.description ? "> " : ""}{bmark.description}
+                        <Description description={bmark.description} />
                     </div>}
                     {editing && <textarea
                         onKeyDown={onKeyDown}
