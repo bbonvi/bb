@@ -12,10 +12,12 @@ mod cli;
 mod config;
 mod editor;
 mod eid;
+mod images;
 mod metadata;
 mod rules;
 mod scrape;
 mod storage;
+mod task_runner;
 #[cfg(test)]
 mod tests;
 mod web;
@@ -107,7 +109,8 @@ fn main() -> anyhow::Result<()> {
         }
 
         cli::Command::Daemon { .. } => {
-            let (mut app_mgr, _) = app_local();
+            let (mut app_mgr, config) = app_local();
+
             app_mgr.run_queue();
             web::start_daemon(app_mgr);
             return Ok(());

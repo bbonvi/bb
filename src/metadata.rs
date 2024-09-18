@@ -81,7 +81,7 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
 
             if let Some(ref icon_url) = meta.icon_url {
                 log::debug!("fetching icon");
-                if let Some((status, bytes)) = scrape::reqwest_with_retries(icon_url) {
+                if let Some((status, bytes)) = scrape::reqwest_with_retries(dbg!(icon_url)) {
                     if status.is_success() {
                         log::debug!("icon is fetched");
 
@@ -144,6 +144,7 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
         Some(mut meta) => {
             // try to get favicon from duckduckgo
             if meta.icon.is_none() {
+                log::debug!("get favicon from duckduckgo");
                 let url_parsed = reqwest::Url::parse(url).unwrap();
                 let host = url_parsed.host_str();
 

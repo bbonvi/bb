@@ -52,7 +52,6 @@ pub fn migrate() {
                     storage_mgr.write(&image_id.clone().unwrap(), &image);
                 };
 
-                //  asmr, baby, black noise, brown noise, calm, colic, colicky, focus, meditate, meditation, pink noise, pray, prayer, relaxing, sleep, sleeping, study, studying, tinnitus, white noise,relaxation
                 bmarks
                     .create(crate::bookmarks::BookmarkCreate {
                         title: Some(title.to_string()),

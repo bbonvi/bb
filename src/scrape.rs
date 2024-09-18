@@ -442,31 +442,3 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         dump: None,
     }
 }
-
-pub fn guess_filetype(url: &str) -> Option<String> {
-    if url.contains(".jpg") || url.contains(".jpeg") {
-        return Some(String::from("jpg"));
-    }
-
-    if url.contains(".webp") {
-        return Some(String::from("webp"));
-    }
-
-    if url.contains(".png") {
-        return Some(String::from("png"));
-    }
-
-    if url.contains(".svg") {
-        return Some(String::from("svg"));
-    }
-
-    if url.contains(".bmp") {
-        return Some(String::from("bmp"));
-    }
-
-    if url.contains(".gif") {
-        return Some(String::from("gif"));
-    }
-
-    None
-}

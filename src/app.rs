@@ -4,8 +4,8 @@ use crate::{
     eid::Eid,
     metadata::{fetch_meta, MetaOptions, Metadata},
     rules::{self, Rule},
-    scrape::guess_filetype,
     storage,
+    task_runner::{self, Status, Task},
     web::TotalResponse,
 };
 use anyhow::{anyhow, bail, Context};
@@ -13,9 +13,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicU16, mpsc, Arc, RwLock},
-    thread::sleep,
-    time::{Duration, SystemTime},
+    sync::{mpsc, Arc, RwLock},
+    time::SystemTime,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -32,9 +31,20 @@ pub enum AppError {
     #[error("io error: {0:?}")]
     IO(#[from] std::io::Error),
 
+    #[error("Base64: {0:?}")]
+    Base64(#[from] base64::DecodeError),
+
     #[error("unexpected error: {0:?}")]
     Other(#[from] anyhow::Error),
 }
+
+// #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+// pub struct UpdateWithFile {
+//     pub bmark_update: bookmarks::BookmarkUpdate,
+//
+//     pub image: Option<Vec<u8>>,
+//     pub icon: Option<Vec<u8>>,
+// }
 
 pub trait AppBackend: Send + Sync {
     fn create(
@@ -42,6 +52,11 @@ pub trait AppBackend: Send + Sync {
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
     ) -> anyhow::Result<bookmarks::Bookmark, AppError>;
+
+    fn upload_cover(&self, id: u64, file: Vec<u8>)
+        -> anyhow::Result<bookmarks::Bookmark, AppError>;
+
+    fn upload_icon(&self, id: u64, file: Vec<u8>) -> anyhow::Result<bookmarks::Bookmark, AppError>;
 
     fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError>;
 
@@ -68,7 +83,7 @@ pub trait AppBackend: Send + Sync {
 pub struct AppLocal {
     pub bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
     tags_cache: Arc<RwLock<Vec<String>>>,
-    storage_mgr: Arc<dyn storage::StorageManager>,
+    pub storage_mgr: Arc<dyn storage::StorageManager>,
 
     task_tx: Option<Arc<mpsc::Sender<Task>>>,
     task_queue_handle: Option<std::thread::JoinHandle<()>>,
@@ -97,13 +112,37 @@ pub fn bmarks_modtime() -> SystemTime {
 impl AppLocal {
     pub fn run_queue(&mut self) {
         let (task_tx, task_rx) = mpsc::channel::<Task>();
+
         let handle = std::thread::spawn({
             let bmark_mgr = self.bmark_mgr.clone();
             let storage_mgr = self.storage_mgr.clone();
             let config = self.config.clone();
 
+            let mut queue_dump = task_runner::read_queue_dump();
+            let task_list = queue_dump.queue.clone();
+
+            queue_dump.queue = Vec::new();
+            task_runner::write_queue_dump(&queue_dump);
+
+            std::thread::spawn({
+                let task_tx = task_tx.clone();
+
+                move || {
+                    for task in task_list {
+                        if let Status::Done = task.status {
+                            continue;
+                        }
+
+                        log::info!("restarting interrupted task \"{:?}\"", task.task);
+                        if let Err(err) = task_tx.send(task.task) {
+                            log::error!("failed to initialize interrupted task: {err:?}");
+                        }
+                    }
+                }
+            });
+
             move || {
-                Self::start_queue(task_rx, bmark_mgr, storage_mgr, config);
+                task_runner::start_queue(task_rx, bmark_mgr, storage_mgr, config);
             }
         });
 
@@ -129,16 +168,16 @@ impl AppLocal {
     }
 }
 
-pub enum Task {
-    /// request to refetch metadata for a given bookmark
-    FetchMetadata {
-        bmark_id: u64,
-        opts: FetchMetadataOpts,
-    },
-
-    /// request to gracefully shutdown task queue
-    Shutdown,
-}
+// pub enum Task {
+//     /// request to refetch metadata for a given bookmark
+//     FetchMetadata {
+//         bmark_id: u64,
+//         opts: FetchMetadataOpts,
+//     },
+//
+//     /// request to gracefully shutdown task queue
+//     Shutdown,
+// }
 
 #[derive(Debug, Clone, Default)]
 pub struct AddOpts {
@@ -206,6 +245,7 @@ impl AppBackend for AppLocal {
 
         Ok(())
     }
+
     fn create(
         &self,
         bmark_create: bookmarks::BookmarkCreate,
@@ -285,18 +325,22 @@ impl AppBackend for AppLocal {
         id: u64,
         bmark_update: bookmarks::BookmarkUpdate,
     ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
-        if let Some(b) = self
-            .search(bookmarks::SearchQuery {
-                url: bmark_update.url.clone(),
-                ..Default::default()
-            })?
-            .iter()
-            .filter(|b| b.id != id)
-            .collect::<Vec<_>>()
-            .first()
-        {
-            return Err(AppError::AlreadyExists(b.id));
-        };
+        if bmark_update.url.is_some() {
+            if let Some(b) = self
+                .search(bookmarks::SearchQuery {
+                    url: bmark_update.url.clone(),
+                    exact: true,
+                    ..Default::default()
+                })?
+                .iter()
+                .filter(|b| b.id != id)
+                .collect::<Vec<_>>()
+                .first()
+            {
+                log::info!("already exists{id}");
+                return Err(AppError::AlreadyExists(b.id));
+            };
+        }
 
         let bmark = self
             .bmark_mgr
@@ -395,6 +439,76 @@ impl AppBackend for AppLocal {
 
         Ok(self.tags_cache.read().unwrap().to_vec())
     }
+
+    fn upload_cover(
+        &self,
+        id: u64,
+        file: Vec<u8>,
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
+        let bmarks = self.bmark_mgr.search(bookmarks::SearchQuery {
+            id: Some(id),
+            ..Default::default()
+        })?;
+        let bmark = bmarks.first().ok_or(AppError::NotFound)?;
+
+        let mut bmark_update = bookmarks::BookmarkUpdate {
+            ..Default::default()
+        };
+
+        let filetype = infer::get(&file)
+            .map(|ftype| ftype.extension())
+            .unwrap_or("png")
+            .to_string();
+
+        let image_id = format!("{}.{}", Eid::new(), filetype);
+
+        self.storage_mgr.write(&image_id, &file);
+
+        bmark_update.image_id = Some(image_id.to_string());
+
+        if let Some(old_image) = &bmark.image_id {
+            if self.storage_mgr.exists(&old_image) {
+                self.storage_mgr.delete(&old_image);
+            }
+        }
+
+        self.bmark_mgr
+            .update(id, bmark_update)?
+            .ok_or(AppError::NotFound)
+    }
+
+    fn upload_icon(&self, id: u64, file: Vec<u8>) -> anyhow::Result<bookmarks::Bookmark, AppError> {
+        let bmarks = self.bmark_mgr.search(bookmarks::SearchQuery {
+            id: Some(id),
+            ..Default::default()
+        })?;
+        let bmark = bmarks.first().ok_or(AppError::NotFound)?;
+
+        let mut bmark_update = bookmarks::BookmarkUpdate {
+            ..Default::default()
+        };
+
+        let filetype = infer::get(&file)
+            .map(|ftype| ftype.extension())
+            .unwrap_or("png")
+            .to_string();
+
+        let icon_id = format!("{}.{}", Eid::new(), filetype);
+
+        self.storage_mgr.write(&icon_id, &file);
+
+        bmark_update.icon_id = Some(icon_id.to_string());
+
+        if let Some(old_icon) = &bmark.icon_id {
+            if self.storage_mgr.exists(&old_icon) {
+                self.storage_mgr.delete(&old_icon);
+            }
+        }
+
+        self.bmark_mgr
+            .update(id, bmark_update)?
+            .ok_or(AppError::NotFound)
+    }
 }
 
 impl AppLocal {
@@ -471,7 +585,7 @@ impl AppLocal {
         return err;
     }
 
-    fn merge_metadata(
+    pub fn merge_metadata(
         bookmark: bookmarks::Bookmark,
         meta: Metadata,
         storage_mgr: Arc<dyn storage::StorageManager>,
@@ -480,6 +594,7 @@ impl AppLocal {
         let mut bmark_update = bookmarks::BookmarkUpdate {
             ..Default::default()
         };
+
         if bookmark.title.is_empty() {
             bmark_update.title = meta.title;
         }
@@ -488,36 +603,38 @@ impl AppLocal {
             bmark_update.description = meta.description;
         }
 
-        if let Some(ref image) = meta.image {
-            let filetype = meta
-                .image_url
-                .as_ref()
-                .map(|url| guess_filetype(&url).unwrap_or("png".to_string()))
-                .unwrap_or("png".to_string());
+        if bookmark.image_id.is_none() {
+            if let Some(ref image) = meta.image {
+                let filetype = infer::get(&image)
+                    .map(|ftype| ftype.extension())
+                    .unwrap_or("png")
+                    .to_string();
 
-            let image_id = format!("{}.{}", Eid::new(), filetype);
+                let image_id = format!("{}.{}", Eid::new(), filetype);
 
-            storage_mgr.write(&image_id, &image);
-            bmark_update.image_id = Some(image_id.to_string());
-        };
+                storage_mgr.write(&image_id, &image);
+                bmark_update.image_id = Some(image_id.to_string());
+            };
+        }
 
-        if let Some(ref icon) = meta.icon {
-            let filetype = meta
-                .image_url
-                .as_ref()
-                .map(|url| guess_filetype(&url).unwrap_or("png".to_string()))
-                .unwrap_or("png".to_string());
+        if bookmark.icon_id.is_none() {
+            if let Some(ref icon) = meta.icon {
+                let filetype = infer::get(&icon)
+                    .map(|ftype| ftype.extension())
+                    .unwrap_or("png")
+                    .to_string();
 
-            let icon_id = format!("{}.{}", Eid::new(), filetype);
+                let icon_id = format!("{}.{}", Eid::new(), filetype);
 
-            storage_mgr.write(&icon_id, &icon);
-            bmark_update.icon_id = Some(icon_id.to_string());
-        };
+                storage_mgr.write(&icon_id, &icon);
+                bmark_update.icon_id = Some(icon_id.to_string());
+            };
+        }
 
         bmark_mgr.update(bookmark.id, bmark_update)
     }
 
-    fn apply_rules(
+    pub fn apply_rules(
         id: u64,
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
         rules: &Vec<Rule>,
@@ -588,94 +705,6 @@ impl AppLocal {
         }
 
         bmark_mgr.update(bmark.id, bmark_update)
-    }
-
-    pub fn start_queue(
-        task_rx: mpsc::Receiver<Task>,
-        bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
-        storage_mgr: Arc<dyn storage::StorageManager>,
-        config: Arc<RwLock<Config>>,
-    ) {
-        use std::sync::atomic::Ordering;
-
-        let thread_ctr = Arc::new(AtomicU16::new(0));
-        let max_threads = config.read().unwrap().task_queue_max_threads;
-
-        log::debug!("waiting for job");
-        while let Ok(task) = task_rx.recv() {
-            log::debug!("got the job");
-            let storage_mgr = storage_mgr.clone();
-            let bmark_mgr = bmark_mgr.clone();
-            let thread_counter = thread_ctr.clone();
-
-            let config = config.clone();
-
-            // graceful shutdown
-            match &task {
-                Task::Shutdown => {
-                    while thread_counter.load(Ordering::Relaxed) > 0 {
-                        sleep(Duration::from_millis(100));
-                    }
-                    return;
-                }
-                _ => {}
-            };
-
-            while thread_counter.load(Ordering::Relaxed) >= max_threads {
-                sleep(Duration::from_millis(100));
-            }
-
-            let task_handle = std::thread::spawn({
-                let thread_counter = thread_counter.clone();
-                move || {
-                    match task {
-                        Task::FetchMetadata { bmark_id, opts } => {
-                            thread_counter.fetch_add(1, Ordering::Relaxed);
-
-                            let handle_metadata = || {
-                                log::debug!("picked up a job...");
-                                let bookmarks = bmark_mgr.search(bookmarks::SearchQuery {
-                                    id: Some(bmark_id),
-                                    ..Default::default()
-                                })?;
-                                let bmark = bookmarks
-                                    .first()
-                                    .ok_or_else(|| anyhow!("bookmark {bmark_id} not found"))?;
-
-                                let meta = Self::fetch_metadata(&bmark.url, opts)?;
-
-                                let bmark = Self::merge_metadata(
-                                    bmark.clone(),
-                                    meta,
-                                    storage_mgr.clone(),
-                                    bmark_mgr.clone(),
-                                )?
-                                .context("bookmark {id} not found")?;
-
-                                Ok(bmark) as anyhow::Result<bookmarks::Bookmark>
-                            };
-
-                            let _ = handle_metadata();
-                            let rules = &config.read().unwrap().rules;
-                            let _ = Self::apply_rules(bmark_id, bmark_mgr.clone(), &rules)
-                                .map_err(|err| log::error!("{err}"));
-
-                            thread_counter.fetch_sub(1, Ordering::Relaxed);
-                        }
-                        Task::Shutdown => unreachable!(),
-                    };
-                }
-            });
-
-            // handle thread panics
-            // TODO: get rid of unwraps and delete this code.
-            std::thread::spawn(move || {
-                if let Err(err) = task_handle.join() {
-                    log::error!("{err:?}");
-                    thread_counter.fetch_sub(1, Ordering::Relaxed);
-                }
-            });
-        }
     }
 
     pub fn wait_task_queue_finish(&mut self) {
@@ -917,5 +946,21 @@ impl AppBackend for AppRemote {
         let resp = self.post("/api/bookmarks/tags").send()?;
 
         Ok(handle_response(resp)?)
+    }
+
+    fn upload_cover(
+        &self,
+        _id: u64,
+        _file: Vec<u8>,
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
+        unimplemented!()
+    }
+
+    fn upload_icon(
+        &self,
+        _id: u64,
+        _file: Vec<u8>,
+    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
+        unimplemented!()
     }
 }

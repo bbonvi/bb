@@ -2,13 +2,21 @@ use crate::{
     app::{AppBackend, AppError, AppLocal, FetchMetadataOpts},
     bookmarks::{Bookmark, BookmarkUpdate, SearchQuery},
     config::Config,
+    images,
     metadata::MetaOptions,
     parse_tags,
+    task_runner::{read_queue_dump, QueueDump},
 };
-use axum::{extract::State, response::IntoResponse, routing::get, routing::post, Json, Router};
+use axum::{
+    extract::{DefaultBodyLimit, State},
+    response::IntoResponse,
+    routing::{get, post},
+    Json, Router,
+};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use tokio::{signal, sync::RwLock};
 
 #[derive(Clone)]
@@ -65,6 +73,8 @@ async fn start_app(app: AppLocal) {
         .route("/api/bookmarks/tags", post(tags))
         .route("/api/config", get(get_config))
         .route("/api/config", post(update_config))
+        .route("/api/task_queue", get(task_queue))
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(
             tower_http::trace::TraceLayer::new_for_http()
                 .make_span_with(
@@ -108,6 +118,13 @@ impl IntoResponse for HttpError {
                 axum::http::StatusCode::CONFLICT,
                 json!({"error": self.0.to_string()}).to_string(),
             ),
+            AppError::Base64(_) => {
+                log::error!("{self:?}");
+                (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    json!({"error": self.0.to_string()}).to_string(),
+                )
+            }
             AppError::Reqwest(_) => {
                 log::error!("{self:?}");
                 (
@@ -197,12 +214,15 @@ async fn search(
     })
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize)]
 pub struct BookmarkCreateRequest {
     pub title: Option<String>,
     pub description: Option<String>,
     pub tags: Option<String>,
     pub url: String,
+
+    pub image_b64: Option<String>,
+    pub icon_b64: Option<String>,
 
     /// Fetch metadata in background.
     ///
@@ -221,11 +241,20 @@ pub struct BookmarkCreateRequest {
     pub no_headless: bool,
 }
 
+impl Debug for BookmarkCreateRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BookmarkCreateRequest {{ title: {:?}, description: {:?}, tags: {:?}, url: {:?}, image_b64: [REDUCTED], icon_b64: [REDUCTED], async_meta: {:?}, no_meta: {:?}, no_headless: {:?} }}", self.title, self.description, self.tags, self.url, self.async_meta, self.no_meta, self.no_headless)
+    }
+}
+
 async fn create(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<BookmarkCreateRequest>,
 ) -> Result<axum::Json<Bookmark>, HttpError> {
     log::debug!("payload: {payload:?}");
+
+    // we turn off metadata fetch requet by default to
+    // upload custom files and then initiate fetch request
 
     let meta_opts = {
         if payload.no_meta {
@@ -240,7 +269,7 @@ async fn create(
     let opts = crate::app::AddOpts {
         no_https_upgrade: false,
         async_meta: payload.async_meta,
-        meta_opts,
+        meta_opts: None,
     };
 
     let bmark_create = crate::bookmarks::BookmarkCreate {
@@ -256,13 +285,39 @@ async fn create(
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
         app.lazy_refresh_backend()?;
-        app.create(bmark_create, opts)
-            .map(Into::into)
-            .map_err(Into::into)
+
+        let bmark = app.create(bmark_create, opts)?;
+
+        if let Some(cover) = payload.image_b64 {
+            let file = STANDARD
+                .decode(cover)
+                .map_err(|err| AppError::Other(err.into()))?;
+
+            let file = images::convert(file, Some((800, 800)), true)?;
+            app.upload_cover(bmark.id, file)?;
+        }
+
+        if let Some(icon) = payload.icon_b64 {
+            let file = STANDARD
+                .decode(icon)
+                .map_err(|err| AppError::Other(err.into()))?;
+            let file = images::convert(file, None, true)?;
+            app.upload_icon(bmark.id, file)?;
+        }
+
+        if let Some(meta_opts) = meta_opts {
+            let refresh_meta_opts = crate::app::RefreshMetadataOpts {
+                async_meta: payload.async_meta,
+                meta_opts,
+            };
+            app.refresh_metadata(bmark.id, refresh_meta_opts)?;
+        };
+
+        todo!()
     })
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize)]
 pub struct BookmarkUpdateRequest {
     pub id: u64,
     pub title: Option<String>,
@@ -271,13 +326,22 @@ pub struct BookmarkUpdateRequest {
     pub append_tags: Option<String>,
     pub remove_tags: Option<String>,
     pub url: Option<String>,
+
+    pub image_b64: Option<String>,
+    pub icon_b64: Option<String>,
+}
+
+impl Debug for BookmarkUpdateRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BookmarkUpdateRequest {{ id: {}, title: {:?}, description: {:?}, tags: {:?}, append_tags: {:?}, remove_tags: {:?}, url: {:?}, image_b64: [REDUCTED], icon_b64: [REDUCTED] }}", self.id, self.title, self.description, self.tags, self.append_tags, self.remove_tags, self.url)
+    }
 }
 
 async fn update(
     State(state): State<Arc<SharedState>>,
     Json(payload): Json<BookmarkUpdateRequest>,
 ) -> Result<axum::Json<Bookmark>, HttpError> {
-    log::debug!("payload: {payload:?}");
+    log::debug!("payload: {payload:?}",);
 
     let app = state.app.clone();
 
@@ -294,9 +358,21 @@ async fn update(
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
         app.lazy_refresh_backend()?;
-        app.update(payload.id, bmark_update)
-            .map(Into::into)
-            .map_err(Into::into)
+        let mut bmark = app.update(payload.id, bmark_update)?;
+
+        if let Some(cover) = payload.image_b64 {
+            let file = STANDARD.decode(cover)?;
+            let file = images::convert(file, Some((800, 800)), true)?;
+            bmark = app.upload_cover(bmark.id, file)?;
+        }
+
+        if let Some(icon) = payload.icon_b64 {
+            let file = STANDARD.decode(icon).map_err(|err| err)?;
+            let file = images::convert(file, None, true)?;
+            bmark = app.upload_icon(bmark.id, file)?;
+        }
+
+        Ok(bmark.into())
     })
 }
 
@@ -452,4 +528,8 @@ async fn update_config(
         *app.config().write().unwrap() = payload.clone();
         Ok(app.config().read().unwrap().clone().into())
     })
+}
+
+async fn task_queue() -> Result<axum::Json<QueueDump>, HttpError> {
+    tokio::task::block_in_place(move || Ok(read_queue_dump().into()))
 }

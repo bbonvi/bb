@@ -2,9 +2,10 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::app::{AppBackend, AppLocal, Task};
+use crate::app::{AppBackend, AppLocal};
 use crate::bookmarks;
 use crate::storage;
+use crate::task_runner::Task;
 
 pub fn create_app() -> AppLocal {
     let _ = std::fs::remove_file("bookmarks-test.csv");
@@ -23,7 +24,7 @@ pub fn create_app() -> AppLocal {
         let config = config.clone();
 
         move || {
-            AppLocal::start_queue(task_rx, bmark_mgr, storage_mgr, config);
+            // AppLocal::start_queue(task_rx, bmark_mgr, storage_mgr, config);
         }
     });
 
