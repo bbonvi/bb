@@ -32,8 +32,33 @@ pub fn migrate() {
                     _ => unreachable!(),
                 };
 
+                let mut icon_id = None;
                 let mut image_id = None;
                 let http_client = reqwest::blocking::Client::new();
+
+                {
+                    let url_parsed = reqwest::Url::parse(&url).unwrap();
+                    let host = url_parsed.host_str();
+
+                    if let Some(host) = host {
+                        let icon_url =
+                            format!("https://external-content.duckduckgo.com/ip3/{host}.ico");
+                        if let Ok(resp) = http_client.get(&icon_url).send() {
+                            if resp.status().as_u16() == 200 {
+                                let file = resp.bytes().unwrap();
+
+                                let filetype = infer::get(&file)
+                                    .map(|ftype| ftype.extension())
+                                    .unwrap_or("png")
+                                    .to_string();
+
+                                icon_id = Some(format!("{}.{}", Eid::new(), filetype));
+                                storage_mgr.write(&icon_id.clone().unwrap(), &file);
+                            }
+                        };
+                    }
+                }
+
                 log::info!("{}", format!("http://buku.localhost/cached/{}", url));
                 if let Ok(resp) = http_client
                     .get(format!("http://buku.localhost/cached/{}", url))
@@ -44,12 +69,17 @@ pub fn migrate() {
                         && resp.status().as_u16() != 400
                         && resp.status().as_u16() != 404
                     {
-                        panic!("{resp:?}");
+                        log::error!("{resp:?}");
                     }
 
-                    let image = resp.bytes().unwrap();
-                    image_id = Some(format!("{}.{}", Eid::new(), "jpg"));
-                    storage_mgr.write(&image_id.clone().unwrap(), &image);
+                    let file = resp.bytes().unwrap();
+                    let filetype = infer::get(&file)
+                        .map(|ftype| ftype.extension())
+                        .unwrap_or("png")
+                        .to_string();
+
+                    image_id = Some(format!("{}.{}", Eid::new(), filetype));
+                    storage_mgr.write(&image_id.clone().unwrap(), &file);
                 };
 
                 bmarks
@@ -71,7 +101,7 @@ pub fn migrate() {
                         ),
                         url: url.to_string(),
                         image_id: image_id,
-                        icon_id: None,
+                        icon_id: icon_id,
                     })
                     .unwrap();
             }
