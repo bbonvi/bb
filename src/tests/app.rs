@@ -50,6 +50,7 @@ pub fn test_create_bookmark() {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
+        skip_rules: false,
     };
 
     let bookmark = app.create(bmark_create, opts).unwrap();
@@ -65,6 +66,7 @@ pub fn test_bookmark_create() {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
+        skip_rules: false,
     };
 
     let bmark_create = bookmarks::BookmarkCreate {
@@ -87,6 +89,7 @@ pub fn test_bookmark_search() {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
+        skip_rules: false,
     };
 
     for b in 0..10 {
@@ -166,6 +169,7 @@ pub fn test_bookmark_update() {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
+        skip_rules: false,
     };
 
     for b in 0..10 {
@@ -211,6 +215,7 @@ pub fn test_bookmark_dedup() {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
+        skip_rules: false,
     };
 
     let _ = app.create(bmark_create.clone(), opts.clone()).unwrap();

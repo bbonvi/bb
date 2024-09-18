@@ -390,6 +390,7 @@ fn handle_add(
         } else {
             Some(MetaOptions { no_headless })
         },
+        skip_rules: false,
     };
 
     let bmark = app_mgr.create(bmark_create, add_opts)?;

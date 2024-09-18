@@ -184,6 +184,7 @@ pub struct AddOpts {
     pub no_https_upgrade: bool,
     pub async_meta: bool,
     pub meta_opts: Option<MetaOptions>,
+    pub skip_rules: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -302,13 +303,16 @@ impl AppBackend for AppLocal {
                 };
 
                 // apply rules
-                let rules = &self.config.read().unwrap().rules;
-                let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
-                    .ok_or_else(|| anyhow!("bmark not found"))?;
+                if !opts.skip_rules {
+                    let rules = &self.config.read().unwrap().rules;
+                    let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
+                        .ok_or_else(|| anyhow!("bmark not found"))?;
+                    return Ok(with_meta.map(|_| with_rules)?);
+                }
 
-                return Ok(with_meta.map(|_| with_rules)?);
+                return Ok(with_meta?);
             }
-        } else {
+        } else if !opts.skip_rules {
             // if no metadata apply Rules.
             let rules = &self.config.read().unwrap().rules;
             return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?

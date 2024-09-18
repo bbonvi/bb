@@ -1,6 +1,6 @@
 use crate::{
     app::{AppBackend, AppError, AppLocal, FetchMetadataOpts},
-    bookmarks::{Bookmark, BookmarkUpdate, SearchQuery},
+    bookmarks::{self, Bookmark, BookmarkUpdate, SearchQuery},
     config::Config,
     images,
     metadata::MetaOptions,
@@ -270,6 +270,7 @@ async fn create(
         no_https_upgrade: false,
         async_meta: payload.async_meta,
         meta_opts: None,
+        skip_rules: true,
     };
 
     let bmark_create = crate::bookmarks::BookmarkCreate {
@@ -313,7 +314,15 @@ async fn create(
             app.refresh_metadata(bmark.id, refresh_meta_opts)?;
         };
 
-        todo!()
+        return Ok(app
+            .search(bookmarks::SearchQuery {
+                id: Some(bmark.id),
+                ..Default::default()
+            })?
+            .first()
+            .unwrap()
+            .clone()
+            .into());
     })
 }
 
