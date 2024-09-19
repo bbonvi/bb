@@ -37,27 +37,28 @@ pub fn migrate() {
                 let http_client = reqwest::blocking::Client::new();
 
                 {
-                    let url_parsed = reqwest::Url::parse(&url).unwrap();
-                    let host = url_parsed.host_str();
+                    if let Ok(url_parsed) = reqwest::Url::parse(&url) {
+                        let host = url_parsed.host_str();
 
-                    if let Some(host) = host {
-                        let icon_url =
-                            format!("https://external-content.duckduckgo.com/ip3/{host}.ico");
-                        if let Ok(resp) = http_client.get(&icon_url).send() {
-                            if resp.status().as_u16() == 200 {
-                                let file = resp.bytes().unwrap();
+                        if let Some(host) = host {
+                            let icon_url =
+                                format!("https://external-content.duckduckgo.com/ip3/{host}.ico");
+                            if let Ok(resp) = http_client.get(&icon_url).send() {
+                                if resp.status().as_u16() == 200 {
+                                    let file = resp.bytes().unwrap();
 
-                                let filetype = infer::get(&file)
-                                    .map(|ftype| ftype.extension())
-                                    .unwrap_or("png")
-                                    .to_string();
+                                    let filetype = infer::get(&file)
+                                        .map(|ftype| ftype.extension())
+                                        .unwrap_or("png")
+                                        .to_string();
 
-                                if file.len() >= 5 {
-                                    icon_id = Some(format!("{}.{}", Eid::new(), filetype));
-                                    storage_mgr.write(&icon_id.clone().unwrap(), &file);
+                                    if file.len() >= 5 {
+                                        icon_id = Some(format!("{}.{}", Eid::new(), filetype));
+                                        storage_mgr.write(&icon_id.clone().unwrap(), &file);
+                                    }
                                 }
-                            }
-                        };
+                            };
+                        }
                     }
                 }
 

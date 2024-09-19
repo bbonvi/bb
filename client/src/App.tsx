@@ -632,10 +632,10 @@ function GridView(props: GridViewProps) {
             focused, editingId, setEditingId,
             handleDelete, handleSave, handleFetchMeta
         }}
-        // itemKey={data => {
-        //     const idx = (data.rowIndex * columns) + data.columnIndex;
-        //     return data.data.bmarks[idx]?.id
-        // }}
+        itemKey={data => {
+            const idx = (data.rowIndex * columns) + data.columnIndex;
+            return data.data.bmarks[idx]?.id ?? (data.rowIndex.toString + "-" + data.columnIndex.toString())
+        }}
         width={containerRect.width}
         className="dark:bg-gray-900"
     >

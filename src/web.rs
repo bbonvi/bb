@@ -60,8 +60,28 @@ async fn start_app(app: AppLocal) {
         }
     }
 
+    use tower_http::services::ServeDir;
+    use tower_http::services::ServeFile;
+
     let app = Router::new()
+        // serve frontend
+        .nest_service("/", ServeFile::new("client/build/index.html"))
+        .nest_service("/static/", ServeDir::new("client/build/static/"))
+        .nest_service(
+            "/asset-manifest.json",
+            ServeFile::new("client/build/asset-manifest.json"),
+        )
+        .nest_service("/favicon.ico", ServeFile::new("client/build/favicon.ico"))
+        .nest_service("/logo192.png", ServeFile::new("client/build/logo192.png"))
+        .nest_service("/logo512.png", ServeFile::new("client/build/logo512.png"))
+        .nest_service(
+            "/manifest.json",
+            ServeFile::new("client/build/manifest.json"),
+        )
+        .nest_service("/robots.txt", ServeFile::new("client/build/robots.txt"))
+        // server uploads
         .nest_service("/api/file/", tower_http::services::ServeDir::new("uploads"))
+        // api
         .route("/api/bookmarks/search", post(search))
         .route("/api/bookmarks/refresh_metadata", post(refresh_metadata))
         .route("/api/bookmarks/create", post(create))

@@ -122,8 +122,15 @@ export function TagInput(props: {
     const rect = el.current?.getBoundingClientRect?.();
 
     const listTop = ((rect?.top ?? 0) + (rect?.height ?? 0));
+    const listHeight = (rect?.height ?? 0);
+    const listBottom = (rect?.bottom ?? 0);
     const listLeft = ((rect?.left ?? 0));
     const listWidth = ((rect?.width ?? 0));
+
+    const paste = (tag: string) => {
+        let [_, ...rest] = value.split(" ").reverse();
+        setValue([tag, ...rest].reverse().join(" ") + " ")
+    }
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "ArrowDown") {
@@ -152,7 +159,7 @@ export function TagInput(props: {
                 let [_, ...rest] = value.split(" ").reverse();
                 const found = tagListSearch?.[searchIdx];
                 if (found) {
-                    setValue([tagListSearch?.[searchIdx], ...rest].reverse().join(" ") + " ")
+                    paste(tagListSearch?.[searchIdx])
                     e.preventDefault()
                     return
                 }
@@ -172,14 +179,14 @@ export function TagInput(props: {
         setFocus(false);
     }
 
-    return <div>
+    return <div className="relative">
         {isDirty && focus && tagListSearch && <div
-            style={{ flexDirection: "column", top: listTop, left: listLeft, width: listWidth }}
-            className="fixed rounded-md z-50 flex bg-gray-600 w-40 overflow-hidden"
+            style={{ flexDirection: "column", top: listHeight, width: listWidth }}
+            className="absolute rounded-md z-50 flex bg-gray-600 w-40 overflow-hidden"
         >
             {tagListSearch.slice(0, 5).map((tag, idx) => {
                 const focused = searchIdx === idx;
-                return <div className={"bg-gray-800 text-gray-200 px-2 py-1 " + (focused ? "!bg-gray-600" : "")} key={tag}>{tag}</div>
+                return <div onMouseDown={() => paste(tagListSearch?.[idx])} className={"bg-gray-800 text-gray-200 px-2 py-1 " + (focused ? "!bg-gray-600" : "")} key={tag}>{tag}</div>
             })}
         </div>}
         <input

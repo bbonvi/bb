@@ -222,10 +222,6 @@ function Bookmark(props: Props) {
     }
 
     function onEdit() {
-        if (!editing) {
-            setForm({ ...bmark });
-        }
-
         if (currentTask) {
             toast.error("cannot update while being processed.");
             return
@@ -242,6 +238,8 @@ function Bookmark(props: Props) {
         if (editing) {
             onExpand();
         }
+
+        setForm({ ...props.bmark });
     }, [props.isEditing]);
 
     const inputStyle = "transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-2 text-gray-100 w-full";
@@ -296,7 +294,6 @@ function Bookmark(props: Props) {
                         className="hover:opacity-90"
                     >
                         <img
-                            loading='lazy'
                             width={417}
                             height={200}
                             alt={bmark.title}
@@ -335,7 +332,6 @@ function Bookmark(props: Props) {
                                 onDragOver={() => setDragOverIcon(true)}
                             >
                                 <img
-                                    loading='lazy'
                                     width={20}
                                     height={20}
                                     alt={bmark.title}
@@ -492,7 +488,6 @@ export function CreateBookmark(props: CreateBookmarkProps) {
             className={"my-2 mx-1 bg-gray-800 h-auto rounded-lg " + (props.className ?? "")}
         >
             {/*<img
-                loading='lazy'
                 width={417}
                 height={200}
                 data-src={`/api/file/${bmark.image_id}`}
