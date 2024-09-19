@@ -11,7 +11,7 @@ use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::{AppLocal, FetchMetadataOpts},
+    app::{backend::FetchMetadataOpts, local::AppLocal},
     bookmarks,
     config::Config,
     eid::Eid,

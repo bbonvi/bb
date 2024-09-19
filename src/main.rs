@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use anyhow::bail;
-use app::AppBackend;
+use app::backend::AppBackend;
 use clap::Parser;
 use std::io::Write;
 
@@ -17,7 +17,6 @@ mod metadata;
 mod rules;
 mod scrape;
 mod storage;
-mod task_runner;
 #[cfg(test)]
 mod tests;
 mod web;
@@ -109,7 +108,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         cli::Command::Daemon { .. } => {
-            let (mut app_mgr, config) = app_local();
+            let (mut app_mgr, _) = app_local();
 
             app_mgr.run_queue();
             web::start_daemon(app_mgr);
@@ -382,7 +381,7 @@ fn handle_add(
         ..Default::default()
     };
 
-    let add_opts = app::AddOpts {
+    let add_opts = app::backend::AddOpts {
         no_https_upgrade,
         async_meta,
         meta_opts: if no_meta {
@@ -399,7 +398,7 @@ fn handle_add(
 }
 
 fn handle_meta(url: String, no_https_upgrade: bool, no_headless: bool) -> anyhow::Result<()> {
-    let fetch_meta_opts = app::FetchMetadataOpts {
+    let fetch_meta_opts = app::backend::FetchMetadataOpts {
         no_https_upgrade,
         meta_opts: MetaOptions { no_headless },
     };

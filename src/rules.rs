@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -35,7 +36,7 @@ impl Rule {
             match_query_chars.next();
             match_query_chars.next_back();
 
-            let regex = regex::Regex::new(&match_query_chars.as_str()).expect("malformed regex");
+            let regex = Regex::new(&match_query_chars.as_str()).expect("malformed regex");
             regex.is_match(&input)
         } else {
             input.to_lowercase().contains(&match_query.to_lowercase())

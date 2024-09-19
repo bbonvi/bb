@@ -2,10 +2,10 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use crate::app::{AppBackend, AppLocal};
+use crate::app::task_runner::Task;
+use crate::app::{backend::AppBackend, local::AppLocal};
 use crate::bookmarks;
 use crate::storage;
-use crate::task_runner::Task;
 
 pub fn create_app() -> AppLocal {
     let _ = std::fs::remove_file("bookmarks-test.csv");
@@ -46,7 +46,7 @@ pub fn test_create_bookmark() {
         ..Default::default()
     };
 
-    let opts = crate::app::AddOpts {
+    let opts = crate::app::backend::AddOpts {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
@@ -62,7 +62,7 @@ pub fn test_create_bookmark() {
 pub fn test_bookmark_create() {
     let app = create_app();
 
-    let opts = crate::app::AddOpts {
+    let opts = crate::app::backend::AddOpts {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
@@ -85,7 +85,7 @@ pub fn test_bookmark_create() {
 pub fn test_bookmark_search() {
     let app = create_app();
 
-    let opts = crate::app::AddOpts {
+    let opts = crate::app::backend::AddOpts {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
@@ -165,7 +165,7 @@ pub fn test_bookmark_search() {
 pub fn test_bookmark_update() {
     let app = create_app();
 
-    let opts = crate::app::AddOpts {
+    let opts = crate::app::backend::AddOpts {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,
@@ -211,7 +211,7 @@ pub fn test_bookmark_dedup() {
         ..Default::default()
     };
 
-    let opts = crate::app::AddOpts {
+    let opts = crate::app::backend::AddOpts {
         no_https_upgrade: false,
         async_meta: false,
         meta_opts: None,

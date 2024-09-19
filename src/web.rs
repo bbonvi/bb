@@ -1,11 +1,15 @@
 use crate::{
-    app::{AppBackend, AppError, AppLocal, FetchMetadataOpts},
+    app::{
+        backend::{AddOpts, AppBackend, FetchMetadataOpts, RefreshMetadataOpts},
+        errors::AppError,
+        local::AppLocal,
+        task_runner::{read_queue_dump, QueueDump},
+    },
     bookmarks::{self, Bookmark, BookmarkUpdate, SearchQuery},
     config::Config,
     images,
     metadata::MetaOptions,
     parse_tags,
-    task_runner::{read_queue_dump, QueueDump},
 };
 use axum::{
     extract::{DefaultBodyLimit, State},
@@ -286,7 +290,7 @@ async fn create(
         }
     };
 
-    let opts = crate::app::AddOpts {
+    let opts = AddOpts {
         no_https_upgrade: false,
         async_meta: payload.async_meta,
         meta_opts: None,
@@ -327,7 +331,7 @@ async fn create(
         }
 
         if let Some(meta_opts) = meta_opts {
-            let refresh_meta_opts = crate::app::RefreshMetadataOpts {
+            let refresh_meta_opts = RefreshMetadataOpts {
                 async_meta: payload.async_meta,
                 meta_opts,
             };
@@ -497,7 +501,7 @@ async fn refresh_metadata(
         let app = app.blocking_read();
         app.refresh_metadata(
             payload.id,
-            crate::app::RefreshMetadataOpts {
+            RefreshMetadataOpts {
                 async_meta: payload.async_meta,
                 meta_opts: MetaOptions {
                     no_headless: payload.no_headless,
