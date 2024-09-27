@@ -1,41 +1,63 @@
 import './App.css';
-import { memo, MutableRefObject, useEffect, useRef, useState } from 'react';
-import { Bmark, BookmarkCreate, Config, createBmark, deleteBmark, fetchBmarks, fetchConfig, fetchMeta, fetchTags, fetchTaskQueue, fetchTotal, updateBmark, UpdateBmark } from './api';
+import { memo, MutableRefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { Bmark, BookmarkCreate, Config, UpdateBmark } from './api';
+import * as api from './api';
 import { areEqual, VariableSizeGrid as Grid } from 'react-window';
 import Header from './header';
 import Bookmark, { CreateBookmark } from './bookmark';
 import toast, { Toaster } from 'react-hot-toast';
 import { findRunningTask, isModKey } from './helpers';
-import { useDispatch } from 'react-redux';
-import { update } from './store/taskQueueSlice';
-import store from './store';
+import { useDispatch, useSelector } from 'react-redux';
+import * as taskQueueSlice from './store/taskQueueSlice';
+import * as bmarksSlice from './store/bmarksSlice';
+import * as globalSlice from './store/globalSlice';
+import store, { RootState } from './store';
+import isEqual from 'lodash.isequal';
 
 const MIN_ROW_HEIGHT = 450;
 
 const DEFAULT_COLUMNS = 4;
 
 function App() {
-    const [bmarks, setBmarks] = useState<Bmark[]>([]);
     const [total, setTotal] = useState<number>(-1);
     const [tags, setTags] = useState<string[]>([]);
     const [config, setConfig] = useState<Config>();
 
+    const updating = useRef(0);
+
     const dispatch = useDispatch();
+    const bmarks = useSelector((state: RootState) => state.bmarks.value);
+    const focused = useSelector((state: RootState) => state.global.focusedIdx);
+    const editingId = useSelector((state: RootState) => state.global.editing);
 
+    const setBmarks = (bmarks: Bmark[]) => dispatch(bmarksSlice.updateAll(bmarks));
+    const setFocused = (idx: number) => dispatch(globalSlice.setFocusedIdx(idx))
+    const setEditingId = (idx: number) => dispatch(globalSlice.setEditing(idx))
 
-    const [sizes, setSizes] = useState<number[]>([]);
+    const [ignoreHidden, setIgnoreHidden] = useState(false);
+
+    const [sizes, setSizes] = useState<{ [keyof: string]: number }>({});
     const [columns, setColumns] = useState(DEFAULT_COLUMNS);
-    const [focused, setFocused] = useState(-1);
+    // const [focused, setFocused] = useState(-1);
 
     const [renderKey, _setRenderKey] = useState(0);
 
     const rerenderList = () => {
-        setSizes(new Array(Math.ceil(bmarks.length / columns)).fill(MIN_ROW_HEIGHT));
+        // setSizes(new Array(Math.ceil(bmarks.length / columns)).fill(MIN_ROW_HEIGHT));
         _setRenderKey(Date.now())
     };
 
+    const hiddenByDefault: string[] = useMemo(() => {
+        if (ignoreHidden) {
+            return []
+        }
+
+        return config?.hidden_by_default ?? [];
+
+    }, [ignoreHidden, config]);
+
+
     const [loaded, setLoaded] = useState(false);
-    const [editingId, setEditingId] = useState<number>();
     const [creating, setCreating] = useState(false);
 
     const [showAll, setShowAll] = useState(false);
@@ -80,12 +102,20 @@ function App() {
     function refreshTotal() {
         clearTimeout(refreshTimerRef.current["2"]);
         refreshTimerRef.current["2"] = setTimeout(() => {
-            fetchTotal().then(setTotal);
+            api.fetchTotal().then(t => {
+                if (t !== total) {
+                    setTotal(t)
+                }
+            });
         }, 1000) as any;
     }
 
     function refreshConfig() {
-        return fetchConfig().then(setConfig)
+        return api.fetchConfig().then((conf) => {
+            if (JSON.stringify(conf) !== JSON.stringify(config)) {
+                return setConfig(conf)
+            }
+        })
     }
 
     function refreshTags() {
@@ -94,7 +124,11 @@ function App() {
             //       so we give backend some time to process them.
             //       300ms should be plenty
             setTimeout(() => {
-                fetchTags().then(setTags).then(resolve).catch(reject);
+                api.fetchTags().then(t => {
+                    if (JSON.stringify(t) !== JSON.stringify(tags)) {
+                        setTags(t)
+                    }
+                }).then(resolve).catch(reject);
             }, 300);
         });
     }
@@ -112,9 +146,54 @@ function App() {
         }
 
         setColumns(cols);
+        return cols;
     }
 
-    async function refreshBmarks(opts: {
+    async function hasBmarksChanged(bmarksList: Bmark[]) {
+    }
+
+    // async function handleBmarks(
+    //     bmarksList: Bmark[],
+    // )
+
+    const getBmarks = async (props: {
+        ignoreHiddenTags: boolean,
+        tags: string,
+        title: string,
+        url: string,
+        description: string,
+    }) => {
+        const tagsFetch = props.tags.trim().replaceAll(" ", ",").split(",");
+
+        const shouldRefresh = props.tags.length
+            || props.title
+            || props.url
+            || props.description
+            || showAll;
+
+        if (!shouldRefresh) {
+            return []
+        }
+
+
+        if (!props.ignoreHiddenTags) {
+            hiddenByDefault.forEach(ht => {
+                if (!tagsFetch.find(t => ht === t || t.includes(ht + "/"))) {
+                    tagsFetch.push("-" + ht)
+                }
+            });
+        }
+
+        return api.fetchBmarks({
+            tags: tagsFetch.join(","),
+            title: props.title,
+            url: props.url,
+            description: props.description,
+            descending: true,
+        })
+    }
+
+    async function _refreshBmarks(opts: {
         scrollToTop?: boolean;
         notify?: boolean;
         resetSizes?: boolean;
@@ -137,7 +216,7 @@ function App() {
 
         if (!shouldRefresh) {
             setBmarks([]);
-            setEditingId(undefined);
+            // setEditingId(undefined);
             return
         }
 
@@ -145,29 +224,41 @@ function App() {
             refreshTimerRef.current["1"] = setTimeout(() => {
                 const tLoading = notify ? toast.loading("loading") : "-1";
 
-                return fetchBmarks({
-                    tags: formRefs.current.inputTags.replaceAll(" ", ","),
+                const tagsFetch = formRefs.current.inputTags.trim().replaceAll(" ", ",").split(",");
+
+                if (!ignoreHidden) {
+                    hiddenByDefault.forEach(ht => {
+                        if (!tagsFetch.find(t => ht === t || t.includes(ht + "/"))) {
+                            tagsFetch.push("-" + ht)
+                        }
+                    });
+                }
+
+                return api.fetchBmarks({
+                    tags: tagsFetch.join(","),
                     title: inputTitle,
                     url: inputUrl,
                     description: inputDescription,
                     descending: true,
                 }).then(bmarksResp => {
+
                     if (scrollToTop) {
                         gridRef.current?.scrollTo({ scrollTop: 0 });
                     }
 
 
                     if (disableEditing) {
-                        setEditingId(undefined);
+                        setEditingId(-1);
                     }
-                    setCols()
 
                     if (resetSizes) {
-                        setSizes(new Array(Math.ceil(bmarksResp.length / columns)).fill(MIN_ROW_HEIGHT));
+                        // setSizes(new Array(Math.ceil(bmarksResp.length / columns)).fill(MIN_ROW_HEIGHT));
                     }
 
-                    setBmarks(curr => {
-                        if (curr.length !== bmarksResp.length) {
+                    const currBmarks = store.getState().bmarks.value;
+                    if (!isEqual(currBmarks, bmarksResp)) {
+                        setCols()
+                        if (currBmarks.length !== bmarksResp.length) {
                             if (bmarksResp.length > 0) {
                                 setFocused(0);
                             } else {
@@ -175,8 +266,9 @@ function App() {
                             }
                         }
 
-                        return bmarksResp
-                    });
+                        setBmarks(bmarksResp);
+                    }
+
                     setLoaded(true);
                     resolve(bmarksResp);
                 })
@@ -190,33 +282,91 @@ function App() {
     }
 
     useEffect(() => {
-        refreshBmarks({ disableEditing: true });
-        refreshTotal();
+        // refreshBmarks({ disableEditing: true, notify: false, resetSizes: false, scrollToTop: true });
+    }, [hiddenByDefault]);
 
+    const refreshBmarks = () => getBmarks({
+        ignoreHiddenTags: ignoreHidden,
+        tags: inputTags,
+        title: inputTitle,
+        description: inputDescription,
+        url: inputUrl,
+    })
+        .then(bmarks => {
+            if (!isEqual(store.getState().bmarks.value, bmarks)) {
+                dispatch(bmarksSlice.updateAll(bmarks))
+                return true
+            }
 
-        const id = setInterval(() => {
-            refreshConfig();
-            refreshTags();
+            return false
+        });
 
-            refreshTaskQueue().then(changed => {
-                if (changed) {
-                    return refreshBmarks({ scrollToTop: false, notify: false, resetSizes: false, disableEditing: true })
-                        .then(() => {
-                            refreshTags();
-                        })
-                }
-            });
-        }, 1500);
+    const refreshAll = async () => {
+        return Promise.all([
+            // refresh bookmarks
+            getBmarks({
+                ignoreHiddenTags: ignoreHidden,
+                tags: inputTags,
+                title: inputTitle,
+                description: inputDescription,
+                url: inputUrl,
+            })
+                .then(bmarks => !isEqual(store.getState().bmarks.value, bmarks) ? dispatch(bmarksSlice.updateAll(bmarks)) : null),
+
+            // refresh config
+            api.fetchConfig()
+                .then((conf) => JSON.stringify(conf) !== JSON.stringify(config) ? setConfig(conf) : null),
+
+            // refresh tags
+            api.fetchTags()
+                .then(t => JSON.stringify(t) !== JSON.stringify(tags) ? setTags(t) : null),
+
+            // refresh task queue
+            api.fetchTaskQueue()
+                .then(tq => store.getState().taskQueue.value.now !== tq.now ? dispatch(taskQueueSlice.update(tq)) : null),
+
+            // refresh total count
+            api.fetchTotal()
+                .then(t => t !== total ? setTotal(t) : null),
+        ]);
+    }
+
+    useEffect(() => {
+        refreshAll().then(() => {
+            setCols()
+            const len = store.getState().bmarks.value.length;
+            // setSizes(new Array(Math.ceil(len / columns)).fill(MIN_ROW_HEIGHT));
+        });
+    }, []);
+
+    useEffect(() => {
+        refreshBmarks().then(changed => {
+            if (changed) {
+                setEditingId(-1);
+                gridRef.current?.scrollTo({ scrollTop: 0 });
+                setFocused(0);
+            }
+        });
+
+        const timerId = setInterval(() => {
+            // do not refresh data as long as something's being saved/delete/refreshed
+            if (updating.current > 0 || store.getState().global.editing >= 0) {
+                return
+            }
+
+            refreshAll();
+        }, 3000);
+
         return () => {
-            clearInterval(id)
+            clearInterval(timerId)
         }
-    }, [inputTags, inputTitle, inputUrl, inputDescription]);
+    }, [inputTags, inputTitle, inputUrl, inputDescription, ignoreHidden]);
 
     async function refreshTaskQueue(): Promise<boolean> {
-        const tasks = await fetchTaskQueue();
+        const tasks = await api.fetchTaskQueue();
 
         const taskQueue = store.getState().taskQueue.value
-        dispatch(update(tasks));
+        dispatch(taskQueueSlice.update(tasks));
 
         return taskQueue.now! != tasks.now
 
@@ -229,7 +379,7 @@ function App() {
     }, []);
 
     useEffect(() => {
-        fetchTotal().then(setTotal);
+        api.fetchTotal().then(setTotal);
 
         const onResize = () => {
             clearTimeout(refreshTimerRef.current["3"]);
@@ -260,19 +410,23 @@ function App() {
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             // defocus inputs
-            if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") {
+            if (
+                document.activeElement?.tagName === "INPUT"
+                || document.activeElement?.tagName === "TEXTAREA"
+                || (document.activeElement?.tagName === "SPAN" && (document.activeElement as any).contentEditable === "true")
+            ) {
                 if (e.code === "Escape") {
                     (document.activeElement as any)?.blur()
                     containerRef.current?.focus?.();
                 }
 
                 // defocus tags
-                if (e.code === "KeyK" && (e.ctrlKey || e.metaKey)) {
+                if (e.code === "KeyK" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
                     e.preventDefault();
 
-                    if (document.activeElement?.closest(".tag-search")) {
-                        (document.querySelector(".header .tag-search") as any)?.blur();
-                    }
+                    // if (document.activeElement?.closest(".tag-search")) {
+                    //     (document.querySelector(".header .tag-search") as any)?.blur();
+                    // }
                 }
                 return
             }
@@ -304,7 +458,7 @@ function App() {
             if (e.code === "KeyN" && !isModKey(e)) {
                 e.preventDefault();
                 setPastedUrl(undefined);
-                setEditingId(undefined);
+                setEditingId(-1);
                 setCreating(true);
             }
 
@@ -312,7 +466,7 @@ function App() {
             if (e.code === "Escape" && !isModKey(e)) {
                 e.preventDefault();
                 if (editingId) {
-                    setEditingId(undefined);
+                    setEditingId(-1);
                 }
 
                 if (creating) {
@@ -332,14 +486,14 @@ function App() {
             if (e.code === "KeyL" && !isModKey(e)) {
                 e.preventDefault();
                 setFocused(Math.min(bmarks.length - 1, focused + 1))
-                if (editingId) setEditingId(undefined);
+                if (editingId) setEditingId(-1);
             }
 
             // focus left
             if (e.code === "KeyH" && !isModKey(e)) {
                 e.preventDefault();
                 setFocused(Math.max(0, focused - 1))
-                if (editingId) setEditingId(undefined);
+                if (editingId) setEditingId(-1);
 
             }
 
@@ -351,14 +505,14 @@ function App() {
                     return
                 }
 
-                if (editingId) setEditingId(undefined);
+                if (editingId) setEditingId(-1);
 
 
                 setFocused(Math.max(0, focused - columns))
             }
 
             // focus tags
-            if (e.code === "KeyK" && (e.ctrlKey || e.metaKey)) {
+            if (e.code === "KeyK" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
                 e.preventDefault();
 
                 (document.querySelector(".header .tag-search") as any)?.focus();
@@ -374,7 +528,7 @@ function App() {
                     return
                 }
 
-                if (editingId) setEditingId(undefined);
+                if (editingId) setEditingId(-1);
 
                 setFocused(Math.min(bmarks.length - 1, value + columns));
             }
@@ -386,7 +540,11 @@ function App() {
                 const url = new URL(text);
 
                 const currentActive = document.activeElement?.tagName;
-                if (currentActive === "INPUT" || currentActive === "TEXTAREA") {
+                if (
+                    currentActive === "INPUT"
+                    || currentActive === "TEXTAREA"
+                    || (document.activeElement?.tagName === "SPAN" && (document.activeElement as any).contentEditable === "true")
+                ) {
                     return
                 }
                 if (creating || editingId) {
@@ -395,7 +553,7 @@ function App() {
 
                 e.preventDefault();
                 setPastedUrl(url.toString());
-                setEditingId(undefined);
+                setEditingId(-1);
                 setCreating(true);
             } catch (_) {
                 setPastedUrl(undefined);
@@ -420,10 +578,15 @@ function App() {
             return
         }
 
-        toast.promise(deleteBmark(id).then(() => {
+        updating.current += 1;
+        toast.promise(api.deleteBmark(id).then(() => {
+            dispatch(bmarksSlice.remove({ id }));
+
+            setEditingId(-1);
             refreshTags();
             refreshTotal();
-            return refreshBmarks({ scrollToTop: false, notify: false });
+        }).finally(() => {
+            updating.current -= 1;
         }), {
             loading: 'Deleting...',
             success: 'Deleted!',
@@ -439,13 +602,10 @@ function App() {
         }
 
         toast.promise(
-            fetchMeta(id).then(() => {
-                refreshTaskQueue();
-                setEditingId(undefined);
-                return refreshBmarks({ scrollToTop: false, notify: false, resetSizes: false, disableEditing: false })
-                    .then(() => {
-                        refreshTags();
-                    })
+            api.fetchMeta(id).then(() => {
+                setEditingId(-1);
+                refreshTaskQueue()
+                    .then(() => setTimeout(refreshTaskQueue, 200));
             }),
             {
                 loading: 'Requesting metadata refetch...',
@@ -462,12 +622,15 @@ function App() {
             return
         }
 
+        updating.current += 1;
+
         toast.promise(
-            updateBmark(update.id, update).then(() => {
-                return refreshBmarks({ scrollToTop: false, notify: false, resetSizes: false, disableEditing: true })
-                    .then(() => {
-                        refreshTags();
-                    })
+            api.updateBmark(update.id, update).then((bmark) => {
+                dispatch(bmarksSlice.update(bmark));
+                setEditingId(-1);
+                refreshTags();
+            }).finally(() => {
+                updating.current -= 1;
             }),
             {
                 loading: 'Saving...',
@@ -479,25 +642,24 @@ function App() {
 
     const onCreating = () => {
         setPastedUrl(undefined);
-        setEditingId(undefined);
+        setEditingId(-1);
         setCreating(true);
     };
 
     const onCreate = (bmark: BookmarkCreate) => {
+        updating.current += 1;
         toast.promise(
-            createBmark({
+            api.createBmark({
                 ...bmark,
-            }).then(() => {
-                refreshTaskQueue();
+            }).then((bmark) => {
+                dispatch(bmarksSlice.create(bmark));
+                setCreating(false);
                 setTimeout(() => {
                     refreshTaskQueue();
                 }, 100);
-
-                setCreating(false);
-                return refreshBmarks({ scrollToTop: true, notify: false })
-                    .then(() => {
-                        refreshTags();
-                    })
+                refreshTags();
+            }).finally(() => {
+                updating.current -= 1;
             }),
             {
                 loading: 'Creating bookmark...',
@@ -522,7 +684,7 @@ function App() {
                 className="fixed z-50 cursor-pointer motion-safe:backdrop-blur-xl bg-gray-900/40 top-0 left-0 right-0 bottom-0 flex"
             >
                 <div onClick={e => e.stopPropagation()} className="m-auto z-50 h-auto w-full max-h-screen max-w-screen-lg">
-                    <CreateBookmark config={config} tagList={tags} className="shadow-[0_0px_50px_0px_rgba(0,0,0,0.3)]" defaultUrl={pastedUrl} onCreate={onCreate} />
+                    <CreateBookmark hiddenByDefault={hiddenByDefault} config={config} tagList={tags} className="shadow-[0_0px_50px_0px_rgba(0,0,0,0.3)]" defaultUrl={pastedUrl} onCreate={onCreate} />
                 </div>
             </div>}
             <div className="dark:bg-gray-900 dark:text-gray-100 h-dvh overflow-hidden">
@@ -532,6 +694,9 @@ function App() {
                     tags={inputTags}
                     onRef={ref => headerRef.current = ref ?? undefined}
                     onTags={setInputTags}
+                    hiddenByDefault={hiddenByDefault}
+                    setIgnoreHidden={setIgnoreHidden}
+                    ignoreHidden={ignoreHidden}
                     title={inputTitle}
                     onNewBookmark={onCreating}
                     onTitle={setInputTitle}
@@ -540,7 +705,7 @@ function App() {
                     description={inputDescription}
                     onDescription={setInputDescription}
                     total={total}
-                    count={loaded ? bmarks.length : -1}
+                    count={bmarks.length}
                     columns={columns}
                     onColumns={(v) => {
                         setColumns(v);
@@ -557,9 +722,7 @@ function App() {
                         gridRef={gridRef}
                         containerRef={containerRef.current}
                         columns={columns}
-                        sizes={sizes}
                         bmarks={bmarks}
-                        setSizes={setSizes}
                         headerRef={headerRef.current}
                         focused={focused}
                         setEditingId={setEditingId}
@@ -581,11 +744,9 @@ function App() {
 interface GridViewProps {
     gridRef: MutableRefObject<Grid<Bmark[]> | undefined>;
     columns: number;
-    sizes: number[];
     bmarks: Bmark[];
-    setSizes: (v: number[]) => void;
     focused: number;
-    setEditingId: (v?: number) => void;
+    setEditingId: (v: number) => void;
     editingId?: number;
     handleDelete: (id: number) => void;
     handleSave: (update: UpdateBmark) => void;
@@ -599,13 +760,12 @@ interface GridViewProps {
 function GridView(props: GridViewProps) {
     const containerRect = props.containerRef.getBoundingClientRect();
     const headerRect = props.headerRef.getBoundingClientRect();
+    const sizes = useSelector((state: RootState) => state.global.sizes);
 
     const {
         gridRef,
         columns,
-        sizes,
         bmarks,
-        setSizes,
         focused,
         setEditingId,
         editingId,
@@ -620,13 +780,14 @@ function GridView(props: GridViewProps) {
         columnCount={columns}
         columnWidth={_ => (containerRect.width) / columns}
         rowHeight={rowIndex => {
-            return Math.max(sizes[rowIndex], MIN_ROW_HEIGHT) || MIN_ROW_HEIGHT
+            const idx = (rowIndex * columns) + 0;
+            return Math.max(...bmarks.slice(idx, idx + columns).map(b => sizes[b.id.toString()] ?? MIN_ROW_HEIGHT));
         }}
         rowCount={Math.ceil(bmarks.length / columns)}
         height={innerHeight}
         itemData={{
-            bmarks, columns, sizes,
-            setSizes, gridRef, headerRect,
+            bmarks, columns,
+            gridRef, headerRect,
             config: props.config,
             tagList: props.tagList,
             focused, editingId, setEditingId,
@@ -645,11 +806,11 @@ function GridView(props: GridViewProps) {
 }
 
 const Row = memo(({ columnIndex, rowIndex, style, data }: any) => {
+    const dispatch = useDispatch();
+
     const {
         bmarks,
         columns,
-        sizes,
-        setSizes,
         gridRef,
         headerRect,
         config,
@@ -661,21 +822,20 @@ const Row = memo(({ columnIndex, rowIndex, style, data }: any) => {
         handleSave,
         handleFetchMeta
     } = data;
+    const sizes = store.getState().global.sizes;
 
     const idx = (rowIndex * columns) + columnIndex;
     const bmark: Bmark = bmarks[idx]
     if (!bmark) return null
     const onSize = (_: number, h: number) => {
-        const current = sizes[rowIndex];
+        const current = sizes[bmark.id.toString()];
         h = Math.max(MIN_ROW_HEIGHT, h + 20);
         if (current && current >= h) {
             return
         }
 
-        const sizesNew = [...sizes];
-        sizesNew[rowIndex] = h;
+        dispatch(globalSlice.setSize({ id: bmark.id, height: h }))
 
-        setSizes(sizesNew);
         gridRef.current?.resetAfterIndices({ columnIndex, rowIndex });
     };
 
@@ -690,7 +850,7 @@ const Row = memo(({ columnIndex, rowIndex, style, data }: any) => {
         isEditing={bmark.id === editingId}
         setEditing={(val) => {
             if (!val) {
-                setEditingId(undefined);
+                setEditingId(-1);
             } else {
                 setEditingId(bmark.id);
             }

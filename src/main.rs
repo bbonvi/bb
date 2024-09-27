@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 use anyhow::bail;
 use app::backend::AppBackend;
 use clap::Parser;
+use editor::EditorDefaults;
 use std::io::Write;
 
 mod app;
@@ -351,7 +352,12 @@ fn handle_add(
     let mut tags = tags;
 
     if use_editor {
-        let editor_bmark = editor::edit()?;
+        let editor_bmark = editor::edit(EditorDefaults {
+            url: url.clone(),
+            title: title.clone(),
+            description: description.clone(),
+            tags: tags.clone(),
+        })?;
 
         url = Some(editor_bmark.url);
         if let editor::EditorValue::Set(value) = editor_bmark.title {

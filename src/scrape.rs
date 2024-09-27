@@ -130,7 +130,7 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
 
         stealth_tab(tab.clone());
 
-        tab.set_default_timeout(Duration::from_secs(10));
+        tab.set_default_timeout(Duration::from_secs(15));
 
         if let Err(err) = tab.navigate_to(url) {
             log::error!("{host}: {}", err);
@@ -144,7 +144,12 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
             continue;
         }
 
+        log::debug!("{host}: sleeping for 2 seconds...");
         sleep(Duration::from_secs(2));
+
+        // in case the page hasn't been fully loaded yet;
+        log::debug!("{host}: sleeping some more...");
+        let _ = tab.wait_for_element_with_custom_timeout("body * *", Duration::from_secs(10));
 
         if let Ok(body) = tab.wait_for_element("body") {
             apply_css_rules(&body);

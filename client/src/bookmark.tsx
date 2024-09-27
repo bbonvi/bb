@@ -40,7 +40,7 @@ function Tags(props: { tags: string[] }) {
     }
     return <div className="flex gap-1">
         {props.tags.map(tag => {
-            return <div onClick={() => requestAddToSearch(tag)} className="font-mono cursor-pointer hover:text-gray-400 py-1" key={tag}>#{tag}</div>
+            return <div onClick={() => requestAddToSearch(tag)} className="font-mono cursor-pointer hover:text-gray-400 " key={tag}>#{tag}</div>
         })}
     </div>
 }
@@ -152,7 +152,6 @@ function Bookmark(props: Props) {
             setDragOverIcon(false);
             setDragStart(false)
             toBase64(file).then(b64 => {
-                console.log(b64)
                 let updateBmark: UpdateBmark = {
                     id: bmark.id,
                     icon_b64: b64,
@@ -182,17 +181,13 @@ function Bookmark(props: Props) {
 
     useEffect(() => {
         const onDragEnter = (e: DragEvent) => {
-            console.log(e.dataTransfer)
             if (!dragStart) {
-                console.log("dragEnter", e.currentTarget)
                 setDragStart(true);
             }
         }
 
         const onDragExit = (e: DragEvent) => {
-            console.log(e.dataTransfer)
             if (dragStart) {
-                console.log("dragExit", e.currentTarget)
                 setDragStart(false);
             }
         }
@@ -291,13 +286,14 @@ function Bookmark(props: Props) {
                     <a
                         target="_blank"
                         href={bmark.url}
-                        className="hover:opacity-90"
+                        className="hover:opacity-90 relative"
                     >
                         <img
                             width={417}
-                            height={200}
+                            height={300}
                             alt={bmark.title}
-                            className={"object-cover w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
+                            style={{ objectPosition: "0px 35%" }}
+                            className={"object-cover z-10 object-contain w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
                             src={bmark.image_id && !dragOverCover ? `/api/file/${bmark.image_id}` : BLANK_IMG}
                         />
                     </a>
@@ -320,10 +316,10 @@ function Bookmark(props: Props) {
                     />}
 
                     {/* title */}
-                    {!editing && <div className="font-bold text-lg leading-6 mb-1">
+                    {!editing && <div className="font-bold leading-6">
                         <a className={"bmark-url py-1 " + (!dragStart ? "hover:opacity-70" : "")} target="_blank" href={bmark.url}>
                             {(bmark.icon_id || dragStart) && <div
-                                className={"inline-block rounded-sm mr-1 mb-1 " + (dragStart ? " bg-emerald-600 p-2 px-3" : " ") + (dragOverIcon ? " !bg-emerald-500" : " ")}
+                                className={"inline-block rounded-sm mr-1 " + (dragStart ? " bg-emerald-600 p-2 px-3" : " ") + (dragOverIcon ? " !bg-emerald-500" : " ")}
                                 onDragExit={() => setDragOverIcon(false)}
                                 onDragEnd={() => setDragOverIcon(false)}
                                 onDrop={onDropIcon}
@@ -354,7 +350,7 @@ function Bookmark(props: Props) {
                     />}
 
                     {/* url */}
-                    {!editing && <div className="text-xs mb-1"><a className="text-orange-500 hover:text-orange-300" target="_blank" href={bmark.url}><Url url={bmark.url} /></a></div>}
+                    {!editing && <div className="text-xs"><a className="text-orange-500 hover:text-orange-300" target="_blank" href={bmark.url}><Url url={bmark.url} /></a></div>}
                     {editing && <input
                         onKeyDown={onKeyDown}
                         onInput={e => setForm({ ...form, url: e.currentTarget.value })}
@@ -445,6 +441,7 @@ interface CreateBookmarkProps {
 
     className?: string;
     config: Config;
+    hiddenByDefault: string[];
     tagList: string[];
 }
 
@@ -511,7 +508,7 @@ export function CreateBookmark(props: CreateBookmarkProps) {
                 {/* tags */}
 
                 <TagInput
-                    hiddenTags={props.config.hidden_by_default}
+                    hiddenTags={props.hiddenByDefault}
                     onValue={setTags}
                     tagList={props.tagList}
                     defaultValue={tags.join(",")}

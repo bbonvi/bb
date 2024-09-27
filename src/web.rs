@@ -75,7 +75,7 @@ async fn start_app(app: AppLocal) {
             "/asset-manifest.json",
             ServeFile::new("client/build/asset-manifest.json"),
         )
-        .nest_service("/favicon.ico", ServeFile::new("client/build/favicon.ico"))
+        .nest_service("/favicon.png", ServeFile::new("client/build/favicon.png"))
         .nest_service("/logo192.png", ServeFile::new("client/build/logo192.png"))
         .nest_service("/logo512.png", ServeFile::new("client/build/logo512.png"))
         .nest_service(
@@ -439,6 +439,7 @@ async fn search_delete(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
+        app.lazy_refresh_backend()?;
         app.bmark_mgr
             .search_delete(payload)
             .map(Into::into)
@@ -462,6 +463,7 @@ async fn search_update(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
+        app.lazy_refresh_backend()?;
         app.search_update(payload.query, payload.update)
             .map(Into::into)
             .map_err(Into::into)
@@ -499,6 +501,7 @@ async fn refresh_metadata(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
+        app.lazy_refresh_backend()?;
         app.refresh_metadata(
             payload.id,
             RefreshMetadataOpts {
@@ -524,6 +527,7 @@ async fn total(
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
+        app.lazy_refresh_backend()?;
         app.total()
             .map(|total| TotalResponse { total }.into())
             .map_err(Into::into)
@@ -535,6 +539,7 @@ async fn tags(State(state): State<Arc<SharedState>>) -> Result<axum::Json<Vec<St
 
     tokio::task::block_in_place(move || {
         let app = app.blocking_read();
+        app.lazy_refresh_backend()?;
         app.tags().map(Into::into).map_err(Into::into)
     })
 }

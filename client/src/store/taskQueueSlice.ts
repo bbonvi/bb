@@ -1,4 +1,3 @@
-// src/store/counterSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { TaskQueue } from '../api';
 

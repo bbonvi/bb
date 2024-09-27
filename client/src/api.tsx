@@ -83,7 +83,7 @@ export interface BookmarkCreate {
 }
 
 
-export function createBmark(create: BookmarkCreate): Promise<Bmark[]> {
+export function createBmark(create: BookmarkCreate): Promise<Bmark> {
     return axios.post(
         "/api/bookmarks/create",
         create,

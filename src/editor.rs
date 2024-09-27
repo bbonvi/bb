@@ -1,13 +1,13 @@
 use crate::eid::Eid;
 
 const TEMPLATE: &str = r###"# URL (one line):
-
+{}
 # TITLE (one line, leave "-" to prevent auto-fill)
-
+{}
 # TAGS (one line, comma/space separated, leave "-" to prevent auto-fill)
-
+{}
 # DESCRIPTION (multi-line, leave "-" to prevent auto-fill)
-
+{}
 "###;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -140,11 +140,37 @@ fn parse_editor_bookmark(input: &str) -> anyhow::Result<EditorBookmark> {
     Ok(editor_bookmark)
 }
 
-pub fn edit() -> anyhow::Result<EditorBookmark> {
+#[derive(Default, Debug)]
+pub struct EditorDefaults {
+    pub url: Option<String>,
+    pub tags: Option<String>,
+    pub description: Option<String>,
+    pub title: Option<String>,
+}
+
+pub fn edit(opts: EditorDefaults) -> anyhow::Result<EditorBookmark> {
     let editor = std::env::var("EDITOR").unwrap_or("nvim".into());
 
     let temp_file = format!("/tmp/bb-{}.md", Eid::new());
-    std::fs::write(&temp_file, TEMPLATE).expect("error writing temp file");
+    std::fs::write(
+        &temp_file,
+        format!(
+            r###"# URL (one line):
+{}
+# TITLE (one line, leave "-" to prevent auto-fill)
+{}
+# TAGS (one line, comma/space separated, leave "-" to prevent auto-fill)
+{}
+# DESCRIPTION (multi-line, leave "-" to prevent auto-fill)
+{}
+"###,
+            opts.url.unwrap_or_default(),
+            opts.title.unwrap_or_default(),
+            opts.tags.unwrap_or_default(),
+            opts.description.unwrap_or_default()
+        ),
+    )
+    .expect("error writing temp file");
 
     std::process::Command::new("/usr/sbin/bash")
         .arg("-c")

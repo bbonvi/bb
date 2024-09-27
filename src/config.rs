@@ -28,6 +28,14 @@ impl Config {
         Self::load_with("config")
     }
 
+    pub fn reload(&mut self) {
+        let conf = Self::load_with(&self.conf_name);
+
+        self.task_queue_max_threads = conf.task_queue_max_threads;
+        self.hidden_by_default = conf.hidden_by_default;
+        self.rules = conf.rules;
+    }
+
     fn validate(&mut self) {
         if self.task_queue_max_threads == 0 {
             self.task_queue_max_threads = 1

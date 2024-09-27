@@ -68,7 +68,6 @@ where
     match web_response {
         WebResponse::Data(data) => Ok(data),
         WebResponse::Error { error } => {
-            // log::error!("{error}");
             bail!(error)
         }
     }

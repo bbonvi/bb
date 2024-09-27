@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Config } from "./api";
 import Button from "./button";
 import { TagInput } from "./components";
+import AutosizeInput from 'react-input-autosize';
 
 interface HeaderProps {
     tags: string;
@@ -27,10 +28,20 @@ interface HeaderProps {
     onNewBookmark: () => void;
 
     config: Config;
+    hiddenByDefault: string[];
+
+    setIgnoreHidden: (val: boolean) => void;
+    ignoreHidden: boolean;
 }
 
 function Header(props: HeaderProps) {
     const [loaded, setLoaded] = useState(false);
+    const [saveQueries, _setSaveQuries] = useState(localStorage["saveQueries"] === "true");
+    const setSaveQuries = (val: boolean) => {
+        _setSaveQuries(val);
+        localStorage["saveQueries"] = JSON.stringify(val)
+    }
+
     function setQuery(tags: string, title: string, url: string, description: string) {
         const urlParams = new URL(window.location.href);
         if (tags) {
@@ -61,25 +72,33 @@ function Header(props: HeaderProps) {
     }
 
     const onTitle = (val: string) => {
-        setQuery(props.tags, val, props.url, props.description)
+        if (saveQueries) {
+            setQuery(props.tags, val, props.url, props.description)
+        }
 
         props.onTitle(val);
     }
 
     const onTags = (val: string) => {
-        setQuery(val, props.title, props.url, props.description)
+        if (saveQueries) {
+            setQuery(val, props.title, props.url, props.description)
+        }
 
         props.onTags(val);
     }
 
     const onUrl = (val: string) => {
-        setQuery(props.tags, props.title, val, props.description)
+        if (saveQueries) {
+            setQuery(props.tags, props.title, val, props.description)
+        }
 
         props.onUrl(val);
     }
 
     const onDescription = (val: string) => {
-        setQuery(props.tags, props.title, props.url, val)
+        if (saveQueries) {
+            setQuery(props.tags, props.title, props.url, val)
+        }
 
         props.onDescription(val);
     }
@@ -89,17 +108,19 @@ function Header(props: HeaderProps) {
         const defaultTitle = new URLSearchParams(window.location.search).get("title") ?? "";
         const defaultUrl = new URLSearchParams(window.location.search).get("url") ?? "";
         const defaultDescription = new URLSearchParams(window.location.search).get("description") ?? "";
+        const ignoreHidden = new URLSearchParams(window.location.search).get("ignore_hidden") ?? "";
 
         setQuery(defaultTags, defaultTitle, defaultUrl, defaultDescription)
         props.onTitle(defaultTitle);
         props.onTags(defaultTags);
         props.onDescription(defaultDescription);
         props.onUrl(defaultUrl);
+        props.setIgnoreHidden(ignoreHidden === "1" || ignoreHidden === "true");
 
         setLoaded(true)
     }, [])
 
-    const inputTextClassNames = "transition-all bg-gray-800/60 hover:bg-gray-800/90 focus:bg-gray-600/60 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-3";
+    const inputTextClassNames = "transition-all bg-gray-800/60 hover:bg-gray-800/90 focus:bg-gray-600/60 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-3 max-w-96 ";
 
     const total = props.total >= 0 ? props.total.toString() : "...";
     const count = props.count >= 0 ? props.count.toString() : "...";
@@ -115,55 +136,88 @@ function Header(props: HeaderProps) {
         <TagInput
             isSearch
             listenEvent
-            hiddenTags={props.config.hidden_by_default}
+            autoSize
+            hiddenTags={props.hiddenByDefault}
             onValue={(value) => onTags(value.join(" "))}
             tagList={props.tagList}
             defaultValue={props.tags}
             className="bg-gray-800/60 hover:bg-gray-800/90 focus:bg-gray-600/60 tag-search"
         />
-        <input
+        <AutosizeInput
             onInput={e => onTitle(e.currentTarget.value)}
             type="text"
             value={props.title}
+            extraWidth={10}
+            placeholderIsMinWidth
             placeholder="Title"
-            className={inputTextClassNames}
+            className="!flex"
+            inputClassName={inputTextClassNames + "auto-size"}
         />
-        <input
+        <AutosizeInput
+            extraWidth={10}
             onInput={e => onUrl(e.currentTarget.value)}
             type="text"
             value={props.url}
+            placeholderIsMinWidth
             placeholder="Url"
-            className={inputTextClassNames}
+            className="!flex"
+            inputClassName={inputTextClassNames + "auto-size"}
         />
-        <input
+        <AutosizeInput
             onInput={e => onDescription(e.currentTarget.value)}
             type="text"
+            extraWidth={10}
+            placeholderIsMinWidth
             value={props.description}
             placeholder="Description"
-            className={inputTextClassNames}
+            className="!flex"
+            inputClassName={inputTextClassNames + "auto-size"}
         />
+        {/*<span
+            contentEditable
+            onInput={e => onDescription(e.currentTarget.textContent ?? "")}
+            content={props.description}
+            className={inputTextClassNames}
+        />*/}
         <div className="text-sm flex"><span className="my-auto">{count}/{total}</span></div>
         <div className="text-sm flex"></div>
         <div className="text-sm flex"><Button onClick={() => props.onNewBookmark()} className="my-auto font-bold bg-green-600 hover:bg-green-700  px-3 py-1">New</Button></div>
         <div className="ml-auto text-sm flex">
             <div className="flex align-sub my-auto">
-                <div className="text-gray-100 flex mr-2">
-                    <input
-                        id="fetch-meta"
-                        onChange={e => null}
-                        type="checkbox"
-                        autoComplete="off"
-                        autoCorrect="off"
-                        checked={true}
-                        placeholder="Tags"
-                        className={inputTextClassNames + " w-auto mr-2 text-left"}
-                    />
-                    <label htmlFor="fetch-meta" className="w-full">Ignore hidden</label>
+                <div className="text-gray-100 flex mr-2" style={{ flexDirection: "column" }}>
+                    <div className="text-gray-100 flex mr-2" title="Auto save search queries in url">
+                        <input
+                            id="save-queries"
+                            onChange={e => setSaveQuries(e.currentTarget.checked)}
+                            type="checkbox"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            checked={saveQueries}
+                            placeholder="Tags"
+                            className={inputTextClassNames + " w-auto mr-2 text-left cursor-pointer"}
+                        />
+                        <label htmlFor="save-queries" className="w-full cursor-pointer">Save queries</label>
+                    </div>
+                    <div className="text-gray-100 flex mr-2" title="Ignore hidden tags">
+                        <input
+                            id="fetch-meta"
+                            onChange={e => props.setIgnoreHidden(!props.ignoreHidden)}
+                            type="checkbox"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            checked={props.ignoreHidden}
+                            placeholder="Tags"
+                            className={inputTextClassNames + " w-auto mr-2 text-left cursor-pointer"}
+                        />
+                        <label htmlFor="fetch-meta" className="w-full cursor-pointer">Show all</label>
+                    </div>
                 </div>
 
-                <div><Button onClick={() => props.onColumns(Math.max(1, props.columns - 1))} >-</Button></div>
-                <div className="mx-1">{props.columns}</div>
-                <div><Button onClick={() => props.onColumns(Math.min(12, props.columns + 1))}>+</Button></div>
+                <div className="text-gray-100 flex mr-2">
+                    <div className="my-auto"><Button onClick={() => props.onColumns(Math.max(1, props.columns - 1))} >-</Button></div>
+                    <div className="mx-1 my-auto">{props.columns}</div>
+                    <div className="my-auto"><Button onClick={() => props.onColumns(Math.min(12, props.columns + 1))}>+</Button></div>
+                </div>
             </div>
 
 

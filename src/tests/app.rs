@@ -14,14 +14,14 @@ pub fn create_app() -> AppLocal {
     let bmark_mgr = Arc::new(bookmarks::BackendCsv::load("bookmarks-test.csv").unwrap());
     let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
 
-    let (task_tx, task_rx) = mpsc::channel::<Task>();
+    let (task_tx, _) = mpsc::channel::<Task>();
 
     let config = Arc::new(RwLock::new(crate::config::Config::load_with("config-test")));
 
     let handle = std::thread::spawn({
-        let bmark_mgr = bmark_mgr.clone();
-        let storage_mgr = storage_mgr.clone();
-        let config = config.clone();
+        let _ = bmark_mgr.clone();
+        let _ = storage_mgr.clone();
+        let _ = config.clone();
 
         move || {
             // AppLocal::start_queue(task_rx, bmark_mgr, storage_mgr, config);

@@ -12,7 +12,7 @@ use anyhow::{anyhow, Context};
 use std::{
     collections::HashMap,
     sync::{mpsc, Arc, RwLock},
-    time::SystemTime,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use super::{backend::*, errors::AppError};
@@ -32,7 +32,8 @@ pub struct AppLocal {
 
 pub fn bmarks_modtime() -> SystemTime {
     use std::path::Path;
-    let meta = std::fs::metadata(Path::new("bookmarks.json"));
+    let path = std::env::var("BB_PATH").unwrap_or(String::from("bookmarks.csv"));
+    let meta = std::fs::metadata(Path::new(&path));
     if let Err(err) = &meta {
         match err.kind() {
             std::io::ErrorKind::NotFound => return SystemTime::now(),
@@ -167,6 +168,11 @@ impl AppBackend for AppLocal {
             ..Default::default()
         };
 
+        // querying manager directly because we need to avoid
+        // hidden_by_default functionality
+        // if let Some(b) = self.bmark_mgr.search(query)?.first() {
+        //     return Err(AppError::AlreadyExists(b.id));
+        // }
         if let Some(b) = self.search(query)?.first() {
             return Err(AppError::AlreadyExists(b.id));
         };
@@ -311,30 +317,31 @@ impl AppBackend for AppLocal {
                 query.url = None;
             };
 
-            // hidden by default functionality
-            let config = self.config.read().unwrap();
-            let hidden_by_default = &config.hidden_by_default;
-            if !hidden_by_default.is_empty() {
-                let mut query_tags = query.tags.clone().unwrap_or_default();
-
-                let mut append = Vec::new();
-                for hidden_tag in hidden_by_default {
-                    if query_tags
-                        .iter()
-                        .find(|query_tag| {
-                            **query_tag == *hidden_tag
-                                || query_tag.starts_with(&format!("{hidden_tag}/"))
-                        })
-                        .is_none()
-                    {
-                        append.push(format!("-{hidden_tag}"))
-                    }
-                }
-
-                query_tags.append(&mut append);
-
-                query.tags = Some(query_tags);
-            }
+            // TODO: this was here initially but it is introduces weird behaviour.
+            // // hidden by default functionality
+            // let config = self.config.read().unwrap();
+            // let hidden_by_default = &config.hidden_by_default;
+            // if !hidden_by_default.is_empty() {
+            //     let mut query_tags = query.tags.clone().unwrap_or_default();
+            //
+            //     let mut append = Vec::new();
+            //     for hidden_tag in hidden_by_default {
+            //         if query_tags
+            //             .iter()
+            //             .find(|query_tag| {
+            //                 **query_tag == *hidden_tag
+            //                     || query_tag.starts_with(&format!("{hidden_tag}/"))
+            //             })
+            //             .is_none()
+            //         {
+            //             append.push(format!("-{hidden_tag}"))
+            //         }
+            //     }
+            //
+            //     query_tags.append(&mut append);
+            //
+            //     query.tags = Some(query_tags);
+            // }
         }
 
         Ok(self.bmark_mgr.search(query)?)
@@ -460,12 +467,15 @@ impl AppLocal {
     }
 
     pub fn lazy_refresh_backend(&self) -> anyhow::Result<()> {
-        let modtime = bmarks_modtime();
         let mut last_modified = self.bmarks_last_modified.write().unwrap();
-        if *last_modified != modtime {
-            *last_modified = modtime;
+        let modtime = bmarks_modtime();
+
+        if *last_modified < modtime {
             self.bmark_mgr.refresh()?;
+            *last_modified = bmarks_modtime();
         }
+
+        self.config().write().unwrap().reload();
 
         Ok(())
     }

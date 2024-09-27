@@ -20,7 +20,6 @@ pub fn convert(
 
     let (width, height) = dims.unwrap_or((actual_width, actual_height));
 
-    log::info!("{actual_width} != {width} && {actual_height} != {height}");
     let aspect = dbg!(actual_width as f64 / actual_height as f64);
     let width = width.min(actual_width);
     let height = if dbg!(preserve_aspect) {

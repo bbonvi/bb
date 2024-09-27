@@ -40,3 +40,10 @@
     transform: rotate(360deg);
   }
 }
+
+.auto-size {
+    min-width: 0px;
+}
+.auto-size:focus {
+    min-width: 120px;
+}
