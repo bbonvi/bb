@@ -173,7 +173,7 @@ Manage automated rules
 
 Create new rule
 
-**Usage:** `bb rule add [OPTIONS] <COMMAND>`
+**Usage:** `bb rule bb rule add --url github.com update --tags code`
 
 ###### **Subcommands:**
 
@@ -192,7 +192,7 @@ Create new rule
 
 Perform an Update action
 
-**Usage:** `bb rule add update [OPTIONS]`
+**Usage:** `bb rule add bb rule add --url github.com update --tags code`
 
 ###### **Options:**
 

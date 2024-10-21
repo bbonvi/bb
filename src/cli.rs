@@ -69,6 +69,7 @@ pub enum ActionArgs {
 #[derive(Subcommand, Debug, Clone)]
 pub enum RuleAction {
     /// Perform an Update action.
+    #[clap(override_usage = r#"bb rule add --url github.com update --tags code"#)]
     Update {
         /// Set bookmark title
         #[clap(long)]
@@ -87,6 +88,7 @@ pub enum RuleAction {
 #[derive(Subcommand, Debug, Clone)]
 pub enum RulesArgs {
     /// Create new rule
+    #[clap(override_usage = r#"bb rule add --url github.com update --tags code"#)]
     Add {
         /// A regex matching bookmark url
         #[clap(long)]
