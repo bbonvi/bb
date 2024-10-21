@@ -1,5 +1,3 @@
-# ,3
-
 # Command-Line Help for `bb`
 
 This document contains the help content for the `bb` command-line program.
