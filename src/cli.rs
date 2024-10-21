@@ -26,8 +26,7 @@ pub struct MetaArgs {
 #[derive(Subcommand, Debug, Clone)]
 pub enum ActionArgs {
     /// Update found bookmarks
-    #[clap(override_usage = r#"bb search --title github update --append-tags dev
-bb search --tags dev update --remove-tags dev --append-tags code"#)]
+    #[clap(override_usage = r#"bb search --title github update --append-tags dev"#)]
     Update {
         /// a url
         #[clap(short, long)]
@@ -54,8 +53,7 @@ bb search --tags dev update --remove-tags dev --append-tags code"#)]
         remove_tags: Option<String>,
     },
     /// Delete found bookmarks
-    #[clap(override_usage = r#"bb search --title github delete
-bb search --tags dev delete"#)]
+    #[clap(override_usage = r#"bb search --title github delete"#)]
     Delete {
         /// Auto confirm
         #[clap(short, long, default_value = "false")]

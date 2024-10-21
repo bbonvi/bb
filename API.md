@@ -70,8 +70,7 @@ Search bookmark
 
 Update found bookmarks
 
-**Usage:** `bb search bb search --title github update --append-tags dev
-bb search --tags dev update --remove-tags dev --append-tags code`
+**Usage:** `bb search bb search --title github update --append-tags dev`
 
 ###### **Options:**
 
@@ -88,8 +87,7 @@ bb search --tags dev update --remove-tags dev --append-tags code`
 
 Delete found bookmarks
 
-**Usage:** `bb search bb search --title github delete
-bb search --tags dev delete`
+**Usage:** `bb search bb search --title github delete`
 
 ###### **Options:**
 
