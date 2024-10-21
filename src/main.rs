@@ -36,14 +36,15 @@ pub fn parse_tags(tags: String) -> Vec<String> {
         .collect::<Vec<_>>()
 }
 
+// built-in println produces end of pipe error if piped to head and such
 macro_rules! println {
-  () => (print!("\n"));
-  ($fmt:expr) => ({
-    writeln!(std::io::stdout(), $fmt)
-  });
-  ($fmt:expr, $($arg:tt)*) => ({
-    writeln!(std::io::stdout(), $fmt, $($arg)*)
-  })
+    () => (print!("\n"));
+    ($fmt:expr) => ({
+        writeln!(std::io::stdout(), $fmt)
+    });
+    ($fmt:expr, $($arg:tt)*) => ({
+        writeln!(std::io::stdout(), $fmt, $($arg)*)
+    })
 }
 
 fn setup_logger() {
@@ -64,14 +65,31 @@ fn setup_logger() {
 }
 
 fn main() -> anyhow::Result<()> {
+    use homedir::my_home;
+
     setup_logger();
+
+    let base_path = std::env::var("BB_BASE_PATH").unwrap_or(format!(
+        "{}/.local/share/bb",
+        my_home()
+            .expect("couldnt find home dir")
+            .expect("couldnt find home dir")
+            .to_string_lossy()
+    ));
+    let bookmarks_path = format!("{base_path}/bookmarks.csv");
+    let uploads_path = format!("{base_path}/uploads");
+
+    std::fs::create_dir_all(&base_path).expect("couldn't create bb dir");
 
     let args = cli::Args::parse();
 
     let app_local = || {
-        let config = Arc::new(RwLock::new(Config::load()));
-        let path = std::env::var("BB_PATH").unwrap_or(String::from("bookmarks.csv"));
-        (app::AppLocal::new(config.clone(), &path), config)
+        let config = Arc::new(RwLock::new(Config::load_with(&base_path)));
+        let storage_mgr = storage::BackendLocal::new(&uploads_path);
+        (
+            app::AppLocal::new(config.clone(), &bookmarks_path, storage_mgr),
+            config,
+        )
     };
 
     let app_mgr = || -> (Box<dyn AppBackend>, Arc<RwLock<Config>>) {
@@ -90,15 +108,22 @@ fn main() -> anyhow::Result<()> {
                 Err(_) => None,
             };
 
-            let config = Arc::new(RwLock::new(Config::load()));
+            let config = Arc::new(RwLock::new(Config::load_with(&base_path)));
             (
                 Box::new(app::AppRemote::new(&backend_addr, basic_auth)),
                 config,
             )
         } else {
-            let config = Arc::new(RwLock::new(Config::load()));
-            let path = std::env::var("BB_PATH").unwrap_or(String::from("bookmarks.csv"));
-            (Box::new(app::AppLocal::new(config.clone(), &path)), config)
+            let config = Arc::new(RwLock::new(Config::load_with(&base_path)));
+            let storage_mgr = storage::BackendLocal::new(&uploads_path);
+            (
+                Box::new(app::AppLocal::new(
+                    config.clone(),
+                    &bookmarks_path,
+                    storage_mgr,
+                )),
+                config,
+            )
         }
     };
 
@@ -112,7 +137,7 @@ fn main() -> anyhow::Result<()> {
             let (mut app_mgr, _) = app_local();
 
             app_mgr.run_queue();
-            web::start_daemon(app_mgr);
+            web::start_daemon(app_mgr, &base_path);
             return Ok(());
         }
 

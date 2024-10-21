@@ -172,7 +172,8 @@ pub fn edit(opts: EditorDefaults) -> anyhow::Result<EditorBookmark> {
     )
     .expect("error writing temp file");
 
-    std::process::Command::new("/usr/sbin/bash")
+    let shell = std::env::var("SHELL").unwrap_or("/usr/sbin/bash".into());
+    std::process::Command::new(shell)
         .arg("-c")
         .arg(format!("{editor} {temp_file}"))
         .spawn()

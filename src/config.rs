@@ -16,7 +16,7 @@ pub struct Config {
     pub rules: Vec<Rule>,
 
     #[serde(skip_serializing, skip_deserializing)]
-    conf_name: String,
+    base_path: String,
 }
 
 fn task_queue_max_threads() -> u16 {
@@ -24,12 +24,8 @@ fn task_queue_max_threads() -> u16 {
 }
 
 impl Config {
-    pub fn load() -> Self {
-        Self::load_with("config")
-    }
-
     pub fn reload(&mut self) {
-        let conf = Self::load_with(&self.conf_name);
+        let conf = Self::load_with(&self.base_path);
 
         self.task_queue_max_threads = conf.task_queue_max_threads;
         self.hidden_by_default = conf.hidden_by_default;
@@ -58,24 +54,22 @@ impl Config {
         }
     }
 
-    pub fn load_with(conf_name: &str) -> Self {
-        let store = storage::BackendLocal::new("./");
-
-        let path = format!("{conf_name}.yaml");
+    pub fn load_with(base_path: &str) -> Self {
+        let store = storage::BackendLocal::new(&base_path);
 
         // create new if does not exist
-        if !store.exists(&path) {
+        if !store.exists("config.yaml") {
             store.write(
-                &path,
+                "config.yaml",
                 &serde_yml::to_string(&Self::default()).unwrap().as_bytes(),
             );
         }
 
         let config_str =
-            String::from_utf8(store.read(&path)).expect("config file is not valid utf8");
+            String::from_utf8(store.read("config.yaml")).expect("config file is not valid utf8");
         let mut config: Self = serde_yml::from_str(&config_str).expect("config is malformed");
 
-        config.conf_name = conf_name.to_string();
+        config.base_path = base_path.to_string();
 
         config.validate();
 
@@ -88,10 +82,9 @@ impl Config {
     }
 
     pub fn save(&self) {
-        let store = storage::BackendLocal::new("./");
+        let store = storage::BackendLocal::new(&self.base_path);
 
         let config_str = serde_yml::to_string(&self).unwrap();
-        let path = format!("{}.yaml", self.conf_name);
-        store.write(&path, &config_str.as_bytes());
+        store.write("config.yaml", &config_str.as_bytes());
     }
 }

@@ -28,7 +28,7 @@ struct SharedState {
     app: Arc<RwLock<AppLocal>>,
 }
 
-async fn start_app(app: AppLocal) {
+async fn start_app(app: AppLocal, base_path: &str) {
     let app = Arc::new(RwLock::new(app));
 
     let signal = shutdown_signal(app.clone());
@@ -67,6 +67,8 @@ async fn start_app(app: AppLocal) {
     use tower_http::services::ServeDir;
     use tower_http::services::ServeFile;
 
+    let uploads_path = format!("{base_path}/uploads");
+
     let app = Router::new()
         // serve frontend
         .nest_service("/", ServeFile::new("client/build/index.html"))
@@ -84,7 +86,10 @@ async fn start_app(app: AppLocal) {
         )
         .nest_service("/robots.txt", ServeFile::new("client/build/robots.txt"))
         // server uploads
-        .nest_service("/api/file/", tower_http::services::ServeDir::new("uploads"))
+        .nest_service(
+            "/api/file/",
+            tower_http::services::ServeDir::new(&uploads_path),
+        )
         // api
         .route("/api/bookmarks/search", post(search))
         .route("/api/bookmarks/refresh_metadata", post(refresh_metadata))
@@ -118,12 +123,12 @@ async fn start_app(app: AppLocal) {
         .unwrap();
 }
 
-pub fn start_daemon(app: AppLocal) {
+pub fn start_daemon(app: AppLocal, base_path: &str) {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap()
-        .block_on(async { start_app(app).await });
+        .block_on(async { start_app(app, base_path).await });
 }
 
 // Make our own error that wraps `anyhow::Error`.

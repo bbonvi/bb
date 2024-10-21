@@ -1,3 +1,4 @@
+import { startsWith } from "lodash";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AutosizeInput from 'react-input-autosize';
 
@@ -106,37 +107,51 @@ export function TagInput(props: {
 
         const tagInputList = value.split(" ");
 
-        const [currWord, _] = currTypingWord();
+        let [currWord, _] = currTypingWord();
         if (!currWord) return []
 
+        const negTag = currWord.startsWith("-");
+        let currWordClean = currWord;
+        if (negTag) {
+            currWordClean = currWord.substring(1);
+        }
+
         const visibleTags: string[] = [];
+        const hiddenTags = props.hiddenTags?.map(t => negTag ? "-" + t : t);
         tagInputList.forEach(t => {
-            let visibleTag = props.hiddenTags?.find(ht => ht === t || t.includes(ht + "/"))
+
+            let visibleTag = hiddenTags.find(ht => ht === t || t.includes(ht + "/"))
             if (visibleTag) {
                 visibleTags.push(visibleTag);
             }
         })
 
-        if (!currWord) {
-            return
-        }
-
-        return props.tagList.filter(t => {
+        return props.tagList.map(tag => {
+            if (negTag) {
+                return "-" + tag;
+            }
+            return tag;
+        }).filter(t => {
             // remove duplicates
             const [_, ...rest] = tagInputList;
             if (rest.includes(t)) {
                 return
             }
 
+
             // hide hidden tags but show them if they're referenced in the input
             if (
-                props.hiddenTags.find(ht => t == ht || t.includes(ht + "/"))
+                hiddenTags.find(ht => t == ht || t.includes(ht + "/"))
                 && !visibleTags.find(vt => t == vt || t.includes(vt + "/"))
             ) {
                 return false
             }
+            if (t.includes("servi")) {
+                console.log(t, currWord)
+                console.log(t, currWordClean as string)
+            }
 
-            return t.includes(currWord);
+            return t.includes(currWordClean as string);
         })
     }, [value]);
 

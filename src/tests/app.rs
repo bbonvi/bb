@@ -12,7 +12,8 @@ pub fn create_app() -> AppLocal {
     let _ = std::fs::remove_file("config-test.yaml");
 
     let bmark_mgr = Arc::new(bookmarks::BackendCsv::load("bookmarks-test.csv").unwrap());
-    let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
+    let uploads_path = std::env::var("BB_UPLOADS_PATH").unwrap_or(String::from("./uploads"));
+    let storage_mgr = Arc::new(storage::BackendLocal::new(&uploads_path));
 
     let (task_tx, _) = mpsc::channel::<Task>();
 

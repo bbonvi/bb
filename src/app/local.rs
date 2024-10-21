@@ -4,11 +4,12 @@ use crate::{
     eid::Eid,
     metadata::{fetch_meta, Metadata},
     rules::{self, Rule},
-    storage,
+    storage::{self, BackendLocal},
 };
 
 use super::task_runner::{self, Status, Task};
 use anyhow::{anyhow, Context};
+use homedir::my_home;
 use std::{
     collections::HashMap,
     sync::{mpsc, Arc, RwLock},
@@ -32,8 +33,18 @@ pub struct AppLocal {
 
 pub fn bmarks_modtime() -> SystemTime {
     use std::path::Path;
-    let path = std::env::var("BB_PATH").unwrap_or(String::from("bookmarks.csv"));
-    let meta = std::fs::metadata(Path::new(&path));
+
+    let base_path = std::env::var("BB_BASE_PATH").unwrap_or(format!(
+        "{}/.local/share/bb",
+        my_home()
+            .expect("couldnt find home dir")
+            .expect("couldnt find home dir")
+            .to_string_lossy()
+    ));
+
+    let bookmarks_path = format!("{base_path}/bookmarks.csv");
+
+    let meta = std::fs::metadata(Path::new(&bookmarks_path));
     if let Err(err) = &meta {
         match err.kind() {
             std::io::ErrorKind::NotFound => return SystemTime::now(),
@@ -88,10 +99,10 @@ impl AppLocal {
         self.task_tx = Some(Arc::new(task_tx));
     }
 
-    pub fn new(config: Arc<RwLock<Config>>, path: &str) -> Self {
+    pub fn new(config: Arc<RwLock<Config>>, path: &str, storage_mgr: BackendLocal) -> Self {
         let bmark_mgr = Arc::new(bookmarks::BackendCsv::load(&path).unwrap());
+        let storage_mgr = Arc::new(storage_mgr);
 
-        let storage_mgr = Arc::new(storage::BackendLocal::new("./uploads"));
         bmark_mgr.save();
 
         Self {

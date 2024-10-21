@@ -140,9 +140,9 @@ const CSV_HEADERS: [&str; 7] = [
 impl BackendCsv {
     pub fn load(path: &str) -> anyhow::Result<Self> {
         if let Err(err) = std::fs::metadata(path) {
-            log::error!("{err}");
             match err.kind() {
                 ErrorKind::NotFound => {
+                    log::info!("Creating new database at {path}");
                     let mut csv_wrt = csv::Writer::from_path(path)?;
                     csv_wrt.write_record(CSV_HEADERS)?;
                     csv_wrt.flush()?;
