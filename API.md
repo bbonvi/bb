@@ -177,7 +177,7 @@ Create new rule
 
 ###### **Subcommands:**
 
-* `update` — 
+* `update` — Perform an Update action
 
 ###### **Options:**
 
@@ -190,13 +190,15 @@ Create new rule
 
 ## `bb rule add update`
 
+Perform an Update action
+
 **Usage:** `bb rule add update [OPTIONS]`
 
 ###### **Options:**
 
-* `--title <TITLE>` — Bookmark title
-* `--description <DESCRIPTION>` — Bookmark description
-* `--tags <TAGS>` — Bookmark tags
+* `--title <TITLE>` — Set bookmark title
+* `--description <DESCRIPTION>` — Set bookmark description
+* `--tags <TAGS>` — Add tags
 
 
 

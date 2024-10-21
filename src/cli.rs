@@ -68,17 +68,17 @@ pub enum ActionArgs {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum RuleAction {
+    /// Perform an Update action.
     Update {
-        /// Bookmark title
+        /// Set bookmark title
         #[clap(long)]
         title: Option<String>,
 
-        /// Bookmark description
+        /// Set bookmark description
         #[clap(long)]
         description: Option<String>,
 
-        /// Bookmark tags
-        // #[clap(long, value_delimiter = ',', num_args = 1..)]
+        /// Add tags
         #[clap(long)]
         tags: Option<String>,
     },
