@@ -103,11 +103,11 @@ When running bb as daemon, you can access webui at [http://localhost:8080/](http
 | ------------- | ---------------- | ------------ | ------- |
 | `RUST_LOG`            | log level | error | warn |
 | `BB_BASE_PATH`        | Base path for bookmarks, configs and thumbnails       | `~/.local/share/bb`   | `~/.local/share/bb`     |
-| `BB_ADDR`             | HTTP address to connect to a daemon                   |                       | `http://localhost:8080` |
-| `BB_BASIC_AUTH`       | Optional basic auth string for daemon authorization   |                       | `myusername:mypassword` |
-| `HTTP_PROXY`          | proxy for all meta requests in a format               |                       | `socks5://127.0.0.1:8060` |
-| `OPT_PROXY`           | An optional proxy that will be used in case default (no proxy/HTTP_PROXY) request fails | | `socks5://127.0.0.1:8060` |
-| `CHROME_PATH`         | A path to a chromium binary                           | `chromium`            | `/usr/sbin/chromium`    |
+| `BB_ADDR`             | Daemon http address                                   |                       | `http://localhost:8080` |
+| `BB_BASIC_AUTH`       | Optional basic auth for daemon authorization.         |                       | `myusername:mypassword` |
+| `HTTP_PROXY`          | Proxy for all meta requests                           |                       | `socks5://127.0.0.1:8060` |
+| `OPT_PROXY`           | An optional proxy that will be used in case default (no proxy/HTTP_PROXY) request fails. Useful if bb needs to access region locked website, but you don't want to increase the probability of captcha. | | `socks5://127.0.0.1:8060` |
+| `CHROME_PATH`         | A path to chromium binary                             | `chromium`            | `/usr/sbin/chromium`    |
 | `EDITOR`              | Your default text editor                              | `vim`                 | `nvim`                  |
 | `SHELL`               | Shell to launch editor with                           | `/usr/sbin/bash`      | `/bin/bash`             |
 
