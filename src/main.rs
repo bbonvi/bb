@@ -132,6 +132,14 @@ fn main() -> anyhow::Result<()> {
     };
 
     match args.command {
+        #[cfg(feature = "markdown-docs")]
+        cli::Command::MarkdownDocs {} => {
+            let args = cli::Args::parse();
+            let markdown: String = clap_markdown::help_markdown::<cli::Args>();
+            println!("{markdown}");
+            Ok(())
+        }
+
         cli::Command::MigrateBuku {} => {
             buku_migrate::migrate();
             return Ok(());

@@ -149,7 +149,7 @@ pub struct EditorDefaults {
 }
 
 pub fn edit(opts: EditorDefaults) -> anyhow::Result<EditorBookmark> {
-    let editor = std::env::var("EDITOR").unwrap_or("nvim".into());
+    let editor = std::env::var("EDITOR").unwrap_or("vim".into());
 
     let temp_file = format!("/tmp/bb-{}.md", Eid::new());
     std::fs::write(

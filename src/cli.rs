@@ -26,6 +26,8 @@ pub struct MetaArgs {
 #[derive(Subcommand, Debug, Clone)]
 pub enum ActionArgs {
     /// Update found bookmarks
+    #[clap(override_usage = r#"bb search --title github update --append-tags dev
+bb search --tags dev update --remove-tags dev --append-tags code"#)]
     Update {
         /// a url
         #[clap(short, long)]
@@ -52,6 +54,8 @@ pub enum ActionArgs {
         remove_tags: Option<String>,
     },
     /// Delete found bookmarks
+    #[clap(override_usage = r#"bb search --title github delete
+bb search --tags dev delete"#)]
     Delete {
         /// Auto confirm
         #[clap(short, long, default_value = "false")]
@@ -109,16 +113,26 @@ pub enum RulesArgs {
     List {},
 }
 
-/// Doc comment
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// This is for internal use only!
+    /// I'm not sure if it still works.
+    /// Might delete later.
+    #[clap(hide = true)]
     MigrateBuku {},
+
+    /// Generate api docs in markdown format
+    #[cfg(feature = "markdown-docs")]
+    #[clap(hide = true)]
+    MarkdownDocs {},
+
     /// Start bb as a service.
     Daemon {
         // #[clap(trailing_var_arg=true, value_parser = ["database", "scraper"])]
         // kind: Vec<String>,
     },
     /// Search bookmark
+    #[clap(override_usage = r#"bb search --url github.com --tags code"#)]
     Search {
         /// a url
         #[clap(short, long)]
@@ -151,6 +165,7 @@ pub enum Command {
         #[clap(subcommand)]
         action: Option<ActionArgs>,
     },
+    #[clap(override_usage = r#"bb add --url "https://github.com/bbonvi/bb" --tags dev"#)]
     Add {
         #[clap(long, default_value = "false")]
         editor: bool,
