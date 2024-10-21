@@ -26,7 +26,6 @@ pub struct MetaArgs {
 #[derive(Subcommand, Debug, Clone)]
 pub enum ActionArgs {
     /// Update found bookmarks
-    #[clap(override_usage = r#"bb search --title github update --append-tags dev"#)]
     Update {
         /// a url
         #[clap(short, long)]
@@ -53,7 +52,6 @@ pub enum ActionArgs {
         remove_tags: Option<String>,
     },
     /// Delete found bookmarks
-    #[clap(override_usage = r#"bb search --title github delete"#)]
     Delete {
         /// Auto confirm
         #[clap(short, long, default_value = "false")]
@@ -69,7 +67,6 @@ pub enum ActionArgs {
 #[derive(Subcommand, Debug, Clone)]
 pub enum RuleAction {
     /// Perform an Update action.
-    #[clap(override_usage = r#"bb rule add --url github.com update --tags code"#)]
     Update {
         /// Set bookmark title
         #[clap(long)]
@@ -88,7 +85,6 @@ pub enum RuleAction {
 #[derive(Subcommand, Debug, Clone)]
 pub enum RulesArgs {
     /// Create new rule
-    #[clap(override_usage = r#"bb rule add --url github.com update --tags code"#)]
     Add {
         /// A regex matching bookmark url
         #[clap(long)]
@@ -135,7 +131,6 @@ pub enum Command {
         // kind: Vec<String>,
     },
     /// Search bookmark
-    #[clap(override_usage = r#"bb search --url github.com --tags code"#)]
     Search {
         /// a url
         #[clap(short, long)]
@@ -168,7 +163,6 @@ pub enum Command {
         #[clap(subcommand)]
         action: Option<ActionArgs>,
     },
-    #[clap(override_usage = r#"bb add --url "https://github.com/bbonvi/bb" --tags dev"#)]
     Add {
         #[clap(long, default_value = "false")]
         editor: bool,

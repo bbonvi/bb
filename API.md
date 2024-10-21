@@ -43,7 +43,7 @@ Start bb as a service
 
 Search bookmark
 
-**Usage:** `bb bb search --url github.com --tags code`
+**Usage:** `bb search [OPTIONS] [COMMAND]`
 
 ###### **Subcommands:**
 
@@ -70,7 +70,7 @@ Search bookmark
 
 Update found bookmarks
 
-**Usage:** `bb search bb search --title github update --append-tags dev`
+**Usage:** `bb search update [OPTIONS]`
 
 ###### **Options:**
 
@@ -87,7 +87,7 @@ Update found bookmarks
 
 Delete found bookmarks
 
-**Usage:** `bb search bb search --title github delete`
+**Usage:** `bb search delete [OPTIONS]`
 
 ###### **Options:**
 
@@ -102,7 +102,7 @@ Delete found bookmarks
 
 ## `bb add`
 
-**Usage:** `bb bb add --url "https://github.com/bbonvi/bb" --tags dev`
+**Usage:** `bb add [OPTIONS]`
 
 ###### **Arguments:**
 
@@ -173,7 +173,7 @@ Manage automated rules
 
 Create new rule
 
-**Usage:** `bb rule bb rule add --url github.com update --tags code`
+**Usage:** `bb rule add [OPTIONS] <COMMAND>`
 
 ###### **Subcommands:**
 
@@ -192,7 +192,7 @@ Create new rule
 
 Perform an Update action
 
-**Usage:** `bb rule add bb rule add --url github.com update --tags code`
+**Usage:** `bb rule add update [OPTIONS]`
 
 ###### **Options:**
 
