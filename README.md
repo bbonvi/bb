@@ -94,6 +94,9 @@ When running bb as daemon, you can access webui at [http://localhost:8080/](http
 
 # API
 
+### CLI API references
+[API.md](https://github.com/bbonvi/bb/blob/main/API.md)
+
 ### Environment Variables
 
 | Variable      | Description      | Default      | Example |
@@ -108,6 +111,4 @@ When running bb as daemon, you can access webui at [http://localhost:8080/](http
 | `EDITOR`              | Your default text editor                              | `vim`                 | `nvim`                  |
 | `SHELL`               | Shell to launch editor with                           | `/usr/sbin/bash`      | `/bin/bash`             |
 
-### CLI API references
-[API.md](https://github.com/bbonvi/bb/blob/main/API.md)
 
