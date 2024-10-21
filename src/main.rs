@@ -67,6 +67,10 @@ fn setup_logger() {
 fn main() -> anyhow::Result<()> {
     use homedir::my_home;
 
+    if std::env::var("RUST_LOG").is_err() {
+        unsafe { std::env::set_var("RUST_LOG", "error") }
+    }
+
     setup_logger();
 
     let base_path = std::env::var("BB_BASE_PATH").unwrap_or(format!(
