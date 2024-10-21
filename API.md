@@ -14,8 +14,8 @@ This document contains the help content for the `bb` command-line program.
 * [`bb rule`↴](#bb-rule)
 * [`bb rule add`↴](#bb-rule-add)
 * [`bb rule add update`↴](#bb-rule-add-update)
-* [`bb rule delete`↴](#bb-rule-delete)
 * [`bb rule list`↴](#bb-rule-list)
+* [`bb rule delete`↴](#bb-rule-delete)
 
 ## `bb`
 
@@ -27,7 +27,7 @@ This document contains the help content for the `bb` command-line program.
 * `search` — Search bookmark
 * `add` — 
 * `meta` — Query website meta data
-* `rule` — Query website meta data
+* `rule` — Manage automated rules
 
 
 
@@ -157,19 +157,21 @@ Query website meta data
 
 ## `bb rule`
 
-Query website meta data
+Manage automated rules
 
 **Usage:** `bb rule <COMMAND>`
 
 ###### **Subcommands:**
 
-* `add` — 
-* `delete` — 
-* `list` — 
+* `add` — Create new rule
+* `list` — List all rules
+* `delete` — UNIMPLEMENTED! Edit config.yaml directly
 
 
 
 ## `bb rule add`
+
+Create new rule
 
 **Usage:** `bb rule add [OPTIONS] <COMMAND>`
 
@@ -198,15 +200,19 @@ Query website meta data
 
 
 
-## `bb rule delete`
-
-**Usage:** `bb rule delete`
-
-
-
 ## `bb rule list`
 
+List all rules
+
 **Usage:** `bb rule list`
+
+
+
+## `bb rule delete`
+
+UNIMPLEMENTED! Edit config.yaml directly
+
+**Usage:** `bb rule delete`
 
 
 

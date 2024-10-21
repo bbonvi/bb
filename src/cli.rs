@@ -86,6 +86,7 @@ pub enum RuleAction {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum RulesArgs {
+    /// Create new rule
     Add {
         /// A regex matching bookmark url
         #[clap(long)]
@@ -107,8 +108,10 @@ pub enum RulesArgs {
         #[clap(subcommand)]
         action: RuleAction,
     },
-    Delete {},
+    /// List all rules.
     List {},
+    /// UNIMPLEMENTED! Edit config.yaml directly.
+    Delete {},
 }
 
 #[derive(Subcommand, Debug)]
@@ -200,7 +203,7 @@ pub enum Command {
         #[clap(flatten)]
         meta_args: MetaArgs,
     },
-    /// Query website meta data
+    /// Manage automated rules
     Rule {
         #[clap(subcommand)]
         action: RulesArgs,
