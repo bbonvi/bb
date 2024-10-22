@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{fmt::Debug, sync::Arc};
 use tokio::{signal, sync::RwLock};
+use tower_http::services::{ServeDir, ServeFile};
 
 #[derive(Clone)]
 struct SharedState {
@@ -64,11 +65,6 @@ async fn start_app(app: AppLocal, base_path: &str) {
         }
     }
 
-    use tower_http::services::ServeDir;
-    use tower_http::services::ServeFile;
-
-    let uploads_path = format!("{base_path}/uploads");
-
     let webui = Router::new()
         .nest_service("/", ServeFile::new("client/build/index.html"))
         .nest_service("/static/", ServeDir::new("client/build/static/"))
@@ -85,10 +81,9 @@ async fn start_app(app: AppLocal, base_path: &str) {
         )
         .nest_service("/robots.txt", ServeFile::new("client/build/robots.txt"));
 
-    let uploads = Router::new().nest_service(
-        "/api/file/",
-        tower_http::services::ServeDir::new(&uploads_path),
-    );
+    let uploads_path = format!("{base_path}/uploads");
+
+    let uploads = Router::new().nest_service("/api/file/", ServeDir::new(&uploads_path));
 
     let api = Router::new()
         .route("/api/bookmarks/search", post(search))
