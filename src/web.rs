@@ -69,8 +69,7 @@ async fn start_app(app: AppLocal, base_path: &str) {
 
     let uploads_path = format!("{base_path}/uploads");
 
-    let app = Router::new()
-        // serve frontend
+    let webui = Router::new()
         .nest_service("/", ServeFile::new("client/build/index.html"))
         .nest_service("/static/", ServeDir::new("client/build/static/"))
         .nest_service(
@@ -84,13 +83,14 @@ async fn start_app(app: AppLocal, base_path: &str) {
             "/manifest.json",
             ServeFile::new("client/build/manifest.json"),
         )
-        .nest_service("/robots.txt", ServeFile::new("client/build/robots.txt"))
-        // server uploads
-        .nest_service(
-            "/api/file/",
-            tower_http::services::ServeDir::new(&uploads_path),
-        )
-        // api
+        .nest_service("/robots.txt", ServeFile::new("client/build/robots.txt"));
+
+    let uploads = Router::new().nest_service(
+        "/api/file/",
+        tower_http::services::ServeDir::new(&uploads_path),
+    );
+
+    let api = Router::new()
         .route("/api/bookmarks/search", post(search))
         .route("/api/bookmarks/refresh_metadata", post(refresh_metadata))
         .route("/api/bookmarks/create", post(create))
@@ -102,17 +102,18 @@ async fn start_app(app: AppLocal, base_path: &str) {
         .route("/api/bookmarks/tags", post(tags))
         .route("/api/config", get(get_config))
         .route("/api/config", post(update_config))
-        .route("/api/task_queue", get(task_queue))
+        .route("/api/task_queue", get(task_queue));
+
+    let tracing_layer = tower_http::trace::TraceLayer::new_for_http()
+        .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(tracing::Level::INFO))
+        .on_response(tower_http::trace::DefaultOnResponse::new().level(tracing::Level::INFO));
+
+    let app = Router::new()
+        .merge(webui)
+        .merge(uploads)
+        .merge(api)
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-        .layer(
-            tower_http::trace::TraceLayer::new_for_http()
-                .make_span_with(
-                    tower_http::trace::DefaultMakeSpan::new().level(tracing::Level::INFO),
-                )
-                .on_response(
-                    tower_http::trace::DefaultOnResponse::new().level(tracing::Level::INFO),
-                ),
-        )
+        .layer(tracing_layer)
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
