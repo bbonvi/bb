@@ -1,0 +1,14 @@
+target
+venv
+*.DS_Store
+*.vim
+*/**/._*
+*/._*
+bookmarks*json
+*bookmarks*json
+bookmarks*csv
+*bookmarks*csv
+client/node_modules
+buku.json
+config.yaml
+uploads/
