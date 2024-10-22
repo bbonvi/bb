@@ -87,6 +87,21 @@ To install bb, follow these steps:
     BB_ADDR=http://localhost:8080 bb search --title bb
    ```
 
+### Running daemon in docker
+```bash
+
+# build with headless chrome
+docker build -t bb:latest -f daemon.Dockerfile .
+# build without headless chrome
+docker build --build-arg NO_HEADLESS=true -t bb:latest -f daemon.Dockerfile .
+
+docker volume create bb-data
+
+# run and open http://localhost:8080
+docker run --rm -it -v bb-data:/root/.local/share/bb -p 8080:8080 bb:latest
+
+```
+
 ### WebUI
 
 When running bb as daemon, you can access webui at [http://localhost:8080/](http://localhost:8080/) 

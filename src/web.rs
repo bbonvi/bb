@@ -52,14 +52,11 @@ async fn start_app(app: AppLocal, base_path: &str) {
         tokio::select! {
             _ = ctrl_c => {
                 let mut app = app.write().await;
-                loop {
-                    app.shutdown();
+                app.shutdown();
 
-                    // join on queue thread handle
-                    log::warn!("waiting for queues to stop");
-                    app.wait_task_queue_finish();
-                    break;
-                }
+                // join on queue thread handle
+                log::warn!("waiting for queues to stop");
+                app.wait_task_queue_finish();
             },
             _ = terminate => {},
         }

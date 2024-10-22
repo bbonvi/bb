@@ -148,6 +148,9 @@ fn main() -> anyhow::Result<()> {
         cli::Command::Daemon { .. } => {
             let (mut app_mgr, _) = app_local();
 
+            #[cfg(feature = "headless")]
+            scrape::headless::test_launch();
+
             app_mgr.run_queue();
             web::start_daemon(app_mgr, &base_path);
             return Ok(());

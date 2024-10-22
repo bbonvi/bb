@@ -1,8 +1,8 @@
+use rusty_ulid::generate_ulid_string;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::str::FromStr;
 use std::{fmt::Display, ops::Deref};
-use ulid::Ulid;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Eid(String);
@@ -50,7 +50,7 @@ impl From<Eid> for String {
 impl Eid {
     #[inline]
     pub fn new() -> Eid {
-        Eid(Ulid::new().to_string())
+        Eid(generate_ulid_string())
     }
 }
 

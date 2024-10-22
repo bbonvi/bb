@@ -43,7 +43,9 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
             } else {
                 if !opts.no_headless {
                     log::debug!("cover not found, taking screencapture");
-                    if let Some(chrome_result) = scrape::fetch_page_with_chrome(url) {
+
+                    #[cfg(feature = "headless")]
+                    if let Some(chrome_result) = scrape::headless::fetch_page_with_chrome(url) {
                         log::debug!("screencapture is taken");
 
                         // now that we've captured the page with browser, we might as well
@@ -96,44 +98,52 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
             if !opts.no_headless {
                 log::debug!("plain request failed. trying chromium.");
 
-                if let Some(chrome_result) = scrape::fetch_page_with_chrome(url) {
-                    let mut meta = scrape::get_data_from_page(chrome_result.html, url);
+                #[cfg(feature = "headless")]
+                {
+                    if let Some(chrome_result) = scrape::headless::fetch_page_with_chrome(url) {
+                        let mut meta = scrape::get_data_from_page(chrome_result.html, url);
 
-                    // TODO: UNCOMMENT
-                    if let Some(ref image_url) = meta.image_url {
-                        if meta.image.is_none() {
-                            log::debug!("fetching cover");
+                        // TODO: UNCOMMENT
+                        if let Some(ref image_url) = meta.image_url {
+                            if meta.image.is_none() {
+                                log::debug!("fetching cover");
 
-                            if let Some((status, bytes)) = scrape::reqwest_with_retries(image_url) {
-                                if status.is_success() {
-                                    log::debug!("cover is fetched");
+                                if let Some((status, bytes)) =
+                                    scrape::reqwest_with_retries(image_url)
+                                {
+                                    if status.is_success() {
+                                        log::debug!("cover is fetched");
 
-                                    meta.image = Some(bytes);
+                                        meta.image = Some(bytes);
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if meta.image.is_none() {
-                        meta.image = Some(chrome_result.screenshot);
-                    }
+                        if meta.image.is_none() {
+                            meta.image = Some(chrome_result.screenshot);
+                        }
 
-                    if let Some(ref icon_url) = meta.icon_url {
-                        log::debug!("fetching icon");
+                        if let Some(ref icon_url) = meta.icon_url {
+                            log::debug!("fetching icon");
 
-                        if let Some((status, bytes)) = scrape::reqwest_with_retries(icon_url) {
-                            if status.is_success() {
-                                log::debug!("icon is fetched");
+                            if let Some((status, bytes)) = scrape::reqwest_with_retries(icon_url) {
+                                if status.is_success() {
+                                    log::debug!("icon is fetched");
 
-                                meta.icon = Some(bytes.to_vec());
+                                    meta.icon = Some(bytes.to_vec());
+                                }
                             }
                         }
-                    }
 
-                    Some(meta)
-                } else {
-                    None
+                        Some(meta)
+                    } else {
+                        None
+                    }
                 }
+
+                #[cfg(not(feature = "headless"))]
+                None
             } else {
                 None
             }
