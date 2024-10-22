@@ -98,7 +98,7 @@ docker build --build-arg NO_HEADLESS=true -t bb:latest -f daemon.Dockerfile .
 docker volume create bb-data
 
 # run and open http://localhost:8080
-docker run --rm -it -v bb-data:/root/.local/share/bb -p 8080:8080 bb:latest
+docker run --rm -it -v bb-data:/root/.local/share/bb -p 8080:8080 --name bb-daemon bb:latest
 
 ```
 
