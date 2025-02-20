@@ -30,8 +30,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub fn parse_tags(tags: String) -> Vec<String> {
     tags.split(',')
-        .map(|value| value.split(&[' ', ' ']).filter(|value| !value.is_empty()))
-        .flatten()
+        .flat_map(|value| value.split(&[' ', ' ']).filter(|value| !value.is_empty()))
         .map(|s| s.to_lowercase().to_string())
         .collect::<Vec<_>>()
 }
@@ -392,11 +391,16 @@ fn handle_add(
     let mut tags = tags;
 
     if use_editor {
+        let mut current_tags = app_mgr.tags().unwrap();
+        //let hidden = config.hidden_by_default.clone();
+        current_tags.sort();
+
         let editor_bmark = editor::edit(EditorDefaults {
             url: url.clone(),
             title: title.clone(),
             description: description.clone(),
             tags: tags.clone(),
+            current_tags,
         })?;
 
         url = Some(editor_bmark.url);

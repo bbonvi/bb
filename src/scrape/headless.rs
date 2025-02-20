@@ -11,6 +11,7 @@ pub struct ChromeResult {
 
 pub fn stealth_tab(tab: Arc<Tab>) {
     tab.call_method(Page::AddScriptToEvaluateOnNewDocument {
+        run_immediately: Some(true),
         source: "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
             .to_string(),
         world_name: None,
@@ -20,6 +21,7 @@ pub fn stealth_tab(tab: Arc<Tab>) {
     tab.set_user_agent("'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'", Some("en-US,en"), Some("Mac OS X")).unwrap();
 
     tab.call_method(Page::AddScriptToEvaluateOnNewDocument {
+        run_immediately: Some(true),
         source: include_str!("./stealth_scripts.js").to_string(),
         world_name: None,
         include_command_line_api: None,
@@ -115,6 +117,7 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
 
         let tab = browser
             .new_tab_with_options(CreateTarget {
+                for_tab: None,
                 url: url.to_string(),
                 width: Some(1366),
                 height: Some(768),
@@ -142,7 +145,7 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
         }
 
         log::debug!("{host}: sleeping for 2 seconds...");
-        sleep(Duration::from_secs(2));
+        sleep(Duration::from_secs(3));
 
         // in case the page hasn't been fully loaded yet;
         log::debug!("{host}: sleeping some more...");

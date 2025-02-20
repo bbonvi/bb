@@ -13,7 +13,7 @@ use homedir::my_home;
 use std::{
     collections::HashMap,
     sync::{mpsc, Arc, RwLock},
-    time::{SystemTime, UNIX_EPOCH},
+    time::SystemTime,
 };
 
 use super::{backend::*, errors::AppError};

@@ -1,15 +1,5 @@
 use crate::eid::Eid;
 
-const TEMPLATE: &str = r###"# URL (one line):
-{}
-# TITLE (one line, leave "-" to prevent auto-fill)
-{}
-# TAGS (one line, comma/space separated, leave "-" to prevent auto-fill)
-{}
-# DESCRIPTION (multi-line, leave "-" to prevent auto-fill)
-{}
-"###;
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EditorValue<T> {
     Set(T),
@@ -68,6 +58,10 @@ fn parse_editor_bookmark(input: &str) -> anyhow::Result<EditorBookmark> {
         if line.starts_with("# DESCRIPTION") {
             curr_line = CurrLine::Description;
             continue;
+        }
+
+        if line.starts_with("# CURRENT TAGS FOR REFERENCE") {
+            break;
         }
 
         if line.is_empty() {
@@ -146,6 +140,7 @@ pub struct EditorDefaults {
     pub tags: Option<String>,
     pub description: Option<String>,
     pub title: Option<String>,
+    pub current_tags: Vec<String>,
 }
 
 pub fn edit(opts: EditorDefaults) -> anyhow::Result<EditorBookmark> {
@@ -163,11 +158,24 @@ pub fn edit(opts: EditorDefaults) -> anyhow::Result<EditorBookmark> {
 {}
 # DESCRIPTION (multi-line, leave "-" to prevent auto-fill)
 {}
+
+
+
+
+
+
+
+
+
+
+# CURRENT TAGS FOR REFERENCE AND AUTOCOMPLETION (do not change this line)
+{}
 "###,
             opts.url.unwrap_or_default(),
             opts.title.unwrap_or_default(),
             opts.tags.unwrap_or_default(),
-            opts.description.unwrap_or_default()
+            opts.description.unwrap_or_default(),
+            opts.current_tags.join(" ")
         ),
     )
     .expect("error writing temp file");
@@ -235,6 +243,7 @@ pub mod tests {
 
         over
         here
+        # CURRENT TAGS FOR REFERENCE AND AUTOCOMPLETION (do not change this line)
         "###;
 
         let result = EditorBookmark {

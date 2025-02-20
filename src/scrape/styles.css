@@ -2,6 +2,9 @@
     filter: unset!important;
     backdrop-filter: unset!important;
 }
+#dialog {
+  display: none !important;
+}
 
 /* body * { */
 /*     background: red; */

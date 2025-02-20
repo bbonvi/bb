@@ -18,10 +18,22 @@ const MIN_ROW_HEIGHT = 450;
 
 const DEFAULT_COLUMNS = 4;
 
+// deterministic shuffle
+function shuffleArray(arr: any[], seed: number = 1) {
+    const array = [...arr];
+    let random = function() {
+        var x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+    };
+    array.sort(() => random() - 0.5);
+    return array;
+}
+
 function App() {
     const [total, setTotal] = useState<number>(-1);
     const [tags, setTags] = useState<string[]>([]);
     const [config, setConfig] = useState<Config>();
+    const [shuffleSeed, setShuffleSeed] = useState(Date.now());
 
     const updating = useRef(0);
 
@@ -35,12 +47,18 @@ function App() {
     const setEditingId = (idx: number) => dispatch(globalSlice.setEditing(idx))
 
     const [ignoreHidden, setIgnoreHidden] = useState(false);
+    const [shuffle, setShuffle] = useState(false);
 
     const [sizes, setSizes] = useState<{ [keyof: string]: number }>({});
     const [columns, setColumns] = useState(DEFAULT_COLUMNS);
     // const [focused, setFocused] = useState(-1);
 
     const [renderKey, _setRenderKey] = useState(0);
+
+    const bmarksShuffled = useMemo(() => shuffle ? shuffleArray(bmarks, shuffleSeed) : bmarks, [bmarks, shuffleSeed]);
+    useEffect(() => {
+        setShuffleSeed(Date.now());
+    }, [shuffle]);
 
     const rerenderList = () => {
         // setSizes(new Array(Math.ceil(bmarks.length / columns)).fill(MIN_ROW_HEIGHT));
@@ -690,6 +708,8 @@ function App() {
             <div className="dark:bg-gray-900 dark:text-gray-100 h-dvh overflow-hidden">
                 <Header
                     config={config}
+                    shuffle={shuffle}
+                    setShuffle={setShuffle}
                     tagList={tags}
                     tags={inputTags}
                     onRef={ref => headerRef.current = ref ?? undefined}
@@ -722,7 +742,7 @@ function App() {
                         gridRef={gridRef}
                         containerRef={containerRef.current}
                         columns={columns}
-                        bmarks={bmarks}
+                        bmarks={bmarksShuffled}
                         headerRef={headerRef.current}
                         focused={focused}
                         setEditingId={setEditingId}

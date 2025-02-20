@@ -292,7 +292,7 @@ function Bookmark(props: Props) {
                             width={417}
                             height={300}
                             alt={bmark.title}
-                            style={{ objectPosition: "0px 35%" }}
+                            style={{ objectPosition: "35% 0px" }}
                             className={"object-cover z-10 object-contain w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
                             src={bmark.image_id && !dragOverCover ? `/api/file/${bmark.image_id}` : BLANK_IMG}
                         />

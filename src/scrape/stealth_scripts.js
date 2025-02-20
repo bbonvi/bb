@@ -1,3 +1,5 @@
+// This file is a modified version of puppeteer stealth script from https://github.com/berstend/puppeteer-extra under MIT license.
+// LICENSE: https://github.com/berstend/puppeteer-extra/blob/master/LICENSE
 
 const utils = {}
 
@@ -865,6 +867,60 @@ applyScript(() => {
 });
 
 applyScript(() => {
+    const parseInput = arg => {
+        const [mime, codecStr] = arg.trim().split(';')
+        let codecs = []
+        if (codecStr && codecStr.includes('codecs="')) {
+            codecs = codecStr
+                .trim()
+                .replace(`codecs="`, '')
+                .replace(`"`, '')
+                .trim()
+                .split(',')
+                .filter(x => !!x)
+                .map(x => x.trim())
+        }
+        return {
+            mime,
+            codecStr,
+            codecs
+        }
+    };
+
+    const canPlayType = {
+        // Intercept certain requests
+        apply: function(target, ctx, args) {
+            if (!args || !args.length) {
+                return target.apply(ctx, args)
+            }
+            const { mime, codecs } = parseInput(args[0])
+            // This specific mp4 codec is missing in Chromium
+            if (mime === 'video/mp4') {
+                if (codecs.includes('avc1.42E01E')) {
+                    return 'probably'
+                }
+            }
+            // This mimetype is only supported if no codecs are specified
+            if (mime === 'audio/x-m4a' && !codecs.length) {
+                return 'maybe'
+            }
+
+            // This mimetype is only supported if no codecs are specified
+            if (mime === 'audio/aac' && !codecs.length) {
+                return 'probably'
+            }
+            // Everything else as usual
+            return target.apply(ctx, args)
+        }
+    };
+    utils.replaceWithProxy(
+        HTMLMediaElement.prototype,
+        'canPlayType',
+        canPlayType
+    )
+});
+
+applyScript(() => {
     const languages = ['en-US', 'en']
     utils.replaceGetterWithProxy(
         Object.getPrototypeOf(navigator),
@@ -922,6 +978,106 @@ applyScript(() => {
         'vendor',
         utils.makeHandler().getterValue('Google Inc.')
     )
+});
+
+applyScript(() => {
+    // Adds a contentWindow proxy to the provided iframe element
+    const addContentWindowProxy = iframe => {
+        const contentWindowProxy = {
+            get(target, key) {
+                // Now to the interesting part:
+                // We actually make this thing behave like a regular iframe window,
+                // by intercepting calls to e.g. `.self` and redirect it to the correct thing. :)
+                // That makes it possible for these assertions to be correct:
+                // iframe.contentWindow.self === window.top // must be false
+                if (key === 'self') {
+                    return this
+                }
+                // iframe.contentWindow.frameElement === iframe // must be true
+                if (key === 'frameElement') {
+                    return iframe
+                }
+                // Intercept iframe.contentWindow[0] to hide the property 0 added by the proxy.
+                if (key === '0') {
+                    return undefined
+                }
+                return Reflect.get(target, key)
+            }
+        }
+
+        if (!iframe.contentWindow) {
+            const proxy = new Proxy(window, contentWindowProxy)
+            Object.defineProperty(iframe, 'contentWindow', {
+                get() {
+                    return proxy
+                },
+                set(newValue) {
+                    return newValue // contentWindow is immutable
+                },
+                enumerable: true,
+                configurable: false
+            })
+        }
+    }
+
+    // Handles iframe element creation, augments `srcdoc` property so we can intercept further
+    const handleIframeCreation = (target, thisArg, args) => {
+        const iframe = target.apply(thisArg, args)
+
+        // We need to keep the originals around
+        const _iframe = iframe
+        const _srcdoc = _iframe.srcdoc
+
+        // Add hook for the srcdoc property
+        // We need to be very surgical here to not break other iframes by accident
+        Object.defineProperty(iframe, 'srcdoc', {
+            configurable: true, // Important, so we can reset this later
+            get: function() {
+                return _srcdoc
+            },
+            set: function(newValue) {
+                addContentWindowProxy(this)
+                // Reset property, the hook is only needed once
+                Object.defineProperty(iframe, 'srcdoc', {
+                    configurable: false,
+                    writable: false,
+                    value: _srcdoc
+                })
+                _iframe.srcdoc = newValue
+            }
+        })
+        return iframe
+    }
+
+    // Adds a hook to intercept iframe creation events
+    const addIframeCreationSniffer = () => {
+        /* global document */
+        const createElementHandler = {
+            // Make toString() native
+            get(target, key) {
+                return Reflect.get(target, key)
+            },
+            apply: function(target, thisArg, args) {
+                const isIframe =
+                    args && args.length && `${args[0]}`.toLowerCase() === 'iframe'
+                if (!isIframe) {
+                    // Everything as usual
+                    return target.apply(thisArg, args)
+                } else {
+                    return handleIframeCreation(target, thisArg, args)
+                }
+            }
+        }
+        // All this just due to iframes with srcdoc bug
+        utils.replaceWithProxy(
+            document,
+            'createElement',
+            createElementHandler
+        )
+    }
+
+    // Let's go
+    addIframeCreationSniffer()
 });
 
 applyScript(() => {

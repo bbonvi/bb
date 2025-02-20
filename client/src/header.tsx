@@ -32,6 +32,8 @@ interface HeaderProps {
 
     setIgnoreHidden: (val: boolean) => void;
     ignoreHidden: boolean;
+    setShuffle: (val: boolean) => void;
+    shuffle: boolean;
 }
 
 function Header(props: HeaderProps) {
@@ -210,6 +212,19 @@ function Header(props: HeaderProps) {
                             className={inputTextClassNames + " w-auto mr-2 text-left cursor-pointer"}
                         />
                         <label htmlFor="fetch-meta" className="w-full cursor-pointer">Show all</label>
+                    </div>
+                    <div className="text-gray-100 flex mr-2" title="Shuffle">
+                        <input
+                            onChange={e => props.setShuffle(!props.shuffle)}
+                            type="checkbox"
+                            id="shuffle"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            checked={props.shuffle}
+                            placeholder="Shuffle"
+                            className={inputTextClassNames + " w-auto mr-2 text-left cursor-pointer"}
+                        />
+                        <label htmlFor="shuffle" className="w-full cursor-pointer">Shuffle</label>
                     </div>
                 </div>
 

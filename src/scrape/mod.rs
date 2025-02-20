@@ -110,6 +110,71 @@ pub fn fetch_page_with_reqwest(url: &str) -> Option<ReqwestResult> {
     })
 }
 
+pub fn get_data_from_ddg(url: &str) -> Option<Metadata> {
+    let ddg_url = format!("https://lite.duckduckgo.com/lite/?q={url}");
+    match reqwest_with_retries(&ddg_url) {
+        Some((status, bytes)) => {
+            if !status.is_success() {
+                return None;
+            }
+
+            get_data_from_ddg_html(String::from_utf8_lossy(&bytes).to_string(), &ddg_url)
+        }
+        None => None,
+    }
+}
+
+pub fn get_data_from_ddg_html(resp_text: String, url: &str) -> Option<Metadata> {
+    let document = scraper::Html::parse_document(&resp_text);
+    let body_selector = scraper::Selector::parse("body").unwrap();
+
+    let title_selector = scraper::Selector::parse(".result-link").unwrap();
+    let description_selector = scraper::Selector::parse(".result-snippet").unwrap();
+
+    let mut description = None;
+    let mut title = None;
+    let mut icon_url = None;
+
+    let body = document.select(&body_selector).next().unwrap();
+    body.select(&title_selector).next().map(|heading_el| {
+        heading_el.text().next().map(|title_text| {
+            title = Some(title_text.to_string().trim().to_string());
+        })
+    });
+    body.select(&description_selector).next().map(|desc_el| {
+        desc_el.text().next().map(|desc_text| {
+            description = Some(desc_text.to_string().trim().to_string());
+        })
+    });
+
+    if icon_url.is_none() {
+        let url_parsed = reqwest::Url::parse(url).unwrap();
+        let host = url_parsed.host_str();
+
+        if let Some(host) = host {
+            icon_url = Some(format!(
+                "https://external-content.duckduckgo.com/ip3/{host}.ico"
+            ));
+        }
+    }
+
+    if title.is_none() {
+        return None;
+    }
+
+    Some(Metadata {
+        title,
+        description,
+        keywords: None,
+        canonical_url: None,
+        image_url: None,
+        icon_url,
+        image: None,
+        icon: None,
+        dump: None,
+    })
+}
+
 pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     let document = scraper::Html::parse_document(&resp_text);
     let head_selector = scraper::Selector::parse("head").unwrap();
