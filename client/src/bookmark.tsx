@@ -262,7 +262,7 @@ function Bookmark(props: Props) {
         onMouseLeave={(e) => {
             if (hover) setHover(false)
         }}
-        className="bmark-container relative text-wrap break-words"
+        className="bmark-container relative text-wrap break-words group"
         onDragExit={() => setDragStart(false)}
         onDragEnd={() => setDragStart(false)}
         onDragLeave={() => setDragStart(false)}
@@ -281,19 +281,26 @@ function Bookmark(props: Props) {
                     onDragEnter={onDragStartCover}
                     onDragOver={onDragStartCover}
                     onDrop={onDropCover}
-                    className={"relative " + (dragStart ? " bg-emerald-600 " : " ") + (dragOverCover ? " !bg-emerald-500	" : " ")}
+                    className={"relative overflow-hidden" + (dragStart ? " bg-emerald-600 " : " ") + (dragOverCover ? " !bg-emerald-500	" : " ")}
                 >
                     <a
                         target="_blank"
                         href={bmark.url}
-                        className="hover:opacity-90 relative"
+                        className="group-hover:opacity-90"
                     >
                         <img
                             width={417}
                             height={300}
                             alt={bmark.title}
-                            style={{ objectPosition: "35% 0px" }}
-                            className={"object-cover z-10 object-contain w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
+                            className={"object-cover absolute blur-none group-hover:blur-xl hidden group-hover:inline-block -z-10 scale-150 w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
+                            src={bmark.image_id && !dragOverCover ? `/api/file/${bmark.image_id}` : BLANK_IMG}
+                        />
+                        <img
+                            width={417}
+                            height={300}
+                            alt={bmark.title}
+                            style={{ objectPosition: "50% 30%" }}
+                            className={"object-cover group-hover:object-contain z-10 w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
                             src={bmark.image_id && !dragOverCover ? `/api/file/${bmark.image_id}` : BLANK_IMG}
                         />
                     </a>
