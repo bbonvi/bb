@@ -61,7 +61,7 @@ export function Settings(props: SettingsProps) {
 
     const [allBmarks, setAllBmarks] = useState<Bmark[]>([]);
 
-    const [relatedTagsUpdateKey, _updateRelatedTags] = useState(Math.random());
+    const [relatedTagsUpdateKey, _updateRelatedTags] = useState(0);
     function updateRelatedTags() {
         _updateRelatedTags(Math.random());
     }
@@ -193,7 +193,9 @@ export function Settings(props: SettingsProps) {
     useEffect(() => {
         api.fetchBmarks({ descending: true }).then(bmarks => {
             setLoading(false);
-            setAllBmarks(bmarks);
+            if (relatedTagsUpdateKey > 0) {
+                setAllBmarks(bmarks);
+            }
         });
     }, [relatedTagsUpdateKey]);
 
