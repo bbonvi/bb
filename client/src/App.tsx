@@ -6,13 +6,15 @@ import { areEqual, VariableSizeGrid as Grid } from 'react-window';
 import Header from './header';
 import Bookmark, { CreateBookmark } from './bookmark';
 import toast, { Toaster } from 'react-hot-toast';
-import { findRunningTask, isModKey } from './helpers';
+import { deepClone, findRunningTask, isModKey, useLocalStorage } from './helpers';
 import { useDispatch, useSelector } from 'react-redux';
 import * as taskQueueSlice from './store/taskQueueSlice';
 import * as bmarksSlice from './store/bmarksSlice';
 import * as globalSlice from './store/globalSlice';
 import store, { RootState } from './store';
 import isEqual from 'lodash.isequal';
+import Settings, { SettingsState } from './settings';
+import { defaultWorkspace, WorkspaceState } from './workspaces';
 
 const MIN_ROW_HEIGHT = 450;
 
@@ -33,6 +35,16 @@ function App() {
     const [total, setTotal] = useState<number>(-1);
     const [tags, setTags] = useState<string[]>([]);
     const [config, setConfig] = useState<Config>();
+
+    const [settings, _saveSettings] = useLocalStorage<SettingsState>("settings", {
+        workspaceState: { workspaces: [defaultWorkspace()], currentWorkspace: 0 },
+    });
+
+    function saveSettings(settings: SettingsState) {
+        _saveSettings(settings);
+        setSettingsUpdated(Date.now());
+    }
+
     const [shuffleSeed, setShuffleSeed] = useState(Date.now());
 
     const updating = useRef(0);
@@ -49,34 +61,41 @@ function App() {
     const [ignoreHidden, setIgnoreHidden] = useState(false);
     const [shuffle, setShuffle] = useState(false);
 
-    const [sizes, setSizes] = useState<{ [keyof: string]: number }>({});
     const [columns, setColumns] = useState(DEFAULT_COLUMNS);
-    // const [focused, setFocused] = useState(-1);
 
     const [renderKey, _setRenderKey] = useState(0);
+    const [settingsUpdated, setSettingsUpdated] = useState(Date.now());
 
-    const bmarksShuffled = useMemo(() => shuffle ? shuffleArray(bmarks, shuffleSeed) : bmarks, [bmarks, shuffleSeed]);
+    const bmarksShuffled = useMemo(() => {
+        let bookmarks = excludeHiddenTags(bmarks);
+        if (shuffle) {
+            bookmarks = shuffleArray(bookmarks, shuffleSeed);
+        }
+
+        return bookmarks;
+    }, [bmarks, shuffleSeed, settingsUpdated, settings.workspaceState.currentWorkspace]);
+
     useEffect(() => {
         setShuffleSeed(Date.now());
     }, [shuffle]);
 
     const rerenderList = () => {
-        // setSizes(new Array(Math.ceil(bmarks.length / columns)).fill(MIN_ROW_HEIGHT));
         _setRenderKey(Date.now())
     };
 
-    const hiddenByDefault: string[] = useMemo(() => {
-        if (ignoreHidden) {
-            return []
-        }
-
-        return config?.hidden_by_default ?? [];
-
-    }, [ignoreHidden, config]);
+    // const hiddenByDefault: string[] = useMemo(() => {
+    //     if (ignoreHidden) {
+    //         return []
+    //     }
+    //
+    //     return settings.hiddenTags;
+    //
+    // }, [ignoreHidden, config, settings.hiddenTags, bmarks]);
 
 
     const [loaded, setLoaded] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
 
     const [showAll, setShowAll] = useState(false);
 
@@ -167,13 +186,6 @@ function App() {
         return cols;
     }
 
-    async function hasBmarksChanged(bmarksList: Bmark[]) {
-    }
-
-    // async function handleBmarks(
-    //     bmarksList: Bmark[],
-    // )
-
     const getBmarks = async (props: {
         ignoreHiddenTags: boolean,
         tags: string,
@@ -193,14 +205,6 @@ function App() {
             return []
         }
 
-
-        if (!props.ignoreHiddenTags) {
-            hiddenByDefault.forEach(ht => {
-                if (!tagsFetch.find(t => ht === t || t.includes(ht + "/"))) {
-                    tagsFetch.push("-" + ht)
-                }
-            });
-        }
 
         return api.fetchBmarks({
             tags: tagsFetch.join(","),
@@ -244,13 +248,13 @@ function App() {
 
                 const tagsFetch = formRefs.current.inputTags.trim().replaceAll(" ", ",").split(",");
 
-                if (!ignoreHidden) {
-                    hiddenByDefault.forEach(ht => {
-                        if (!tagsFetch.find(t => ht === t || t.includes(ht + "/"))) {
-                            tagsFetch.push("-" + ht)
-                        }
-                    });
-                }
+                // if (!ignoreHidden) {
+                //     hiddenByDefault.forEach(ht => {
+                //         if (!tagsFetch.find(t => ht === t || t.includes(ht + "/"))) {
+                //             tagsFetch.push("-" + ht)
+                //         }
+                //     });
+                // }
 
                 return api.fetchBmarks({
                     tags: tagsFetch.join(","),
@@ -299,9 +303,16 @@ function App() {
         })
     }
 
-    useEffect(() => {
-        // refreshBmarks({ disableEditing: true, notify: false, resetSizes: false, scrollToTop: true });
-    }, [hiddenByDefault]);
+    function updateBmarksIfNeeded(bmarks: Bmark[]) {
+        // const excluded = excludeHiddenTags(bmarks);
+        const excluded = bmarks;
+        if (!isEqual(store.getState().bmarks.value, excluded)) {
+            dispatch(bmarksSlice.updateAll(excluded))
+            return true
+        }
+
+        return false
+    }
 
     const refreshBmarks = () => getBmarks({
         ignoreHiddenTags: ignoreHidden,
@@ -310,14 +321,23 @@ function App() {
         description: inputDescription,
         url: inputUrl,
     })
-        .then(bmarks => {
-            if (!isEqual(store.getState().bmarks.value, bmarks)) {
-                dispatch(bmarksSlice.updateAll(bmarks))
-                return true
-            }
+        .then(updateBmarksIfNeeded);
 
-            return false
-        });
+    function excludeHiddenTags(bmarks: Bmark[]) {
+        const currentWorkspace = settings.workspaceState.workspaces[settings.workspaceState.currentWorkspace];
+        const { blacklist, whitelist } = currentWorkspace.tags;
+
+        if (whitelist.length > 0) {
+            return bmarks.filter(bmark => bmark.tags.some(t => whitelist.find(wt => t === wt))).filter(bmark => {
+                return !bmark.tags.some(t => blacklist.find(wt => t === wt))
+            })
+        }
+
+        return bmarks
+            .filter(bmark => {
+                return !bmark.tags.some(t => blacklist.find(wt => t === wt))
+            })
+    }
 
     const refreshAll = async () => {
         return Promise.all([
@@ -329,7 +349,7 @@ function App() {
                 description: inputDescription,
                 url: inputUrl,
             })
-                .then(bmarks => !isEqual(store.getState().bmarks.value, bmarks) ? dispatch(bmarksSlice.updateAll(bmarks)) : null),
+                .then(updateBmarksIfNeeded),
 
             // refresh config
             api.fetchConfig()
@@ -378,7 +398,7 @@ function App() {
         return () => {
             clearInterval(timerId)
         }
-    }, [inputTags, inputTitle, inputUrl, inputDescription, ignoreHidden]);
+    }, [inputTags, inputTitle, inputUrl, inputDescription, ignoreHidden, settingsUpdated]);
 
     async function refreshTaskQueue(): Promise<boolean> {
         const tasks = await api.fetchTaskQueue();
@@ -427,6 +447,10 @@ function App() {
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
+            if (showSettings) {
+                return
+            }
+
             // defocus inputs
             if (
                 document.activeElement?.tagName === "INPUT"
@@ -490,7 +514,6 @@ function App() {
                 if (creating) {
                     setCreating(false);
                     setPastedUrl(undefined);
-
                 }
             }
 
@@ -553,6 +576,10 @@ function App() {
         }
 
         const onPaste = (e: any) => {
+            if (showSettings) {
+                return
+            }
+
             try {
                 const text = e.clipboardData.getData('text');
                 const url = new URL(text);
@@ -565,17 +592,16 @@ function App() {
                 ) {
                     return
                 }
-                if (creating || editingId) {
+                if (creating || editingId >= 0) {
                     return
                 }
 
                 e.preventDefault();
-                setPastedUrl(url.toString());
                 setEditingId(-1);
+                setPastedUrl(url.toString());
                 setCreating(true);
             } catch (_) {
                 setPastedUrl(undefined);
-                // pass
             }
         };
 
@@ -587,7 +613,7 @@ function App() {
             document.removeEventListener("keydown", onKeyDown);
             window.removeEventListener('paste', onPaste);
         }
-    }, [focused, bmarks, editingId, columns, creating]);
+    }, [focused, bmarks, editingId, columns, creating, showSettings]);
 
     const handleDelete = (id: number) => {
         const currTask = findRunningTask(id)
@@ -694,6 +720,17 @@ function App() {
 
     return (
         <>
+            {showSettings && !creating && <div
+                onClick={e => {
+                    e.preventDefault();
+                    setShowSettings(false);
+                }}
+                className="fixed z-50 cursor-pointer motion-safe:backdrop-blur-xl bg-gray-900/40 top-0 left-0 right-0 bottom-0"
+            >
+                <div onClick={e => e.stopPropagation()} className="m-auto z-50 w-full max-w-screen-lg cursor-auto py-2 h-full">
+                    <Settings settings={settings} onSave={(settings) => saveSettings(settings)} tags={tags} />
+                </div>
+            </div>}
             {creating && <div
                 onClick={e => {
                     e.preventDefault();
@@ -702,11 +739,21 @@ function App() {
                 className="fixed z-50 cursor-pointer motion-safe:backdrop-blur-xl bg-gray-900/40 top-0 left-0 right-0 bottom-0 flex"
             >
                 <div onClick={e => e.stopPropagation()} className="m-auto z-50 h-auto w-full max-h-screen max-w-screen-lg">
-                    <CreateBookmark hiddenByDefault={hiddenByDefault} config={config} tagList={tags} className="shadow-[0_0px_50px_0px_rgba(0,0,0,0.3)]" defaultUrl={pastedUrl} onCreate={onCreate} />
+                    <CreateBookmark
+                        handleKeyDown={!showSettings}
+                        config={config}
+                        tagList={tags}
+                        className="shadow-[0_0px_50px_0px_rgba(0,0,0,0.3)]"
+                        defaultUrl={pastedUrl}
+                        onCreate={onCreate}
+                    />
                 </div>
             </div>}
             <div className="dark:bg-gray-900 dark:text-gray-100 h-dvh overflow-hidden">
                 <Header
+                    settings={deepClone(settings)}
+                    onSaveSettings={saveSettings}
+                    openSettings={() => setShowSettings(true)}
                     config={config}
                     shuffle={shuffle}
                     setShuffle={setShuffle}
@@ -714,7 +761,6 @@ function App() {
                     tags={inputTags}
                     onRef={ref => headerRef.current = ref ?? undefined}
                     onTags={setInputTags}
-                    hiddenByDefault={hiddenByDefault}
                     setIgnoreHidden={setIgnoreHidden}
                     ignoreHidden={ignoreHidden}
                     title={inputTitle}

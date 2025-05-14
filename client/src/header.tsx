@@ -3,6 +3,7 @@ import { Config } from "./api";
 import Button from "./button";
 import { TagInput } from "./components";
 import AutosizeInput from 'react-input-autosize';
+import { SettingsState } from "./settings";
 
 interface HeaderProps {
     tags: string;
@@ -28,17 +29,27 @@ interface HeaderProps {
     onNewBookmark: () => void;
 
     config: Config;
-    hiddenByDefault: string[];
 
     setIgnoreHidden: (val: boolean) => void;
     ignoreHidden: boolean;
     setShuffle: (val: boolean) => void;
     shuffle: boolean;
+
+    openSettings: () => void;
+    settings: SettingsState;
+    onSaveSettings: (settings: SettingsState) => void;
 }
 
 function Header(props: HeaderProps) {
     const [loaded, setLoaded] = useState(false);
     const [saveQueries, _setSaveQuries] = useState(localStorage["saveQueries"] === "true");
+
+    let [currWorkspace, setCurrWorkspace] = useState(props.settings.workspaceState.currentWorkspace);
+
+    useEffect(() => {
+        setCurrWorkspace(currWorkspace);
+    }, [props.settings.workspaceState.currentWorkspace]);
+
     const setSaveQuries = (val: boolean) => {
         _setSaveQuries(val);
         localStorage["saveQueries"] = JSON.stringify(val)
@@ -131,6 +142,24 @@ function Header(props: HeaderProps) {
         return <div />
     }
 
+    function setWorkspace(idx: number) {
+        props.settings.workspaceState.currentWorkspace = idx;
+    }
+
+    function saveSettings() {
+        props.onSaveSettings(props.settings);
+    }
+
+    function excludedHiddenTags(tags: string[]) {
+        const workspace = props.settings.workspaceState.workspaces[props.settings.workspaceState.currentWorkspace];
+
+        if (workspace.tags.whitelist.length) {
+            return tags.filter(tag => workspace.tags.whitelist.includes(tag))
+        }
+
+        return tags.filter(tag => !workspace.tags.blacklist.includes(tag))
+    }
+
     return <div
         ref={ref => props.onRef(ref)}
         className="header top-0 left-0 right-0 fixed z-40 bg-gray-900 motion-safe:bg-gray-900/80 motion-safe:backdrop-blur-2xl p-5 shadow-lg flex flex-wrap gap-2"
@@ -139,9 +168,9 @@ function Header(props: HeaderProps) {
             isSearch
             listenEvent
             autoSize
-            hiddenTags={props.hiddenByDefault}
+            excludeDirectMatch
             onValue={(value) => onTags(value.join(" "))}
-            tagList={props.tagList}
+            tagList={excludedHiddenTags(props.tagList)}
             defaultValue={props.tags}
             className="bg-gray-800/60 hover:bg-gray-800/90 focus:bg-gray-600/60 tag-search"
         />
@@ -175,6 +204,19 @@ function Header(props: HeaderProps) {
             className="!flex"
             inputClassName={inputTextClassNames + "auto-size"}
         />
+        <div className="flex">
+            <select
+                className="transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-2 max-w-64 border-none h-full"
+                value={currWorkspace}
+                onChange={e => {
+                    setCurrWorkspace(parseInt(e.currentTarget.value));
+                    setWorkspace(parseInt(e.currentTarget.value));
+                    saveSettings();
+                }}
+            >
+                {props.settings.workspaceState.workspaces.map((ws, idx) => <option key={idx} value={idx}>{ws.name}</option>)}
+            </select>
+        </div>
         {/*<span
             contentEditable
             onInput={e => onDescription(e.currentTarget.textContent ?? "")}
@@ -186,7 +228,7 @@ function Header(props: HeaderProps) {
         <div className="text-sm flex"><Button onClick={() => props.onNewBookmark()} className="my-auto font-bold bg-green-600 hover:bg-green-700  px-3 py-1">New</Button></div>
         <div className="ml-auto text-sm flex">
             <div className="flex align-sub my-auto">
-                <div className="text-gray-100 flex mr-2" style={{ flexDirection: "column" }}>
+                <div className="text-gray-100 flex mr-2 gap-1" style={{ flexDirection: "column" }}>
                     <div className="text-gray-100 flex mr-2" title="Auto save search queries in url">
                         <input
                             id="save-queries"
@@ -200,19 +242,7 @@ function Header(props: HeaderProps) {
                         />
                         <label htmlFor="save-queries" className="w-full cursor-pointer">Save queries</label>
                     </div>
-                    <div className="text-gray-100 flex mr-2" title="Ignore hidden tags">
-                        <input
-                            id="fetch-meta"
-                            onChange={e => props.setIgnoreHidden(!props.ignoreHidden)}
-                            type="checkbox"
-                            autoComplete="off"
-                            autoCorrect="off"
-                            checked={props.ignoreHidden}
-                            placeholder="Tags"
-                            className={inputTextClassNames + " w-auto mr-2 text-left cursor-pointer"}
-                        />
-                        <label htmlFor="fetch-meta" className="w-full cursor-pointer">Show all</label>
-                    </div>
+
                     <div className="text-gray-100 flex mr-2" title="Shuffle">
                         <input
                             onChange={e => props.setShuffle(!props.shuffle)}
@@ -228,10 +258,16 @@ function Header(props: HeaderProps) {
                     </div>
                 </div>
 
-                <div className="text-gray-100 flex mr-2">
-                    <div className="my-auto"><Button onClick={() => props.onColumns(Math.max(1, props.columns - 1))} >-</Button></div>
-                    <div className="mx-1 my-auto">{props.columns}</div>
-                    <div className="my-auto"><Button onClick={() => props.onColumns(Math.min(12, props.columns + 1))}>+</Button></div>
+                <div className="flex flex-col gap-2 justify-center">
+                    <div className="text-gray-100 flex mx-auto">
+                        <div className="my-auto"><Button onClick={() => props.onColumns(Math.max(1, props.columns - 1))} >-</Button></div>
+                        <div className="mx-1 my-auto">{props.columns}</div>
+                        <div className="my-auto"><Button onClick={() => props.onColumns(Math.min(12, props.columns + 1))}>+</Button></div>
+                    </div>
+                    <Button
+                        className="px-4 py-1 font-bold bg-sky-500 hover:bg-sky-700 text-gray-100"
+                        onClick={e => props.openSettings()}
+                    >Settings</Button>
                 </div>
             </div>
 

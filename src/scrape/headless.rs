@@ -123,7 +123,7 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
                 height: Some(768),
                 browser_context_id: None,
                 enable_begin_frame_control: None,
-                new_window: None,
+                new_window: Some(true),
                 background: None,
             })
             .unwrap();

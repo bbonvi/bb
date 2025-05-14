@@ -5,13 +5,14 @@ interface Props {
     onClick?: (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
     children?: ReactElement<any, JSXElementConstructor<any>> | string | undefined
     className?: string;
+    disabled?: boolean;
 }
 
 const Button = (props: Props) => {
     const className = props.className ?? "";
     return <button
         onClick={props?.onClick}
-        className={"transition-all bg-gray-600 hover:bg-gray-700 shadow-sm hover:shadow-inner rounded px-2 " + className}
+        className={"transition-all bg-gray-600 hover:bg-gray-700 shadow-sm hover:shadow-inner rounded px-2 disabled:bg-gray-500 disabled:text-gray-400 disabled:cursor-not-allowed " + className} disabled={props.disabled}
     >
         {props.children}
     </button>

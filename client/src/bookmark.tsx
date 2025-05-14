@@ -271,7 +271,7 @@ function Bookmark(props: Props) {
     >
         <div
             style={{ height: "calc(100% - 0.5rem)" }}
-            className={`my-2 mx-1 ${props.focused ? 'bg-gray-600' : 'bg-gray-800'} h-auto overflow-auto rounded-lg overflow-hidden`}
+            className={`my-2 mx-1 ${props.focused ? 'bg-gray-600' : 'bg-gray-800'} h-auto rounded-lg overflow-hidden`}
         >
             <div ref={ref => innerContainer.current = ref}>
                 <div
@@ -315,7 +315,6 @@ function Bookmark(props: Props) {
                     {!editing && <div className="text-xs font-bold text-gray-300"><Tags tags={props.bmark.tags} /></div>}
                     {editing && <TagInput
                         onKeyDown={onKeyDown}
-                        hiddenTags={props.config.hidden_by_default}
                         onValue={value => setForm({ ...form, tags: value })}
                         autoFocus
                         tagList={props.tagList}
@@ -448,8 +447,9 @@ interface CreateBookmarkProps {
 
     className?: string;
     config: Config;
-    hiddenByDefault: string[];
     tagList: string[];
+
+    handleKeyDown: boolean;
 }
 
 export function CreateBookmark(props: CreateBookmarkProps) {
@@ -465,6 +465,9 @@ export function CreateBookmark(props: CreateBookmarkProps) {
     const inputStyle = "transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-2 text-gray-100";
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (!props.handleKeyDown) {
+            return
+        }
         if (e.key === "Enter" && !isModKey(e)) {
             e.preventDefault();
             onCreate();
@@ -515,7 +518,6 @@ export function CreateBookmark(props: CreateBookmarkProps) {
                 {/* tags */}
 
                 <TagInput
-                    hiddenTags={props.hiddenByDefault}
                     onValue={setTags}
                     tagList={props.tagList}
                     defaultValue={tags.join(",")}

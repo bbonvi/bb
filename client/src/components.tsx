@@ -9,9 +9,12 @@ export function TagInput(props: {
     onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
     onValue?: (e: string[]) => void;
     defaultValue?: string;
+    disabled?: boolean;
+    single?: boolean;
+    excludeDirectMatch?: boolean;
+    id?: string;
 
     tagList: string[];
-    hiddenTags: string[];
     tagListRequested?: () => void;
     autoFocus?: boolean;
 
@@ -33,7 +36,7 @@ export function TagInput(props: {
         isSearch = false,
     } = props;
 
-    const className = "transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-2 text-gray-100 max-w-96 w-full " + (props.className ?? "");
+    const className = "transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-2 max-w-64 " + (props.className ?? "");
 
     useEffect(() => {
         props.onValue?.(value.split(" "))
@@ -62,6 +65,11 @@ export function TagInput(props: {
             }
 
             let valueNew = (value + " " + tag);
+
+            if (props.single) {
+                valueNew = valueNew.replaceAll(" ", "");
+            }
+
             setValue(valueNew);
             setSearchIdx(0);
         };
@@ -82,7 +90,11 @@ export function TagInput(props: {
 
     const onInput = (e: React.FormEvent<HTMLInputElement>) => {
         const v = e.currentTarget.value.replace(/[,]{2,}/g, " ").replaceAll(",", " ").replace(/[/]{2,}/g, "/").replace(/[^\p{L}\p{N} /-]+/ug, "");
-        setValue(v);
+        if (props.single) {
+            setValue(v.split(" ")[0] || "");
+        } else {
+            setValue(v);
+        }
         setSearchIdx(0);
     }
 
@@ -117,14 +129,6 @@ export function TagInput(props: {
         }
 
         const visibleTags: string[] = [];
-        const hiddenTags = props.hiddenTags?.map(t => negTag ? "-" + t : t);
-        tagInputList.forEach(t => {
-
-            let visibleTag = hiddenTags.find(ht => ht === t || t.includes(ht + "/"))
-            if (visibleTag) {
-                visibleTags.push(visibleTag);
-            }
-        })
 
         return props.tagList.map(tag => {
             if (negTag) {
@@ -138,19 +142,6 @@ export function TagInput(props: {
                 return
             }
 
-
-            // hide hidden tags but show them if they're referenced in the input
-            if (
-                hiddenTags.find(ht => t == ht || t.includes(ht + "/"))
-                && !visibleTags.find(vt => t == vt || t.includes(vt + "/"))
-            ) {
-                return false
-            }
-            if (t.includes("servi")) {
-                console.log(t, currWord)
-                console.log(t, currWordClean as string)
-            }
-
             return t.includes(currWordClean as string);
         })
     }, [value]);
@@ -159,6 +150,8 @@ export function TagInput(props: {
 
     const listHeight = (rect?.height ?? 0);
     const listWidth = ((rect?.width ?? 0));
+    const listTop = (rect?.top ?? 0) + listHeight + 10
+    const listLeft = (rect?.left ?? 0);
 
     const paste = (tag: string, wordIdx: number) => {
         const tagList = value.split(" ");
@@ -167,6 +160,10 @@ export function TagInput(props: {
         }
 
         tagList[wordIdx] = tag.trim() + " ";
+        if (props.single) {
+            tagList[wordIdx] = tagList[wordIdx].trim()
+        }
+
         const position = [...tagList.slice(0, wordIdx), tagList[wordIdx]].join(" ").length;
 
         setValue(tagList.join(" "));
@@ -197,7 +194,7 @@ export function TagInput(props: {
             setSearchIdx((searchIdx - 1) < 0 ? Math.min((tagsFiltered?.length ?? (MAX_TAGS_AUTOCOMPLETE - 1)) - 1, (MAX_TAGS_AUTOCOMPLETE - 1)) : searchIdx - 1)
         }
 
-        if (e.key === "Tab" || e.key === "Enter") {
+        if (e.key === "Tab") {
             const [currWord, currWordIdx] = currTypingWord();
 
             if (currWord) {
@@ -227,10 +224,10 @@ export function TagInput(props: {
         setFocus(false);
     }
 
-    return <div className="relative !flex">
+    return <div className="flex">
         {isDirty && focus && tagsFiltered && <div
-            style={{ flexDirection: "column", top: listHeight, width: listWidth }}
-            className="absolute rounded-md z-50 flex bg-gray-600 w-40 overflow-hidden"
+            style={{ width: listWidth, top: listTop, left: listLeft }}
+            className="flex flex-col fixed rounded-md z-50 bg-gray-600 w-40 overflow-hidden"
         >
             {tagsFiltered.slice(0, MAX_TAGS_AUTOCOMPLETE).map((tag, idx) => {
                 const focused = searchIdx === idx;
@@ -244,9 +241,11 @@ export function TagInput(props: {
         </div>}
 
         {props.autoSize && <AutosizeInput
+            id={props.id}
             onKeyDown={onKeyDown}
             onFocus={onFocus}
             onBlur={onBlur}
+            disabled={props.disabled}
             onInput={onInput}
             inputRef={ref => el.current = ref}
             type="text"
@@ -255,13 +254,15 @@ export function TagInput(props: {
             value={value.replace(/[,]{2,}/g, " ").replace(/[/]{2,}/g, "/").replace(/[^\p{L}\p{N} /-]+/ug, "")}
             placeholderIsMinWidth
             extraWidth={15}
-            placeholder="Tags"
+            placeholder={props.single ? "Tag" : "Tags"}
             className="!flex"
             inputClassName={className + " auto-size"}
             autoFocus={props.autoFocus ?? false}
         />}
         {!props.autoSize && <input
+            id={props.id}
             onKeyDown={onKeyDown}
+            disabled={props.disabled}
             onFocus={onFocus}
             onBlur={onBlur}
             onInput={onInput}
@@ -270,7 +271,7 @@ export function TagInput(props: {
             autoComplete="off"
             autoCorrect="off"
             value={value.replace(/[,]{2,}/g, " ").replace(/[/]{2,}/g, "/").replace(/[^\p{L}\p{N} /-]+/ug, "")}
-            placeholder="Tags"
+            placeholder={props.single ? "Tag" : "Tags"}
             className={className}
             autoFocus={props.autoFocus ?? false}
         />}
