@@ -432,6 +432,7 @@ export function Settings(props: SettingsProps) {
                     onChange={e => {
                         const file = e.currentTarget.files?.item(0);
                         if (!file) {
+                            toast.error("No file selected");
                             return
                         }
                         const reader = new FileReader();
@@ -440,7 +441,7 @@ export function Settings(props: SettingsProps) {
                                 const settings = JSON.parse(e.target?.result as string);
                                 if (settings.workspaceState) {
                                     setSettings(settings);
-                                    onSave();
+                                    onSave(settings);
                                 } else {
                                     toast.error("Invalid settings.json file");
                                 }
