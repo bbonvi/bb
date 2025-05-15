@@ -1,8 +1,11 @@
+use std::sync::RwLock;
+
 use anyhow::bail;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
+use std::sync::Arc;
 
-use crate::{bookmarks, web::TotalResponse};
+use crate::{bookmarks, config::Config, web::TotalResponse};
 
 use super::{backend::*, errors::AppError};
 
@@ -18,6 +21,18 @@ impl AppRemote {
         AppRemote {
             remote_addr,
             basic_auth,
+        }
+    }
+
+    fn get(&self, url: &str) -> reqwest::blocking::RequestBuilder {
+        log::info!("{}{}", self.remote_addr, url);
+        let url = format!("{}{}", self.remote_addr, url);
+
+        match self.basic_auth.clone() {
+            Some((username, password)) => reqwest::blocking::Client::new()
+                .get(&url)
+                .basic_auth(username, password),
+            None => reqwest::blocking::Client::new().get(&url),
         }
     }
 
@@ -74,6 +89,15 @@ where
 }
 
 impl AppBackend for AppRemote {
+    fn config(&self) -> anyhow::Result<Arc<RwLock<Config>>, AppError> {
+        let resp = self.get("/api/config").send()?;
+        Ok(handle_response::<Config>(resp).map(|c| Arc::new(RwLock::new(c)))?)
+    }
+    fn update_config(&self, config: Config) -> anyhow::Result<(), AppError> {
+        let resp = self.post("/api/config").json(&config).send()?;
+
+        Ok(handle_response(resp)?)
+    }
     fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
         let resp = self
             .post("/api/bookmarks/refresh_metadata")

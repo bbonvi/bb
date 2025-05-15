@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, RwLock};
 
-use crate::{bookmarks, metadata::MetaOptions};
+use crate::{bookmarks, config::Config, metadata::MetaOptions};
 
 use super::errors::AppError;
 
@@ -36,6 +37,9 @@ pub trait AppBackend: Send + Sync {
         &self,
         query: bookmarks::SearchQuery,
     ) -> anyhow::Result<Vec<bookmarks::Bookmark>, AppError>;
+
+    fn config(&self) -> anyhow::Result<Arc<RwLock<Config>>, AppError>;
+    fn update_config(&self, config: Config) -> anyhow::Result<(), AppError>;
 }
 
 #[derive(Debug, Clone, Default)]

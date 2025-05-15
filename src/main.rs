@@ -87,15 +87,12 @@ fn main() -> anyhow::Result<()> {
     let args = cli::Args::parse();
 
     let app_local = || {
-        let config = Arc::new(RwLock::new(Config::load_with(&base_path)));
         let storage_mgr = storage::BackendLocal::new(&uploads_path);
-        (
-            app::AppLocal::new(config.clone(), &bookmarks_path, storage_mgr),
-            config,
-        )
+        let config = Arc::new(RwLock::new(Config::load_with(&base_path)));
+        app::AppLocal::new(config.clone(), &bookmarks_path, storage_mgr)
     };
 
-    let app_mgr = || -> (Box<dyn AppBackend>, Arc<RwLock<Config>>) {
+    let app_mgr = || -> Box<dyn AppBackend> {
         if let Ok(backend_addr) = std::env::var("BB_ADDR") {
             let basic_auth = match std::env::var("BB_BASIC_AUTH") {
                 Ok(ba) => {
@@ -111,22 +108,15 @@ fn main() -> anyhow::Result<()> {
                 Err(_) => None,
             };
 
-            let config = Arc::new(RwLock::new(Config::load_with(&base_path)));
-            (
-                Box::new(app::AppRemote::new(&backend_addr, basic_auth)),
-                config,
-            )
+            Box::new(app::AppRemote::new(&backend_addr, basic_auth))
         } else {
             let config = Arc::new(RwLock::new(Config::load_with(&base_path)));
             let storage_mgr = storage::BackendLocal::new(&uploads_path);
-            (
-                Box::new(app::AppLocal::new(
-                    config.clone(),
-                    &bookmarks_path,
-                    storage_mgr,
-                )),
-                config,
-            )
+            Box::new(app::AppLocal::new(
+                config.clone(),
+                &bookmarks_path,
+                storage_mgr,
+            ))
         }
     };
 
@@ -145,7 +135,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         cli::Command::Daemon { .. } => {
-            let (mut app_mgr, _) = app_local();
+            let mut app_mgr = app_local();
 
             #[cfg(feature = "headless")]
             scrape::headless::test_launch();
@@ -165,7 +155,7 @@ fn main() -> anyhow::Result<()> {
             count,
             action,
         } => {
-            let (app_mgr, _) = app_mgr();
+            let app_mgr = app_mgr();
 
             handle_search(
                 url,
@@ -194,10 +184,12 @@ fn main() -> anyhow::Result<()> {
                 },
             ..
         } => {
-            let (app_mgr, config) = app_mgr();
+            let app_mgr = app_mgr();
 
-            let c = config.read().unwrap();
+            let config = app_mgr.config();
+            let c = config.unwrap().clone();
 
+            let conf = c.read().unwrap();
             handle_add(
                 use_editor,
                 url,
@@ -209,7 +201,7 @@ fn main() -> anyhow::Result<()> {
                 no_meta,
                 async_meta,
                 app_mgr,
-                c.clone(),
+                conf.clone(),
             )
         }
         cli::Command::Meta {
@@ -224,11 +216,11 @@ fn main() -> anyhow::Result<()> {
         } => handle_meta(url, no_https_upgrade, no_headless),
 
         cli::Command::Rule { action } => {
-            let (_, config) = app_mgr();
+            let config = app_mgr().config()?;
 
-            let mut config = config.write().unwrap();
+            let mut conf = config.write().unwrap();
 
-            handle_rule(action, &mut config)
+            handle_rule(action, &mut conf)
         }
     }
 }
@@ -407,7 +399,10 @@ fn handle_add(
             current_tags,
         };
 
-        let rules = config.rules.clone();
+        let config = app_mgr.config();
+        let config = config?.read().unwrap();
+        let rules = &config.rules;
+
         if let Some(u) = url {
             for rule in rules.iter() {
                 // recreating query because it could've been changed by previous rule
@@ -462,10 +457,8 @@ fn handle_add(
         if let editor::EditorValue::Set(value) = editor_bmark.tags {
             tags = Some(value)
         }
-    } else {
-        if url.is_none() {
-            anyhow::bail!("url cannot be empty");
-        }
+    } else if url.is_none() {
+        anyhow::bail!("url cannot be empty");
     }
 
     let url = url.unwrap_or_default();

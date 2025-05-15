@@ -118,6 +118,16 @@ impl AppLocal {
 }
 
 impl AppBackend for AppLocal {
+    fn update_config(&self, config: Config) -> anyhow::Result<(), AppError> {
+        *self.config.write().unwrap() = config;
+        self.config().write().unwrap().save();
+        Ok(())
+    }
+
+    fn config(&self) -> anyhow::Result<Arc<RwLock<Config>>, AppError> {
+        Ok(self.config.clone())
+    }
+
     fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
         let bmarks = self.bmark_mgr.search(bookmarks::SearchQuery {
             id: Some(id),
