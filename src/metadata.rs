@@ -56,7 +56,9 @@ pub fn fetch_meta(url: &str, opts: MetaOptions) -> anyhow::Result<Metadata> {
                         meta.image = Some(bytes);
                     }
                 }
-            } else if !opts.no_headless {
+            }
+
+            if meta.image.is_none() && !opts.no_headless {
                 log::debug!("cover not found, taking screencapture");
 
                 #[cfg(feature = "headless")]
