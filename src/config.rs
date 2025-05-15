@@ -55,13 +55,13 @@ impl Config {
     }
 
     pub fn load_with(base_path: &str) -> Self {
-        let store = storage::BackendLocal::new(&base_path);
+        let store = storage::BackendLocal::new(base_path);
 
         // create new if does not exist
         if !store.exists("config.yaml") {
             store.write(
                 "config.yaml",
-                &serde_yml::to_string(&Self::default()).unwrap().as_bytes(),
+                serde_yml::to_string(&Self::default()).unwrap().as_bytes(),
             );
         }
 

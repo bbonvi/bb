@@ -95,16 +95,15 @@ fn main() -> anyhow::Result<()> {
     let app_mgr = || -> Box<dyn AppBackend> {
         if let Ok(backend_addr) = std::env::var("BB_ADDR") {
             let basic_auth = match std::env::var("BB_BASIC_AUTH") {
-                Ok(ba) => {
-                    if let Some(username) = ba.split(":").collect::<Vec<_>>().get(0) {
+                Ok(ba) => match ba.split(":").collect::<Vec<_>>().get(0) {
+                    Some(username) => {
                         let collect = &ba.split(":").collect::<Vec<_>>();
                         let password = collect.get(1);
 
                         Some((username.to_string(), password.map(|p| p.to_string())))
-                    } else {
-                        None
                     }
-                }
+                    None => None,
+                },
                 Err(_) => None,
             };
 
@@ -186,10 +185,6 @@ fn main() -> anyhow::Result<()> {
         } => {
             let app_mgr = app_mgr();
 
-            let config = app_mgr.config();
-            let c = config.unwrap().clone();
-
-            let conf = c.read().unwrap();
             handle_add(
                 use_editor,
                 url,
@@ -201,7 +196,6 @@ fn main() -> anyhow::Result<()> {
                 no_meta,
                 async_meta,
                 app_mgr,
-                conf.clone(),
             )
         }
         cli::Command::Meta {
@@ -379,7 +373,6 @@ fn handle_add(
     no_meta: bool,
     async_meta: bool,
     app_mgr: Box<dyn AppBackend>,
-    config: Config,
 ) -> anyhow::Result<()> {
     let mut url = url;
     let mut title = title;
@@ -441,8 +434,6 @@ fn handle_add(
                 }
             }
         }
-
-        println!("{editor_defaults:?}");
 
         let editor_bmark = editor::edit(editor_defaults)?;
 
