@@ -309,6 +309,12 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     }
 
     if let Some(ref img) = icon_url {
+        let mut img = img.clone();
+
+        if img.starts_with("//") {
+            img = format!("https:{}", img);
+        }
+
         if !img.starts_with("http") {
             let mut url_parsed = reqwest::Url::parse(url).unwrap();
             url_parsed.set_path(&img);
@@ -317,6 +323,12 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     }
 
     if let Some(ref img) = image_url {
+        let mut img = img.clone();
+
+        if img.starts_with("//") {
+            img = format!("https:{}", img);
+        }
+
         if !img.starts_with("http") {
             let mut url_parsed = reqwest::Url::parse(url).unwrap();
             url_parsed.set_path(&img);
