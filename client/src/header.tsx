@@ -30,10 +30,11 @@ interface HeaderProps {
 
     config: Config;
 
-    setIgnoreHidden: (val: boolean) => void;
-    ignoreHidden: boolean;
     setShuffle: (val: boolean) => void;
     shuffle: boolean;
+
+    onShowAll: (val: boolean) => void;
+    showAll: boolean;
 
     openSettings: () => void;
     settings: SettingsState;
@@ -55,7 +56,7 @@ function Header(props: HeaderProps) {
         localStorage["saveQueries"] = JSON.stringify(val)
     }
 
-    function setQuery(tags: string, title: string, url: string, description: string) {
+    function setQuery(tags: string, title: string, url: string, description: string, showAll: boolean) {
         const urlParams = new URL(window.location.href);
         if (tags) {
             urlParams.searchParams.set("tags", tags);
@@ -81,12 +82,24 @@ function Header(props: HeaderProps) {
             urlParams.searchParams.delete("title");
         }
 
+        if (showAll) {
+            urlParams.searchParams.set("all", "1");
+        } else {
+            urlParams.searchParams.delete("all");
+        }
+
         window.history.pushState({}, "", urlParams);
     }
 
+    useEffect(() => {
+        if (saveQueries) {
+            setQuery(props.tags, props.title, props.url, props.description, props.showAll)
+        }
+    }, [saveQueries]);
+
     const onTitle = (val: string) => {
         if (saveQueries) {
-            setQuery(props.tags, val, props.url, props.description)
+            setQuery(props.tags, val, props.url, props.description, props.showAll)
         }
 
         props.onTitle(val);
@@ -94,7 +107,7 @@ function Header(props: HeaderProps) {
 
     const onTags = (val: string) => {
         if (saveQueries) {
-            setQuery(val, props.title, props.url, props.description)
+            setQuery(val, props.title, props.url, props.description, props.showAll)
         }
 
         props.onTags(val);
@@ -102,7 +115,7 @@ function Header(props: HeaderProps) {
 
     const onUrl = (val: string) => {
         if (saveQueries) {
-            setQuery(props.tags, props.title, val, props.description)
+            setQuery(props.tags, props.title, val, props.description, props.showAll)
         }
 
         props.onUrl(val);
@@ -110,7 +123,7 @@ function Header(props: HeaderProps) {
 
     const onDescription = (val: string) => {
         if (saveQueries) {
-            setQuery(props.tags, props.title, props.url, val)
+            setQuery(props.tags, props.title, props.url, val, props.showAll)
         }
 
         props.onDescription(val);
@@ -121,14 +134,14 @@ function Header(props: HeaderProps) {
         const defaultTitle = new URLSearchParams(window.location.search).get("title") ?? "";
         const defaultUrl = new URLSearchParams(window.location.search).get("url") ?? "";
         const defaultDescription = new URLSearchParams(window.location.search).get("description") ?? "";
-        const ignoreHidden = new URLSearchParams(window.location.search).get("ignore_hidden") ?? "";
+        const showAll = new URLSearchParams(window.location.search).get("all") ?? "";
 
-        setQuery(defaultTags, defaultTitle, defaultUrl, defaultDescription)
+        setQuery(defaultTags, defaultTitle, defaultUrl, defaultDescription, showAll === "1" || showAll === "true")
         props.onTitle(defaultTitle);
         props.onTags(defaultTags);
         props.onDescription(defaultDescription);
         props.onUrl(defaultUrl);
-        props.setIgnoreHidden(ignoreHidden === "1" || ignoreHidden === "true");
+        props.onShowAll(showAll === "1" || showAll === "true");
 
         setLoaded(true)
     }, [])
@@ -255,6 +268,19 @@ function Header(props: HeaderProps) {
                             className={inputTextClassNames + " w-auto mr-2 text-left cursor-pointer"}
                         />
                         <label htmlFor="shuffle" className="w-full cursor-pointer">Shuffle</label>
+                    </div>
+                    <div className="text-gray-100 flex mr-2" title="Shuffle">
+                        <input
+                            onChange={e => props.onShowAll(!props.showAll)}
+                            type="checkbox"
+                            id="showall"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            checked={props.showAll}
+                            placeholder="Show all"
+                            className={inputTextClassNames + " w-auto mr-2 text-left cursor-pointer"}
+                        />
+                        <label htmlFor="showall" className="w-full cursor-pointer">Show all</label>
                     </div>
                 </div>
 

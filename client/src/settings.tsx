@@ -81,15 +81,16 @@ export function Settings(props: SettingsProps) {
         props.onSave(settings);
     }
 
-    const onSave = () => {
-        const currWorkspaceName = settings.workspaceState.workspaces[settings.workspaceState.currentWorkspace].name;
+    const onSave = (settingsOpt?: SettingsState) => {
+        const s = settingsOpt ?? settings;
+        const currWorkspaceName = s.workspaceState.workspaces[s.workspaceState.currentWorkspace].name;
 
-        if (settings.workspaceState.workspaces.length === 0) {
+        if (s.workspaceState.workspaces.length === 0) {
             toast.error("At least one workspace is required");
             return
         }
 
-        settings.workspaceState.workspaces.forEach((ws, idx) => {
+        s.workspaceState.workspaces.forEach((ws, idx) => {
             if (ws.name.trim() === "") {
                 toast.error("Workspace name cannot be empty");
                 return
@@ -104,11 +105,11 @@ export function Settings(props: SettingsProps) {
             }
         });
 
-        settings.workspaceState.workspaces.sort((a, b) => a.name.localeCompare(b.name));
+        s.workspaceState.workspaces.sort((a, b) => a.name.localeCompare(b.name));
 
-        settings.workspaceState.currentWorkspace = settings.workspaceState.workspaces.findIndex(ws => ws.name === currWorkspaceName);
+        s.workspaceState.currentWorkspace = s.workspaceState.workspaces.findIndex(ws => ws.name === currWorkspaceName);
 
-        props.onSave(settings);
+        props.onSave(s);
     };
 
     function createWorkspace() {
@@ -260,6 +261,17 @@ export function Settings(props: SettingsProps) {
         </div>
     }
 
+    function saveSettings() {
+        const blob = new Blob([JSON.stringify(settings)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "settings.json";
+        a.click();
+
+        a.remove();
+    }
+
     return <div
         className={"bg-gray-800 rounded-lg flex flex-col h-full"}
     >
@@ -356,17 +368,8 @@ export function Settings(props: SettingsProps) {
                             <div onClick={() => addWhitelistTag(tag)} className="px-1 text-xs rounded cursor-pointer select-none transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500">{tag}</div>
                         </div>)}
                     </div>
-                    <div className="flex flex-initial gap-1 py-2 basis-1/12">
-                        <Button
-                            className="mb-1 font-bold bg-green-600 hover:bg-green-700 text-gray-100"
-                            onClick={() => updateRelatedTags()}
-                        >
-                            Refresh
-                        </Button>
-                    </div>
                 </div>
             </div>
-
 
             <div className="flex flex-col h-full">
                 <div className="text-gray-100 font-bold px-3 py-2 text-xl flex-none basis-1/12">
@@ -407,18 +410,56 @@ export function Settings(props: SettingsProps) {
                             <div onClick={() => addBlacklistTag(tag)} className="px-1 text-xs rounded cursor-pointer select-none transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500">{tag}</div>
                         </div>)}
                     </div>
-                    <div className="flex flex-initial gap-1 py-2 basis-1/12">
-                        <Button
-                            className="mb-1 font-bold bg-green-600 hover:bg-green-700 text-gray-100"
-                            onClick={() => updateRelatedTags()}
-                        >
-                            Refresh
-                        </Button>
-                    </div>
+
                 </div>
             </div>
 
+        </div>
+        <div className="px-3 flex flex-row gap-1 mb-1 w-full pt-4">
+            <Button
+                className="mb-1 font-bold bg-green-600 hover:bg-green-700 text-gray-100 w-full"
+                onClick={() => updateRelatedTags()}
+            >
+                Fetch related
+            </Button>
+        </div>
 
+        <div className="px-3 flex flex-row gap-1 mb-4 w-full pt-1">
+            <div className="ml-auto flex">
+                <input
+                    className="transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-2 max-w-64 border-none"
+                    type="file"
+                    onChange={e => {
+                        const file = e.currentTarget.files?.item(0);
+                        if (!file) {
+                            return
+                        }
+                        const reader = new FileReader();
+                        reader.onload = e => {
+                            try {
+                                const settings = JSON.parse(e.target?.result as string);
+                                if (settings.workspaceState) {
+                                    setSettings(settings);
+                                    onSave();
+                                } else {
+                                    toast.error("Invalid settings.json file");
+                                }
+                            } catch (err) {
+                                toast.error("Invalid settings.json file: " + err);
+                            }
+                        };
+                        reader.readAsText(file);
+                    }}
+                />
+            </div>
+            <div className="flex">
+                <Button
+                    className="bg-sky-600 hover:bg-sky-700 text-gray-100"
+                    onClick={() => saveSettings()}
+                >
+                    Export
+                </Button>
+            </div>
         </div>
     </div>
 }

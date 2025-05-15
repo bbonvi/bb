@@ -58,7 +58,8 @@ function App() {
     const setFocused = (idx: number) => dispatch(globalSlice.setFocusedIdx(idx))
     const setEditingId = (idx: number) => dispatch(globalSlice.setEditing(idx))
 
-    const [ignoreHidden, setIgnoreHidden] = useState(false);
+    const [showAll, setShowAll] = useState(false);
+
     const [shuffle, setShuffle] = useState(false);
 
     const [columns, setColumns] = useState(DEFAULT_COLUMNS);
@@ -96,8 +97,6 @@ function App() {
     const [loaded, setLoaded] = useState(false);
     const [creating, setCreating] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
-
-    const [showAll, setShowAll] = useState(false);
 
     const gridRef = useRef<Grid<Bmark[]>>()
 
@@ -187,7 +186,6 @@ function App() {
     }
 
     const getBmarks = async (props: {
-        ignoreHiddenTags: boolean,
         tags: string,
         title: string,
         url: string,
@@ -315,7 +313,6 @@ function App() {
     }
 
     const refreshBmarks = () => getBmarks({
-        ignoreHiddenTags: ignoreHidden,
         tags: inputTags,
         title: inputTitle,
         description: inputDescription,
@@ -343,7 +340,6 @@ function App() {
         return Promise.all([
             // refresh bookmarks
             getBmarks({
-                ignoreHiddenTags: ignoreHidden,
                 tags: inputTags,
                 title: inputTitle,
                 description: inputDescription,
@@ -398,7 +394,7 @@ function App() {
         return () => {
             clearInterval(timerId)
         }
-    }, [inputTags, inputTitle, inputUrl, inputDescription, ignoreHidden, settingsUpdated]);
+    }, [inputTags, inputTitle, inputUrl, inputDescription, showAll, settingsUpdated]);
 
     async function refreshTaskQueue(): Promise<boolean> {
         const tasks = await api.fetchTaskQueue();
@@ -761,8 +757,8 @@ function App() {
                     tags={inputTags}
                     onRef={ref => headerRef.current = ref ?? undefined}
                     onTags={setInputTags}
-                    setIgnoreHidden={setIgnoreHidden}
-                    ignoreHidden={ignoreHidden}
+                    onShowAll={setShowAll}
+                    showAll={showAll}
                     title={inputTitle}
                     onNewBookmark={onCreating}
                     onTitle={setInputTitle}
@@ -771,7 +767,7 @@ function App() {
                     description={inputDescription}
                     onDescription={setInputDescription}
                     total={total}
-                    count={bmarks.length}
+                    count={bmarksShuffled.length}
                     columns={columns}
                     onColumns={(v) => {
                         setColumns(v);
