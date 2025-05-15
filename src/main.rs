@@ -400,7 +400,8 @@ fn handle_add(
         };
 
         let config = app_mgr.config();
-        let config = config?.read().unwrap();
+        let rw_lock = config?;
+        let config = rw_lock.read().unwrap();
         let rules = &config.rules;
 
         if let Some(u) = url {
