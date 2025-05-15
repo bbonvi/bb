@@ -194,7 +194,9 @@ fn main() -> anyhow::Result<()> {
                 },
             ..
         } => {
-            let (app_mgr, _) = app_mgr();
+            let (app_mgr, config) = app_mgr();
+
+            let c = config.read().unwrap();
 
             handle_add(
                 use_editor,
@@ -207,6 +209,7 @@ fn main() -> anyhow::Result<()> {
                 no_meta,
                 async_meta,
                 app_mgr,
+                c.clone(),
             )
         }
         cli::Command::Meta {
@@ -384,6 +387,7 @@ fn handle_add(
     no_meta: bool,
     async_meta: bool,
     app_mgr: Box<dyn AppBackend>,
+    config: Config,
 ) -> anyhow::Result<()> {
     let mut url = url;
     let mut title = title;
@@ -395,13 +399,56 @@ fn handle_add(
         //let hidden = config.hidden_by_default.clone();
         current_tags.sort();
 
-        let editor_bmark = editor::edit(EditorDefaults {
+        let mut editor_defaults = EditorDefaults {
             url: url.clone(),
             title: title.clone(),
             description: description.clone(),
             tags: tags.clone(),
             current_tags,
-        })?;
+        };
+
+        let rules = config.rules.clone();
+        if let Some(u) = url {
+            for rule in rules.iter() {
+                // recreating query because it could've been changed by previous rule
+                let record = rules::Record {
+                    url: u.clone(),
+                    title: title.clone(),
+                    description: description.clone(),
+                    tags: tags.clone().map(parse_tags),
+                };
+
+                if !rule.is_match(&record) {
+                    continue;
+                }
+
+                match &rule.action {
+                    crate::rules::Action::UpdateBookmark {
+                        title,
+                        description,
+                        tags,
+                    } => {
+                        if let Some(title) = title {
+                            editor_defaults.title = Some(title.clone());
+                        }
+                        if let Some(description) = description {
+                            editor_defaults.description = Some(description.clone());
+                        }
+                        if let Some(tags) = tags {
+                            let mut curr_tags = (editor_defaults.tags.map(parse_tags))
+                                .take()
+                                .unwrap_or_default();
+                            curr_tags.append(&mut tags.clone());
+                            editor_defaults.tags = Some(curr_tags.join(" "));
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("{editor_defaults:?}");
+
+        let editor_bmark = editor::edit(editor_defaults)?;
 
         url = Some(editor_bmark.url);
         if let editor::EditorValue::Set(value) = editor_bmark.title {
