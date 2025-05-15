@@ -23,7 +23,14 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
 
     let mut r = 0;
 
-    let url_parsed = reqwest::Url::parse(url).unwrap();
+    let mut url = url.to_string();
+
+    if url.starts_with("//") {
+        url = format!("https:{}", url);
+    }
+
+    let url_parsed =
+        reqwest::Url::parse(&url).unwrap_or_else(|_| panic!("{url} is not a valid url"));
     let host = url_parsed.host_str().unwrap_or_default();
     let path = url_parsed.path();
     let iden = format!("{host}{path}");
@@ -56,7 +63,7 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
 
         log::debug!("{iden}: requesting");
 
-        let resp = match client.get(url).send() {
+        let resp = match client.get(&url).send() {
             Ok(r) => r,
             Err(err) => {
                 force_proxy = true;
