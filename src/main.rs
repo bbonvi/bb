@@ -8,6 +8,7 @@ use std::io::Write;
 
 mod app;
 mod bookmarks;
+mod peekalink;
 mod buku_migrate;
 mod cli;
 mod config;
