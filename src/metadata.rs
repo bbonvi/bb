@@ -77,11 +77,14 @@ fn try_fetch_icon(meta: &mut Metadata) {
 fn fetch_via_peekalink(url: &str) -> Result<Option<Metadata>> {
     let api_key = match env::var("PEEKALINK_API_KEY") {
         Ok(key) if !key.is_empty() => key,
-        _ => return Ok(None),
+        _ => {
+            log::warn!("PEEKALINK_API_KEY is missing");
+            return Ok(None)
+        }
     };
 
     let peek_result = crate::peekalink::peekalink(url, &api_key);
-    log::debug!("peekalink result: {:#?}", peek_result);
+    log::info!("peekalink result: {:#?}", peek_result);
 
     if let Some(m) = peek_result {
         // require at least title and image_url

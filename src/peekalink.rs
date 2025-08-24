@@ -24,6 +24,8 @@ pub fn peekalink(url: &str, api_key: &str) -> Option<PeekalinkResult> {
 
     let metadata = extract_metadata_from_value(&resp)?;
 
+    log::info!("m: {:?}", metadata);
+
     if metadata.title.is_some() && metadata.image_url.is_some() {
         Some(metadata)
     } else {
@@ -32,6 +34,7 @@ pub fn peekalink(url: &str, api_key: &str) -> Option<PeekalinkResult> {
 }
 
 pub fn extract_metadata_from_value(resp: &Value) -> Option<PeekalinkResult> {
+    log::info!("resp: {:?}", resp);
     if !resp.get("ok")?.as_bool()? {
         return None;
     }
