@@ -52,6 +52,10 @@ pub enum Command {
         #[clap(short = 'g', long, allow_hyphen_values = true)]
         tags: Option<String>,
 
+        /// Fuzzy search across title, description, url, and tags (use #tag for tag search)
+        #[clap(short, long)]
+        fuzzy: Option<String>,
+
         /// id
         #[clap(short, long)]
         id: Option<u64>,

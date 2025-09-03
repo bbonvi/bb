@@ -305,6 +305,9 @@ impl AppBackend for AppLocal {
             if query.url.clone().unwrap_or_default() == "" {
                 query.url = None;
             };
+            if query.fuzzy.clone().unwrap_or_default() == "" {
+                query.fuzzy = None;
+            }
 
             // TODO: this was here initially but it is introduces weird behaviour.
             // // hidden by default functionality

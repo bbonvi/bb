@@ -21,6 +21,7 @@ pub struct SearchCommandParams {
     pub title: Option<String>,
     pub description: Option<String>,
     pub tags: Option<String>,
+    pub fuzzy: Option<String>,
     pub id: Option<u64>,
     pub exact: bool,
     pub count: bool,
@@ -38,6 +39,7 @@ impl SearchCommand {
             url: params.url,
             description: params.description,
             tags: params.tags.map(parse_tags),
+            fuzzy: params.fuzzy,
             exact: params.exact,
             limit: None,
         };

@@ -10,6 +10,7 @@ interface HeaderProps {
     title: string;
     url: string;
     description: string;
+    fuzzy: string;
 
     count: number;
     total: number;
@@ -23,6 +24,7 @@ interface HeaderProps {
     onTitle: (val: string) => void;
     onUrl: (val: string) => void;
     onDescription: (val: string) => void;
+    onFuzzy: (val: string) => void;
 
     onRef: (ref: HTMLDivElement | null) => void;
 
@@ -214,6 +216,16 @@ function Header(props: HeaderProps) {
             placeholderIsMinWidth
             value={props.description}
             placeholder="Description"
+            className="!flex"
+            inputClassName={inputTextClassNames + "auto-size"}
+        />
+        <AutosizeInput
+            onInput={e => props.onFuzzy(e.currentTarget.value)}
+            type="text"
+            extraWidth={10}
+            placeholderIsMinWidth
+            value={props.fuzzy}
+            placeholder="Fuzzy search"
             className="!flex"
             inputClassName={inputTextClassNames + "auto-size"}
         />

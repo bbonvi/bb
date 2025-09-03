@@ -81,6 +81,7 @@ pub struct SearchQuery {
     pub url: Option<String>,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    pub fuzzy: Option<String>,
 
     #[serde(default)]
     pub exact: bool,
@@ -110,6 +111,7 @@ impl SearchQuery {
             .tags
             .as_ref()
             .map(|tags| tags.iter().map(|t| t.to_lowercase()).collect::<Vec<_>>());
+        self.fuzzy = self.fuzzy.as_ref().map(|fuzzy| fuzzy.to_lowercase());
     }
 }
 
@@ -439,6 +441,7 @@ impl BookmarkManager for BackendCsv {
             && query.title.is_none()
             && (query.tags.is_none() || query.tags.clone().unwrap_or_default().is_empty())
             && query.id.is_none()
+            && query.fuzzy.is_none()
         {
             return Ok(bmarks.clone());
         }
@@ -523,6 +526,54 @@ impl BookmarkManager for BackendCsv {
                     } else {
                         has_match = true;
                     }
+                }
+            };
+
+            // Fuzzy search - matches across title, description, url, and tags
+            if let Some(fuzzy) = &query.fuzzy {
+                let mut fuzzy_match = false;
+
+                // For non-exact mode, split by whitespace and check each keyword
+                let keywords: Vec<&str> = fuzzy.split_whitespace().collect();
+
+                // A bookmark matches if ALL keywords are found in ANY field
+                let mut all_keywords_match = true;
+
+                for keyword in keywords {
+                    let mut keyword_matches = false;
+
+                    // Check if this keyword starts with # for tag search
+                    if bmark_tags.iter().any(|tag| tag.contains(keyword)) {
+                        keyword_matches = true;
+                    }
+                    // Check title
+                    if bookmark.title.to_lowercase().contains(keyword) {
+                        keyword_matches = true;
+                    }
+
+                    // Check description
+                    if bookmark.description.to_lowercase().contains(keyword) {
+                        keyword_matches = true;
+                    }
+
+                    // Check URL
+                    if bookmark.url.to_lowercase().contains(keyword) {
+                        keyword_matches = true;
+                    }
+
+                    // If any keyword doesn't match, the bookmark doesn't match
+                    if !keyword_matches {
+                        all_keywords_match = false;
+                        break;
+                    }
+                }
+
+                fuzzy_match = all_keywords_match;
+
+                if !fuzzy_match {
+                    continue;
+                } else {
+                    has_match = true;
                 }
             };
 

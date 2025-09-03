@@ -152,6 +152,7 @@ pub struct ListBookmarksRequest {
     pub url: Option<String>,
     pub description: Option<String>,
     pub tags: Option<String>,
+    pub fuzzy: Option<String>,
 
     #[serde(default)]
     pub exact: bool,
@@ -173,12 +174,8 @@ async fn search(
         title: payload.title,
         url: payload.url,
         description: payload.description,
-        tags: payload.tags.map(|tags| {
-            tags.split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect()
-        }),
+        tags: payload.tags.map(crate::parse_tags),
+        fuzzy: payload.fuzzy,
         exact: payload.exact,
         limit: payload.limit,
     };

@@ -24,6 +24,7 @@ export interface SearchQuery {
     url?: string,
     description?: string,
     tags?: string,
+    fuzzy?: string,
     exact?: boolean,
     descending?: boolean,
 }

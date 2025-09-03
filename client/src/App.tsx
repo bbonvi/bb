@@ -15,10 +15,24 @@ import store, { RootState } from './store';
 import isEqual from 'lodash.isequal';
 import Settings, { SettingsState } from './settings';
 import { defaultWorkspace, WorkspaceState } from './workspaces';
+import IframePopup from './popup';
 
-const MIN_ROW_HEIGHT = 450;
 
-const DEFAULT_COLUMNS = 4;
+let DEFAULT_COLUMNS = 4;
+const innerWidth = window.innerWidth - 10;
+
+if (innerWidth < 768) {
+    DEFAULT_COLUMNS = 1
+} else if (innerWidth < 1024) {
+    DEFAULT_COLUMNS = 2
+} else if (innerWidth < 1280) {
+    DEFAULT_COLUMNS = 3
+}
+
+let MIN_ROW_HEIGHT = 400;
+if (DEFAULT_COLUMNS <= 2) {
+    MIN_ROW_HEIGHT = 525
+}
 
 // deterministic shuffle
 function shuffleArray(arr: any[], seed: number = 1) {
@@ -59,6 +73,8 @@ function App() {
     const setEditingId = (idx: number) => dispatch(globalSlice.setEditing(idx))
 
     const [showAll, setShowAll] = useState(false);
+
+    const [showIframePopup, setShowIframePopup] = useState<Bmark | undefined | null>();
 
     const [shuffle, setShuffle] = useState(false);
 
@@ -108,6 +124,7 @@ function App() {
     const [inputTitle, _setInputTitle] = useState("");
     const [inputUrl, _setInputUrl] = useState("");
     const [inputDescription, _setInputDescription] = useState("");
+    const [inputFuzzy, _setInputFuzzy] = useState("");
     const formRefs = useRef({ inputTags: inputTags, inputTitle: inputTitle, inputUrl: inputUrl, inputDescription: inputDescription });
 
     const [pastedUrl, setPastedUrl] = useState<string>();
@@ -130,6 +147,10 @@ function App() {
     const setInputDescription = (val: string) => {
         formRefs.current.inputDescription = val;
         return _setInputDescription(val)
+    }
+
+    const setInputFuzzy = (val: string) => {
+        return _setInputFuzzy(val)
     }
 
     // misc
@@ -179,6 +200,15 @@ function App() {
             cols = 2
         } else if (innerWidth < 1280) {
             cols = 3
+        } else if (innerWidth < 1920) {
+            cols = 4
+        } else {
+            cols = 5
+        }
+
+        MIN_ROW_HEIGHT = 400;
+        if (cols <= 2) {
+            MIN_ROW_HEIGHT = 525
         }
 
         setColumns(cols);
@@ -190,6 +220,7 @@ function App() {
         title: string,
         url: string,
         description: string,
+        fuzzy: string,
     }) => {
         const tagsFetch = props.tags.trim().replaceAll(" ", ",").split(",");
 
@@ -197,9 +228,9 @@ function App() {
             || props.title
             || props.url
             || props.description
+            || props.fuzzy
             || showAll;
 
-        console.log("should refresh", shouldRefresh, props)
         if (!shouldRefresh) {
             return []
         }
@@ -210,7 +241,8 @@ function App() {
             title: props.title,
             url: props.url,
             description: props.description,
-        })
+            fuzzy: props.fuzzy,
+        }).then(b => b.reverse())
     }
 
     function updateBmarksIfNeeded(bmarks: Bmark[]) {
@@ -229,6 +261,7 @@ function App() {
         title: inputTitle,
         description: inputDescription,
         url: inputUrl,
+        fuzzy: inputFuzzy,
     })
         .then(updateBmarksIfNeeded);
 
@@ -256,6 +289,7 @@ function App() {
                 title: inputTitle,
                 description: inputDescription,
                 url: inputUrl,
+                fuzzy: inputFuzzy.replace(/^#/, "")
             })
                 .then(updateBmarksIfNeeded),
 
@@ -279,7 +313,7 @@ function App() {
 
     useEffect(() => {
         refreshAll().then(() => {
-            setCols()
+            // setCols()
             const len = store.getState().bmarks.value.length;
             // setSizes(new Array(Math.ceil(len / columns)).fill(MIN_ROW_HEIGHT));
         });
@@ -306,7 +340,7 @@ function App() {
         return () => {
             clearInterval(timerId)
         }
-    }, [inputTags, inputTitle, inputUrl, inputDescription, showAll, settingsUpdated]);
+    }, [inputTags, inputTitle, inputUrl, inputDescription, inputFuzzy, showAll, settingsUpdated]);
 
     async function refreshTaskQueue(): Promise<boolean> {
         const tasks = await api.fetchTaskQueue();
@@ -328,11 +362,11 @@ function App() {
         api.fetchTotal().then(setTotal);
 
         const onResize = () => {
-            clearTimeout(refreshTimerRef.current["3"]);
-            refreshTimerRef.current["3"] = setTimeout(() => {
+            cancelAnimationFrame(refreshTimerRef.current["3"]);
+            refreshTimerRef.current["3"] = requestAnimationFrame(() => {
                 setCols()
                 rerenderList();
-            }, 32) as any;
+            }) as any;
         };
 
         window.addEventListener("resize", onResize);
@@ -639,6 +673,14 @@ function App() {
                     <Settings settings={settings} onSave={(settings) => saveSettings(settings)} tags={tags} />
                 </div>
             </div>}
+
+            {/* Iframe Popup */}
+            {showIframePopup &&
+                <IframePopup
+                    url={showIframePopup.url}
+                    isOpen={!!showIframePopup}
+                    onClose={() => setShowIframePopup(null)}
+                />}
             {creating && <div
                 onClick={e => {
                     e.preventDefault();
@@ -657,7 +699,7 @@ function App() {
                     />
                 </div>
             </div>}
-            <div className="dark:bg-gray-900 dark:text-gray-100 h-dvh overflow-hidden">
+            <div className="dark:bg-gray-900 dark:text-gray-100 h-screen p-0 [scrollbar-gutter:stable]">
                 <Header
                     settings={deepClone(settings)}
                     onSaveSettings={saveSettings}
@@ -678,6 +720,8 @@ function App() {
                     onUrl={setInputUrl}
                     description={inputDescription}
                     onDescription={setInputDescription}
+                    fuzzy={inputFuzzy}
+                    onFuzzy={setInputFuzzy}
                     total={total}
                     count={bmarksShuffled.length}
                     columns={columns}
@@ -687,12 +731,13 @@ function App() {
                     }}
                 />
                 <div
-                    key={renderKey}
-                    className="dark:bg-gray-900 overflow-y-scroll overflow-x-hidden h-screen xs:m-0 md:mx-5 h-full"
+                    className="dark:bg-gray-900 overflow-y-hidden overflow-x-hidden mx-0 px-0"
                     ref={ref => containerRef.current = ref ?? undefined}
                 >
                     {(containerRef.current && headerRef.current && <GridView
                         tagList={tags}
+                        setShowIframePopup={setShowIframePopup}
+                        key={renderKey}
                         gridRef={gridRef}
                         containerRef={containerRef.current}
                         columns={columns}
@@ -706,8 +751,6 @@ function App() {
                         handleFetchMeta={handleFetchMeta}
                         config={config}
                     />)}
-                </div>
-                <div className="p-5">
                 </div>
             </div>
             <Toaster toastOptions={{ style: { background: '#505560', color: '#E5E7EB', } }} position="bottom-right" />
@@ -729,12 +772,17 @@ interface GridViewProps {
     tagList: string[];
     containerRef: HTMLDivElement;
     headerRef: HTMLDivElement;
+    setShowIframePopup: (bmark: Bmark) => void;
 }
 
 function GridView(props: GridViewProps) {
-    const containerRect = props.containerRef.getBoundingClientRect();
+    const [containerRect, setContainerRect] = useState(props.containerRef.getBoundingClientRect());
     const headerRect = props.headerRef.getBoundingClientRect();
     const sizes = useSelector((state: RootState) => state.global.sizes);
+
+    useEffect(() => {
+        setContainerRect(props.containerRef.getBoundingClientRect());
+    }, [props]);
 
     const {
         gridRef,
@@ -746,13 +794,14 @@ function GridView(props: GridViewProps) {
         handleDelete,
         handleSave,
         handleFetchMeta,
+        setShowIframePopup,
     } = props;
 
     const innerHeight = window.innerHeight;
     return <Grid
         ref={ref => gridRef.current = (ref as any) ?? undefined}
         columnCount={columns}
-        columnWidth={_ => (containerRect.width) / columns}
+        columnWidth={_ => Math.ceil((containerRect.width - 30) / columns)}
         rowHeight={rowIndex => {
             const idx = (rowIndex * columns) + 0;
             return Math.max(...bmarks.slice(idx, idx + columns).map(b => sizes[b.id.toString()] ?? MIN_ROW_HEIGHT));
@@ -765,14 +814,15 @@ function GridView(props: GridViewProps) {
             config: props.config,
             tagList: props.tagList,
             focused, editingId, setEditingId,
-            handleDelete, handleSave, handleFetchMeta
+            handleDelete, handleSave, handleFetchMeta,
+            setShowIframePopup,
         }}
         itemKey={data => {
             const idx = (data.rowIndex * columns) + data.columnIndex;
             return data.data.bmarks[idx]?.id ?? (data.rowIndex.toString + "-" + data.columnIndex.toString())
         }}
-        width={containerRect.width}
-        className="dark:bg-gray-900"
+        width={Math.ceil(containerRect.width)}
+        className="dark:bg-gray-900 [scrollbar-gutter:stable]"
     >
         {Row}
     </Grid>
@@ -794,7 +844,8 @@ const Row = memo(({ columnIndex, rowIndex, style, data }: any) => {
         setEditingId,
         handleDelete,
         handleSave,
-        handleFetchMeta
+        handleFetchMeta,
+        setShowIframePopup,
     } = data;
     const sizes = store.getState().global.sizes;
 
@@ -820,6 +871,7 @@ const Row = memo(({ columnIndex, rowIndex, style, data }: any) => {
         tagList={tagList}
         focused={focused === idx}
         onSize={onSize}
+        setShowIframePopup={setShowIframePopup}
         style={style}
         isEditing={bmark.id === editingId}
         setEditing={(val) => {
