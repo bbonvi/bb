@@ -10,8 +10,6 @@ mod editor;
 mod eid;
 mod images;
 mod metadata;
-mod microlink;
-mod peekalink;
 mod rules;
 mod scrape;
 mod storage;

@@ -2,7 +2,7 @@ use crate::{
     app::backend::AppBackend,
     bookmarks::{BookmarkCreate, SearchQuery},
     config::Config,
-    metadata::{MetaOptions, fetch_meta},
+    metadata::MetaOptions,
     parse_tags,
     rules,
 };
@@ -166,7 +166,7 @@ pub fn handle_add(
     Ok(())
 }
 
-pub fn handle_meta(url: String, no_https_upgrade: bool, no_headless: bool) -> Result<()> {
+pub fn handle_meta(url: String, _no_https_upgrade: bool, no_headless: bool) -> Result<()> {
     let meta_opts = crate::metadata::MetaOptions { no_headless };
 
     let meta = crate::metadata::fetch_meta(&url, meta_opts)?;

@@ -7,4 +7,3 @@ pub mod service;
 pub mod task_runner;
 
 pub use factory::AppFactory;
-pub use local::AppLocal;

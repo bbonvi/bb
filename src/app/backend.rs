@@ -39,6 +39,7 @@ pub trait AppBackend: Send + Sync {
     ) -> anyhow::Result<Vec<bookmarks::Bookmark>, AppError>;
 
     fn config(&self) -> anyhow::Result<Arc<RwLock<Config>>, AppError>;
+    #[allow(dead_code)]
     fn update_config(&self, config: Config) -> anyhow::Result<(), AppError>;
 }
 

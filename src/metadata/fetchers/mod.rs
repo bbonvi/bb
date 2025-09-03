@@ -1,10 +1,8 @@
 pub mod microlink;
 pub mod peekalink;
 pub mod plain;
-pub mod youtube;
 
 use crate::metadata::types::{Metadata, MetaOptions};
-use anyhow::Result;
 
 /// Helper to fetch bytes from a URL via scrape::reqwest_with_retries
 pub fn fetch_bytes(url: &str) -> Option<Vec<u8>> {

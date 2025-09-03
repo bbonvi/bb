@@ -1,6 +1,5 @@
 use crate::metadata::types::{Metadata, MetaOptions};
 use crate::metadata::fetchers::{MetadataFetcher, fetch_bytes};
-use anyhow::Result;
 
 pub struct PlainFetcher;
 

@@ -2,7 +2,7 @@ pub mod types;
 pub mod fetchers;
 
 pub use types::{Metadata, MetaOptions};
-pub use fetchers::{MetadataFetcher, FetcherRegistry};
+pub use fetchers::FetcherRegistry;
 
 use anyhow::Result;
 

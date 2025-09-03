@@ -21,16 +21,6 @@ pub struct MetaOptions {
 }
 
 impl Metadata {
-    /// Check if the metadata is essentially empty (no useful fields)
-    pub fn is_empty(&self) -> bool {
-        self.title.is_none()
-            && self.description.is_none()
-            && self.icon_url.is_none()
-            && self.image_url.is_none()
-            && self.keywords.is_none()
-            && self.canonical_url.is_none()
-    }
-
     /// Try to fetch and set image bytes from image_url if present
     pub fn try_fetch_image(&mut self) {
         if let Some(ref img_url) = self.image_url {

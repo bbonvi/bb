@@ -1,6 +1,5 @@
-use crate::metadata::types::{Metadata, MetaOptions};
+use crate::metadata::types::Metadata;
 use crate::metadata::fetchers::{MetadataFetcher, fetch_bytes};
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
