@@ -286,21 +286,13 @@ function Bookmark(props: Props) {
                     <a
                         target="_blank"
                         href={bmark.url}
-                        className="group-hover:opacity-90"
                     >
                         <img
                             width={417}
                             height={300}
                             alt={bmark.title}
-                            className={"object-cover absolute blur-none group-hover:blur-xl hidden group-hover:inline-block -z-10 scale-150 w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
-                            src={bmark.image_id && !dragOverCover ? `/api/file/${bmark.image_id}` : BLANK_IMG}
-                        />
-                        <img
-                            width={417}
-                            height={300}
-                            alt={bmark.title}
                             style={{ objectPosition: "50% 30%" }}
-                            className={"object-cover group-hover:object-contain z-10 w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
+                            className={"object-cover z-10 w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
                             src={bmark.image_id && !dragOverCover ? `/api/file/${bmark.image_id}` : BLANK_IMG}
                         />
                     </a>
