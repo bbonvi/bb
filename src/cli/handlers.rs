@@ -1,25 +1,42 @@
 use crate::{
     app::backend::AppBackend,
     config::Config,
-    cli::commands::{SearchCommand, AddCommand, MetaCommand, RuleCommand, AddOptions, RuleAction, RuleUpdateAction},
+    cli::commands::{SearchCommand, AddCommand, MetaCommand, RuleCommand, AddOptions, RuleAction, RuleUpdateAction, SearchCommandParams},
 };
 use anyhow::Result;
 
 use super::types::ActionArgs;
 
-pub fn handle_search(
-    url: Option<String>,
-    title: Option<String>,
-    description: Option<String>,
-    tags: Option<String>,
-    id: Option<u64>,
-    exact: bool,
-    count: bool,
-    action: Option<ActionArgs>,
-    app_mgr: Box<dyn AppBackend>,
-) -> Result<()> {
+/// Parameters for search operations
+#[derive(Debug)]
+pub struct SearchParams {
+    pub url: Option<String>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub id: Option<u64>,
+    pub exact: bool,
+    pub count: bool,
+    pub action: Option<ActionArgs>,
+}
+
+/// Parameters for add operations
+#[derive(Debug)]
+pub struct AddParams {
+    pub use_editor: bool,
+    pub url: Option<String>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub no_https_upgrade: bool,
+    pub no_headless: bool,
+    pub no_meta: bool,
+    pub async_meta: bool,
+}
+
+pub fn handle_search(params: SearchParams, app_mgr: Box<dyn AppBackend>) -> Result<()> {
     // Convert ActionArgs to ActionCommand
-    let action_command = action.map(|action| match action {
+    let action_command = params.action.map(|action| match action {
         ActionArgs::Update { url, title, description, tags, append_tags, remove_tags } => {
             crate::cli::commands::ActionCommand::Update {
                 url, title, description, tags, append_tags, remove_tags
@@ -30,34 +47,30 @@ pub fn handle_search(
         }
     });
 
-    let search_command = SearchCommand::new(
-        url, title, description, tags, id, exact, count, action_command
-    )?;
+    let search_command = SearchCommand::new(SearchCommandParams {
+        url: params.url,
+        title: params.title,
+        description: params.description,
+        tags: params.tags,
+        id: params.id,
+        exact: params.exact,
+        count: params.count,
+        action: action_command,
+    })?;
     
     search_command.execute(app_mgr).map_err(|e| anyhow::anyhow!(e))
 }
 
-pub fn handle_add(
-    use_editor: bool,
-    url: Option<String>,
-    title: Option<String>,
-    description: Option<String>,
-    tags: Option<String>,
-    no_https_upgrade: bool,
-    no_headless: bool,
-    no_meta: bool,
-    async_meta: bool,
-    app_mgr: Box<dyn AppBackend>,
-) -> Result<()> {
+pub fn handle_add(params: AddParams, app_mgr: Box<dyn AppBackend>) -> Result<()> {
     let options = AddOptions {
-        use_editor,
-        no_https_upgrade,
-        no_headless,
-        no_meta,
-        async_meta,
+        use_editor: params.use_editor,
+        no_https_upgrade: params.no_https_upgrade,
+        no_headless: params.no_headless,
+        no_meta: params.no_meta,
+        async_meta: params.async_meta,
     };
 
-    let add_command = AddCommand::new(url, title, description, tags, options)?;
+    let add_command = AddCommand::new(params.url, params.title, params.description, params.tags, options)?;
     add_command.execute(app_mgr).map_err(|e| anyhow::anyhow!(e))
 }
 

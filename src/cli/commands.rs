@@ -14,34 +14,38 @@ pub struct SearchCommand {
     pub action: Option<ActionCommand>,
 }
 
+/// Parameters for creating a search command
+#[derive(Debug, Clone)]
+pub struct SearchCommandParams {
+    pub url: Option<String>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+    pub id: Option<u64>,
+    pub exact: bool,
+    pub count: bool,
+    pub action: Option<ActionCommand>,
+}
+
 impl SearchCommand {
-    pub fn new(
-        url: Option<String>,
-        title: Option<String>,
-        description: Option<String>,
-        tags: Option<String>,
-        id: Option<u64>,
-        exact: bool,
-        count: bool,
-        action: Option<ActionCommand>,
-    ) -> CliResult<Self> {
+    pub fn new(params: SearchCommandParams) -> CliResult<Self> {
         // Validate search query input
-        validate_search_query(&url, &title, &description, &tags)?;
+        validate_search_query(&params.url, &params.title, &params.description, &params.tags)?;
 
         let query = SearchQuery {
-            id,
-            title,
-            url,
-            description,
-            tags: tags.map(parse_tags),
-            exact,
+            id: params.id,
+            title: params.title,
+            url: params.url,
+            description: params.description,
+            tags: params.tags.map(parse_tags),
+            exact: params.exact,
             limit: None,
         };
 
         Ok(Self {
             query,
-            count_only: count,
-            action,
+            count_only: params.count,
+            action: params.action,
         })
     }
 

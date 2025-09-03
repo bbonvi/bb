@@ -28,9 +28,6 @@ pub enum CliError {
     #[error("Storage operation failed: {message}")]
     Storage { message: String },
 
-    #[error("Network operation failed: {message}")]
-    Network { message: String },
-
     #[error("Internal error: {message}")]
     Internal { message: String },
 }
@@ -72,11 +69,6 @@ impl CliError {
     /// Create a storage error
     pub fn storage(message: impl Into<String>) -> Self {
         Self::Storage { message: message.into() }
-    }
-
-    /// Create a network error
-    pub fn network(message: impl Into<String>) -> Self {
-        Self::Network { message: message.into() }
     }
 
     /// Create an internal error

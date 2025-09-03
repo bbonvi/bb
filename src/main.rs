@@ -88,7 +88,7 @@ fn main() -> anyhow::Result<()> {
             action,
         } => {
             let app_service = app::AppFactory::create_app_service()?;
-            cli::handle_search(
+            let params = cli::SearchParams {
                 url,
                 title,
                 description,
@@ -97,8 +97,8 @@ fn main() -> anyhow::Result<()> {
                 exact,
                 count,
                 action,
-                app_service.into_backend(),
-            )
+            };
+            cli::handle_search(params, app_service.into_backend())
         }
 
         Command::Add {
@@ -111,18 +111,18 @@ fn main() -> anyhow::Result<()> {
             meta_args,
         } => {
             let app_service = app::AppFactory::create_app_service()?;
-            cli::handle_add(
+            let params = cli::AddParams {
                 use_editor,
                 url,
                 title,
                 description,
                 tags,
-                meta_args.no_https_upgrade,
-                meta_args.no_headless,
-                meta_args.no_meta,
+                no_https_upgrade: meta_args.no_https_upgrade,
+                no_headless: meta_args.no_headless,
+                no_meta: meta_args.no_meta,
                 async_meta,
-                app_service.into_backend(),
-            )
+            };
+            cli::handle_add(params, app_service.into_backend())
         }
 
         Command::Meta {

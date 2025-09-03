@@ -136,18 +136,14 @@ pub fn validate_rule_input(
     }
     
     if let Some(title) = title {
-        if !title.trim().is_empty() {
-            if title.len() > 200 {
-                return Err(CliError::validation("title", "Title pattern cannot exceed 200 characters"));
-            }
+        if !title.trim().is_empty() && title.len() > 200 {
+            return Err(CliError::validation("title", "Title pattern cannot exceed 200 characters"));
         }
     }
     
     if let Some(description) = description {
-        if !description.trim().is_empty() {
-            if description.len() > 500 {
-                return Err(CliError::validation("description", "Description pattern cannot exceed 500 characters"));
-            }
+        if !description.trim().is_empty() && description.len() > 500 {
+            return Err(CliError::validation("description", "Description pattern cannot exceed 500 characters"));
         }
     }
     
