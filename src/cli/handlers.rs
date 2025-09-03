@@ -2,7 +2,7 @@ use crate::{
     app::backend::AppBackend,
     bookmarks::{BookmarkCreate, SearchQuery},
     config::Config,
-    metadata::MetaOptions,
+    metadata::{MetaOptions, fetch_meta},
     parse_tags,
     rules,
 };
@@ -167,12 +167,9 @@ pub fn handle_add(
 }
 
 pub fn handle_meta(url: String, no_https_upgrade: bool, no_headless: bool) -> Result<()> {
-    let fetch_meta_opts = crate::app::backend::FetchMetadataOpts {
-        no_https_upgrade,
-        meta_opts: MetaOptions { no_headless },
-    };
+    let meta_opts = crate::metadata::MetaOptions { no_headless };
 
-    let meta = crate::app::AppLocal::fetch_metadata(&url, fetch_meta_opts)?;
+    let meta = crate::metadata::fetch_meta(&url, meta_opts)?;
 
     if let Some(ref image) = meta.image {
         std::fs::write("screenshot.png", &image).unwrap();
