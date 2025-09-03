@@ -127,6 +127,7 @@ fn main() -> anyhow::Result<()> {
                 no_meta: meta_args.no_meta,
                 async_meta,
             };
+            log::info!("params: {:?}", params);
             cli::handle_add(params, app_service)
         }
 

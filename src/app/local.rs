@@ -160,8 +160,13 @@ impl AppBackend for AppLocal {
         // if let Some(b) = self.bmark_mgr.search(query)?.first() {
         //     return Err(AppError::AlreadyExists(b.id));
         // }
+        log::info!("{:?}", query);
         if let Some(b) = self.search(query)?.first() {
-            return Err(AppError::Other(anyhow::anyhow!("Bookmark with URL '{}' already exists at id {}", url, b.id)));
+            return Err(AppError::Other(anyhow::anyhow!(
+                "Bookmark with URL '{}' already exists at id {}",
+                url,
+                b.id
+            )));
         };
 
         // create empty bookmark
@@ -188,7 +193,7 @@ impl AppBackend for AppLocal {
                         },
                     )?;
 
-                                          let bmark = Self::merge_metadata(
+                    let bmark = Self::merge_metadata(
                         bmark.clone(),
                         meta,
                         self.storage_mgr.clone(),
@@ -201,7 +206,7 @@ impl AppBackend for AppLocal {
                 // apply rules
                 if !opts.skip_rules {
                     let rules = &self.config.read().unwrap().rules;
-                                          let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?;
+                    let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?;
                     return Ok(with_meta.map(|_| with_rules)?);
                 }
 
@@ -210,7 +215,7 @@ impl AppBackend for AppLocal {
         } else if !opts.skip_rules {
             // if no metadata apply Rules.
             let rules = &self.config.read().unwrap().rules;
-                          return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?);
+            return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?);
         }
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
@@ -236,13 +241,15 @@ impl AppBackend for AppLocal {
                 .first()
             {
                 log::info!("already exists{id}");
-                return Err(AppError::Other(anyhow::anyhow!("Bookmark with URL '{}' already exists at id {}", bmark_update.url.as_ref().unwrap(), b.id)));
+                return Err(AppError::Other(anyhow::anyhow!(
+                    "Bookmark with URL '{}' already exists at id {}",
+                    bmark_update.url.as_ref().unwrap(),
+                    b.id
+                )));
             };
         }
 
-        let bmark = self
-            .bmark_mgr
-            .update(id, bmark_update)?;
+        let bmark = self.bmark_mgr.update(id, bmark_update)?;
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
 
@@ -275,8 +282,6 @@ impl AppBackend for AppLocal {
         Ok(search_update)
     }
 
-
-
     fn total(&self) -> anyhow::Result<usize, AppError> {
         let bookmarks = self.bmark_mgr.search(bookmarks::SearchQuery::default())?;
         Ok(bookmarks.len())
@@ -289,6 +294,7 @@ impl AppBackend for AppLocal {
         let mut query = query;
 
         // TODO: do we prevent queries against empty strings?
+        log::info!("{:?}", query);
         {
             if query.title.clone().unwrap_or_default() == "" {
                 query.title = None;
@@ -360,10 +366,7 @@ impl AppLocal {
             ..Default::default()
         })?;
 
-        let tags: Vec<String> = bmarks
-            .into_iter()
-            .flat_map(|bmark| bmark.tags)
-            .collect();
+        let tags: Vec<String> = bmarks.into_iter().flat_map(|bmark| bmark.tags).collect();
 
         let mut counts = HashMap::new();
         for tag in &tags {

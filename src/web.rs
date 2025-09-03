@@ -145,9 +145,18 @@ impl IntoResponse for AppError {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct ListBookmarksRequest {
-    pub query: SearchQuery,
+    pub id: Option<u64>,
+    pub title: Option<String>,
+    pub url: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<String>,
+
+    #[serde(default)]
+    pub exact: bool,
+
+    #[serde(default)]
     pub limit: Option<usize>,
 }
 
@@ -155,11 +164,25 @@ async fn search(
     State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<ListBookmarksRequest>,
 ) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
+    log::info!("Search bookmarks request: {:?}", payload);
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 
-    let mut query = payload.query;
-    query.limit = payload.limit;
+    let query = SearchQuery {
+        id: payload.id,
+        title: payload.title,
+        url: payload.url,
+        description: payload.description,
+        tags: payload.tags.map(|tags| {
+            tags.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        }),
+        exact: payload.exact,
+        limit: payload.limit,
+    };
+    log::info!("Search bookmarks with query: {:?}", query);
 
     let bookmarks = app_service
         .search_bookmarks(query, false)
@@ -233,6 +256,7 @@ async fn create(
         url: payload.url,
         ..Default::default()
     };
+    log::info!("Create bookmark request: {:?}", create);
 
     // Handle base64 image/icon uploads
     if let Some(image_b64) = payload.image_b64 {
@@ -387,6 +411,7 @@ async fn search_delete(
     State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<SearchQuery>,
 ) -> Result<axum::Json<usize>, AppError> {
+    log::info!("Search and delete bookmarks with query: {:?}", payload);
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 

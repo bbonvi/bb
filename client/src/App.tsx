@@ -199,6 +199,7 @@ function App() {
             || props.description
             || showAll;
 
+        console.log("should refresh", shouldRefresh, props)
         if (!shouldRefresh) {
             return []
         }
@@ -209,95 +210,6 @@ function App() {
             title: props.title,
             url: props.url,
             description: props.description,
-            descending: true,
-        })
-    }
-
-    async function _refreshBmarks(opts: {
-        scrollToTop?: boolean;
-        notify?: boolean;
-        resetSizes?: boolean;
-        disableEditing?: boolean;
-    } = {}) {
-        const {
-            scrollToTop = true,
-            notify = true,
-            resetSizes = true,
-            disableEditing = false,
-        } = opts;
-
-        clearTimeout(refreshTimerRef.current["1"]);
-
-        const shouldRefresh = formRefs.current.inputTags
-            || formRefs.current.inputTitle
-            || formRefs.current.inputUrl
-            || formRefs.current.inputDescription
-            || showAll;
-
-        if (!shouldRefresh) {
-            setBmarks([]);
-            // setEditingId(undefined);
-            return
-        }
-
-        return new Promise((resolve, reject) => {
-            refreshTimerRef.current["1"] = setTimeout(() => {
-                const tLoading = notify ? toast.loading("loading") : "-1";
-
-                const tagsFetch = formRefs.current.inputTags.trim().replaceAll(" ", ",").split(",");
-
-                // if (!ignoreHidden) {
-                //     hiddenByDefault.forEach(ht => {
-                //         if (!tagsFetch.find(t => ht === t || t.includes(ht + "/"))) {
-                //             tagsFetch.push("-" + ht)
-                //         }
-                //     });
-                // }
-
-                return api.fetchBmarks({
-                    tags: tagsFetch.join(","),
-                    title: inputTitle,
-                    url: inputUrl,
-                    description: inputDescription,
-                    descending: true,
-                }).then(bmarksResp => {
-
-                    if (scrollToTop) {
-                        gridRef.current?.scrollTo({ scrollTop: 0 });
-                    }
-
-
-                    if (disableEditing) {
-                        setEditingId(-1);
-                    }
-
-                    if (resetSizes) {
-                        // setSizes(new Array(Math.ceil(bmarksResp.length / columns)).fill(MIN_ROW_HEIGHT));
-                    }
-
-                    const currBmarks = store.getState().bmarks.value;
-                    if (!isEqual(currBmarks, bmarksResp)) {
-                        setCols()
-                        if (currBmarks.length !== bmarksResp.length) {
-                            if (bmarksResp.length > 0) {
-                                setFocused(0);
-                            } else {
-                                setFocused(-1);
-                            }
-                        }
-
-                        setBmarks(bmarksResp);
-                    }
-
-                    setLoaded(true);
-                    resolve(bmarksResp);
-                })
-                    .catch(reject)
-                    .finally(() => {
-                        toast.dismiss(tLoading)
-                    });
-
-            }, 100) as any;
         })
     }
 

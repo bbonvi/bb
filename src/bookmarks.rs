@@ -296,7 +296,9 @@ impl BookmarkManager for BackendCsv {
     fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Bookmark> {
         let mut bmarks = self.list.write().unwrap();
 
-        let bmark_idx = bmarks.iter().position(|b| b.id == id)
+        let bmark_idx = bmarks
+            .iter()
+            .position(|b| b.id == id)
             .ok_or_else(|| anyhow::anyhow!("Bookmark with id {} not found", id))?;
 
         let bmark = &mut bmarks[bmark_idx];
@@ -422,10 +424,9 @@ impl BookmarkManager for BackendCsv {
         Ok(count)
     }
 
-
-
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
         let bmarks = self.list.read().unwrap();
+        log::info!("Search query: {:?}", query);
 
         let mut query = query;
         query.lowercase();
@@ -540,8 +541,6 @@ impl BookmarkManager for BackendCsv {
 
         Ok(output)
     }
-
-
 }
 
 #[cfg(test)]

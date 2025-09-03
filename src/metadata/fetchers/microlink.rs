@@ -1,5 +1,5 @@
+use crate::metadata::fetchers::{fetch_bytes, MetadataFetcher};
 use crate::metadata::types::Metadata;
-use crate::metadata::fetchers::{MetadataFetcher, fetch_bytes};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -18,7 +18,7 @@ impl MicrolinkFetcher {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub fn microlink(url: &str, api_key: Option<&str>) -> Option<MicrolinkResult> {
         let client = reqwest::blocking::Client::new();
 
@@ -29,6 +29,9 @@ impl MicrolinkFetcher {
             ("screenshot.type", "jpeg"),
             ("screenshot.fullPage", "true"),
             ("meta", "true"),
+            ("adblock", "true"),
+            ("device", "Macbook Pro 13"),
+            ("retry", "3"),
         ]);
 
         if let Some(key) = api_key {
@@ -115,7 +118,7 @@ impl MetadataFetcher for MicrolinkFetcher {
                     image: None,
                     icon: None,
                 };
-                
+
                 // fetch image and icon
                 if let Some(img_url) = m.image_url {
                     if let Some(bytes) = fetch_bytes(&img_url) {
@@ -127,14 +130,14 @@ impl MetadataFetcher for MicrolinkFetcher {
                         meta.icon = Some(bytes);
                     }
                 }
-                
+
                 return Ok(Some(meta));
             }
         }
 
         Ok(None)
     }
-    
+
     fn name(&self) -> &'static str {
         "Microlink"
     }

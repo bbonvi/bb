@@ -207,8 +207,7 @@ impl AppBackend for AppRemote {
                 "url": query.url,
                 "description": query.description,
                 "tags": query.tags.map(|tags| tags.join(",")),
-                "exact": query.exact,
-                "descending": false,
+                "exact": query.exact
             }))
             .send()?;
 
