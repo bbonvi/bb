@@ -20,19 +20,10 @@ impl AppFactory {
     /// Create a local application instance
     pub fn create_local_app() -> Result<AppLocal> {
         let paths = Self::get_paths()?;
-        let storage_mgr = storage::BackendLocal::new(&paths.uploads_path);
-        let config = Self::create_config(&paths.base_path)?;
-        
-        Ok(AppLocal::new(config.clone(), &paths.bookmarks_path, storage_mgr))
-    }
+        let config = Arc::new(RwLock::new(Config::load_with(&paths.base_path)));
+        let storage = storage::BackendLocal::new(&paths.uploads_path);
 
-    /// Create a remote application instance
-    pub fn create_remote_app() -> Result<AppRemote> {
-        let backend_addr = std::env::var("BB_ADDR")
-            .context("BB_ADDR environment variable is required for remote mode")?;
-        
-        let basic_auth = Self::parse_basic_auth()?;
-        Ok(AppRemote::new(&backend_addr, basic_auth))
+        Ok(AppLocal::new(config, &paths.bookmarks_path, storage))
     }
 
     /// Get application paths with validation
@@ -129,24 +120,6 @@ impl AppFactory {
         
         Ok(())
     }
-
-    /// Check if the application is running in remote mode
-    pub fn is_remote_mode() -> bool {
-        std::env::var("BB_ADDR").is_ok()
-    }
-
-    /// Get application environment information
-    pub fn get_environment_info() -> EnvironmentInfo {
-        EnvironmentInfo {
-            is_remote: Self::is_remote_mode(),
-            base_path: Self::get_base_path().unwrap_or_else(|_| "unknown".to_string()),
-            has_basic_auth: std::env::var("BB_BASIC_AUTH").is_ok(),
-            task_queue_threads: std::env::var("BB_TASK_QUEUE_THREADS")
-                .ok()
-                .and_then(|s| s.parse::<u16>().ok())
-                .unwrap_or(4),
-        }
-    }
 }
 
 /// Application paths structure
@@ -157,84 +130,9 @@ pub struct AppPaths {
     pub uploads_path: String,
 }
 
-impl AppPaths {
-    /// Get the base path
-    pub fn base_path(&self) -> &str {
-        &self.base_path
-    }
-
-    /// Get the bookmarks file path
-    pub fn bookmarks_path(&self) -> &str {
-        &self.bookmarks_path
-    }
-
-    /// Get the uploads directory path
-    pub fn uploads_path(&self) -> &str {
-        &self.uploads_path
-    }
-
-    /// Ensure all required directories exist
-    pub fn ensure_directories(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.base_path)
-            .context("Failed to create base directory")?;
-        
-        std::fs::create_dir_all(&self.uploads_path)
-            .context("Failed to create uploads directory")?;
-        
-        // Ensure bookmarks directory exists (for the CSV file)
-        if let Some(parent) = std::path::Path::new(&self.bookmarks_path).parent() {
-            std::fs::create_dir_all(parent)
-                .context("Failed to create bookmarks directory")?;
-        }
-        
-        Ok(())
-    }
-}
-
-/// Environment information structure
-#[derive(Debug, Clone)]
-pub struct EnvironmentInfo {
-    pub is_remote: bool,
-    pub base_path: String,
-    pub has_basic_auth: bool,
-    pub task_queue_threads: u16,
-}
-
-impl EnvironmentInfo {
-    /// Check if running in local mode
-    pub fn is_local(&self) -> bool {
-        !self.is_remote
-    }
-
-    /// Get a summary of the environment
-    pub fn summary(&self) -> String {
-        format!(
-            "Mode: {}, Base Path: {}, Auth: {}, Task Threads: {}",
-            if self.is_remote { "Remote" } else { "Local" },
-            self.base_path,
-            if self.has_basic_auth { "Yes" } else { "No" },
-            self.task_queue_threads
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_environment_info() {
-        let info = EnvironmentInfo {
-            is_remote: false,
-            base_path: "/test/path".to_string(),
-            has_basic_auth: true,
-            task_queue_threads: 8,
-        };
-        
-        assert!(info.is_local());
-        assert!(info.has_basic_auth);
-        assert_eq!(info.task_queue_threads, 8);
-    }
 
     #[test]
     fn test_app_paths() {
@@ -244,8 +142,8 @@ mod tests {
             uploads_path: "/test/base/uploads".to_string(),
         };
         
-        assert_eq!(paths.base_path(), "/test/base");
-        assert_eq!(paths.bookmarks_path(), "/test/base/bookmarks.csv");
-        assert_eq!(paths.uploads_path(), "/test/base/uploads");
+        assert_eq!(paths.base_path, "/test/base");
+        assert_eq!(paths.bookmarks_path, "/test/base/bookmarks.csv");
+        assert_eq!(paths.uploads_path, "/test/base/uploads");
     }
 }

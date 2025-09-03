@@ -7,7 +7,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -209,13 +209,12 @@ impl Task {
 
                     let meta = AppLocal::fetch_metadata(&bmark.url, opts.clone())?;
 
-                    let bmark = AppLocal::merge_metadata(
+                                          let bmark = AppLocal::merge_metadata(
                         bmark.clone(),
                         meta,
                         storage_mgr.clone(),
                         bmark_mgr.clone(),
-                    )?
-                    .context("bookmark {id} not found")?;
+                    )?;
 
                     Ok(bmark) as anyhow::Result<bookmarks::Bookmark>
                 };

@@ -33,12 +33,14 @@ pub enum CliError {
 }
 
 impl CliError {
-    /// Create an invalid input error
     pub fn invalid_input(message: impl Into<String>) -> Self {
         Self::InvalidInput { message: message.into() }
     }
 
-    /// Create a validation error
+    pub fn configuration(message: impl Into<String>) -> Self {
+        Self::Configuration { message: message.into() }
+    }
+
     pub fn validation(field: impl Into<String>, message: impl Into<String>) -> Self {
         Self::Validation { 
             field: field.into(), 
@@ -46,35 +48,23 @@ impl CliError {
         }
     }
 
-    /// Create a configuration error
-    pub fn configuration(message: impl Into<String>) -> Self {
-        Self::Configuration { message: message.into() }
-    }
-
-    /// Create a not supported error
     pub fn not_supported(operation: impl Into<String>) -> Self {
         Self::NotSupported { operation: operation.into() }
     }
 
-    /// Create a database error
     pub fn database(message: impl Into<String>) -> Self {
         Self::Database { message: message.into() }
     }
 
-    /// Create a metadata error
     pub fn metadata(message: impl Into<String>) -> Self {
         Self::Metadata { message: message.into() }
     }
 
-    /// Create a storage error
     pub fn storage(message: impl Into<String>) -> Self {
         Self::Storage { message: message.into() }
     }
 
-    /// Create an internal error
-    pub fn internal(message: impl Into<String>) -> Self {
-        Self::Internal { message: message.into() }
-    }
+
 }
 
 /// Result type for CLI operations

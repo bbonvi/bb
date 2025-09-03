@@ -12,11 +12,6 @@ pub trait AppBackend: Send + Sync {
         opts: AddOpts,
     ) -> anyhow::Result<bookmarks::Bookmark, AppError>;
 
-    fn upload_cover(&self, id: u64, file: Vec<u8>)
-        -> anyhow::Result<bookmarks::Bookmark, AppError>;
-
-    fn upload_icon(&self, id: u64, file: Vec<u8>) -> anyhow::Result<bookmarks::Bookmark, AppError>;
-
     fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError>;
 
     fn update(

@@ -1,5 +1,5 @@
 use crate::{
-    app::backend::AppBackend,
+    app::service::AppService,
     bookmarks::{BookmarkCreate, BookmarkUpdate, SearchQuery},
     metadata::MetaOptions,
     parse_tags,
@@ -49,8 +49,8 @@ impl SearchCommand {
         })
     }
 
-    pub fn execute(self, app_mgr: Box<dyn AppBackend>) -> CliResult<()> {
-        let bmarks = app_mgr.search(self.query.clone())
+    pub fn execute(self, app_service: AppService) -> CliResult<()> {
+        let bmarks = app_service.search_bookmarks(self.query.clone(), self.count_only)
             .map_err(|e| crate::cli::errors::CliError::database(e.to_string()))?;
 
         if bmarks.is_empty() {
@@ -69,7 +69,7 @@ impl SearchCommand {
         }
 
         if let Some(action) = self.action {
-            action.execute(bmarks, self.query, app_mgr)
+            action.execute(bmarks, self.query, app_service)
         } else {
             println!("{}", serde_json::to_string_pretty(&bmarks)
                 .map_err(|e| crate::cli::errors::CliError::invalid_input(e.to_string()))?);
@@ -117,14 +117,14 @@ impl AddCommand {
         })
     }
 
-    pub fn execute(self, app_mgr: Box<dyn AppBackend>) -> CliResult<()> {
+    pub fn execute(self, app_service: AppService) -> CliResult<()> {
         let mut url = self.url;
         let mut title = self.title;
         let mut description = self.description;
         let mut tags = self.tags;
 
         if self.options.use_editor {
-            let mut current_tags = app_mgr.tags()
+            let mut current_tags = app_service.get_tags()
                 .map_err(|e| crate::cli::errors::CliError::database(e.to_string()))?;
             current_tags.sort();
 
@@ -136,7 +136,7 @@ impl AddCommand {
                 current_tags,
             };
 
-            let config = app_mgr.config()
+            let config = app_service.get_config()
                 .map_err(|e| crate::cli::errors::CliError::configuration(e.to_string()))?;
             let rules = &config.read().unwrap().rules;
 
@@ -217,7 +217,7 @@ impl AddCommand {
             skip_rules: false,
         };
 
-        let bmark = app_mgr.create(bmark_create, add_opts)
+        let bmark = app_service.create_bookmark(bmark_create, add_opts)
             .map_err(|e| crate::cli::errors::CliError::database(e.to_string()))?;
         
         println!("{}", serde_json::to_string_pretty(&bmark)
@@ -392,7 +392,7 @@ impl ActionCommand {
         self,
         bmarks: Vec<crate::bookmarks::Bookmark>,
         query: SearchQuery,
-        app_mgr: Box<dyn AppBackend>,
+        app_service: AppService,
     ) -> CliResult<()> {
         match self {
             ActionCommand::Update {
@@ -449,7 +449,7 @@ impl ActionCommand {
                     }
                 }
 
-                let count = app_mgr.search_update(query, bmark_update)
+                let count = app_service.search_and_update(query, bmark_update)
                     .map_err(|e| crate::cli::errors::CliError::database(e.to_string()))?;
                 println!("{} items updated", count);
                 Ok(())
@@ -483,7 +483,7 @@ impl ActionCommand {
                     }
                 }
 
-                let count = app_mgr.search_delete(query)
+                let count = app_service.search_and_delete(query)
                     .map_err(|e| crate::cli::errors::CliError::database(e.to_string()))?;
                 println!("{} items removed", count);
                 Ok(())

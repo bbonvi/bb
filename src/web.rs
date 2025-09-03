@@ -1,242 +1,144 @@
 use crate::{
     app::{
-        backend::{AddOpts, AppBackend, FetchMetadataOpts, RefreshMetadataOpts},
-        errors::AppError,
-        local::AppLocal,
-        task_runner::{read_queue_dump, QueueDump},
+        backend::*,
+        service::AppService,
+        task_runner::{self, QueueDump},
     },
-    bookmarks::{self, Bookmark, BookmarkUpdate, SearchQuery},
+    bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery},
     config::Config,
-    images,
+    eid::Eid,
     metadata::MetaOptions,
-    parse_tags,
+    storage::{self, StorageManager},
 };
+use anyhow::Context;
 use axum::{
-    extract::{DefaultBodyLimit, State},
+    extract::State,
+    http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::Engine;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::{fmt::Debug, sync::Arc};
-use tokio::{signal, sync::RwLock};
-use tower_http::services::{ServeDir, ServeFile};
+use std::sync::{Arc, RwLock};
+use tower_http::services::ServeDir;
+use tokio::signal;
 
-#[derive(Clone)]
 struct SharedState {
-    app: Arc<RwLock<AppLocal>>,
+    app_service: Arc<RwLock<AppService>>,
+    storage_mgr: Arc<dyn StorageManager>,
 }
 
-async fn start_app(app: AppLocal, base_path: &str) {
-    let app = Arc::new(RwLock::new(app));
+async fn start_app(app_service: AppService, base_path: &str) {
+    let storage_mgr = Arc::new(storage::BackendLocal::new(&format!("{base_path}/uploads")));
+    let shared_state = Arc::new(RwLock::new(SharedState {
+        app_service: Arc::new(RwLock::new(app_service)),
+        storage_mgr,
+    }));
 
-    let signal = shutdown_signal(app.clone());
-    let shared_state = Arc::new(SharedState { app: app.clone() });
-
-    async fn shutdown_signal(app: Arc<RwLock<AppLocal>>) {
-        let ctrl_c = async {
-            signal::ctrl_c()
-                .await
-                .expect("failed to install Ctrl+C handler");
-        };
-
-        let terminate = async {
-            signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("failed to install signal handler")
-                .recv()
-                .await;
-        };
-
-        tokio::select! {
-            _ = ctrl_c => {
-                let mut app = app.write().await;
-                app.shutdown();
-
-                // join on queue thread handle
-                log::warn!("waiting for queues to stop");
-                app.wait_task_queue_finish();
-            },
-            _ = terminate => {},
-        }
-    }
-
-    let webui = Router::new()
-        .nest_service("/", ServeFile::new("client/build/index.html"))
-        .nest_service("/static/", ServeDir::new("client/build/static/"))
-        .nest_service(
-            "/asset-manifest.json",
-            ServeFile::new("client/build/asset-manifest.json"),
-        )
-        .nest_service("/favicon.png", ServeFile::new("client/build/favicon.png"))
-        .nest_service("/logo192.png", ServeFile::new("client/build/logo192.png"))
-        .nest_service("/logo512.png", ServeFile::new("client/build/logo512.png"))
-        .nest_service(
-            "/manifest.json",
-            ServeFile::new("client/build/manifest.json"),
-        )
-        .nest_service("/robots.txt", ServeFile::new("client/build/robots.txt"));
-
-    let uploads_path = format!("{base_path}/uploads");
-
-    let uploads = Router::new().nest_service("/api/file/", ServeDir::new(&uploads_path));
-
-    let api = Router::new()
+    let app = Router::new()
         .route("/api/bookmarks/search", post(search))
-        .route("/api/bookmarks/refresh_metadata", post(refresh_metadata))
         .route("/api/bookmarks/create", post(create))
         .route("/api/bookmarks/update", post(update))
         .route("/api/bookmarks/delete", post(delete))
-        .route("/api/bookmarks/search_update", post(search_update))
         .route("/api/bookmarks/search_delete", post(search_delete))
+        .route("/api/bookmarks/search_update", post(search_update))
+        .route("/api/bookmarks/refresh_metadata", post(refresh_metadata))
         .route("/api/bookmarks/total", post(total))
         .route("/api/bookmarks/tags", post(tags))
-        .route("/api/config", get(get_config))
-        .route("/api/config", post(update_config))
-        .route("/api/task_queue", get(task_queue));
-
-    let tracing_layer = tower_http::trace::TraceLayer::new_for_http()
-        .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(tracing::Level::INFO))
-        .on_response(tower_http::trace::DefaultOnResponse::new().level(tracing::Level::INFO));
-
-    let app = Router::new()
-        .merge(webui)
-        .merge(uploads)
-        .merge(api)
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-        .layer(tracing_layer)
-        .with_state(shared_state);
+        .route("/api/config", get(get_config).post(update_config))
+        .route("/api/task_queue", get(task_queue))
+        .with_state(shared_state.clone())
+        .nest_service("/", ServeDir::new(format!("{base_path}/web")));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
-    log::info!("listening on 0.0.0.0:8080");
+    log::info!("listening on {}", listener.local_addr().unwrap());
+
     axum::serve(listener, app)
-        .with_graceful_shutdown(signal)
+        .with_graceful_shutdown(shutdown_signal(shared_state))
         .await
         .unwrap();
 }
 
-pub fn start_daemon(app: AppLocal, base_path: &str) {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async { start_app(app, base_path).await });
-}
-
-// Make our own error that wraps `anyhow::Error`.
-#[derive(Debug)]
-struct HttpError(AppError);
-
-// Tell axum how to convert `AppError` into a response.
-impl IntoResponse for HttpError {
-    fn into_response(self) -> axum::response::Response {
-        match self.0 {
-            AppError::NotFound => (
-                axum::http::StatusCode::NOT_FOUND,
-                json!({"error": self.0.to_string()}).to_string(),
-            ),
-            AppError::AlreadyExists(_) => (
-                axum::http::StatusCode::CONFLICT,
-                json!({"error": self.0.to_string()}).to_string(),
-            ),
-            AppError::Base64(_) => {
-                log::error!("{self:?}");
-                (
-                    axum::http::StatusCode::BAD_REQUEST,
-                    json!({"error": self.0.to_string()}).to_string(),
-                )
-            }
-            AppError::Reqwest(_) => {
-                log::error!("{self:?}");
-                (
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    json!({"error": self.0.to_string()}).to_string(),
-                )
-            }
-            AppError::IO(_) => {
-                log::error!("{self:?}");
-                (
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    json!({"error": self.0.to_string()}).to_string(),
-                )
-            }
-            AppError::Other(_) => {
-                log::error!("{self:?}");
-                (
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    json!({"error": self.0.to_string()}).to_string(),
-                )
-            }
+async fn shutdown_signal(_app_service: Arc<RwLock<SharedState>>) {
+    // Wait for shutdown signals (Ctrl+C, SIGTERM, etc.)
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            log::info!("Received Ctrl+C, shutting down web server");
         }
-        .into_response()
+        _ = async {
+            if let Ok(mut sig) = signal::unix::signal(signal::unix::SignalKind::terminate()) {
+                sig.recv().await;
+            }
+        } => {
+            log::info!("Received SIGTERM, shutting down web server");
+        }
     }
 }
 
-// This enables using `?` on functions that return `Result<_, anyhow::Error>` to turn them into
-// `Result<_, AppError>`. That way you don't need to do that manually.
-impl<E> From<E> for HttpError
-where
-    E: Into<AppError>,
-{
-    fn from(err: E) -> Self {
-        Self(err.into())
+pub fn start_daemon(app: crate::app::local::AppLocal, base_path: &str) {
+    let app_service = AppService::new(Box::new(app));
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(start_app(app_service, base_path));
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum AppError {
+    #[error("reqwest error: {0:?}")]
+    Reqwest(#[from] reqwest::Error),
+
+    #[error("io error: {0:?}")]
+    IO(#[from] std::io::Error),
+
+    #[error("Base64: {0:?}")]
+    Base64(#[from] base64::DecodeError),
+
+    #[error("unexpected error: {0:?}")]
+    Other(#[from] anyhow::Error),
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, error_message) = match self {
+            AppError::Reqwest(_) => (StatusCode::BAD_GATEWAY, self.to_string()),
+            AppError::IO(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            AppError::Base64(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            AppError::Other(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+        };
+
+        let body = Json(serde_json::json!({
+            "error": error_message
+        }));
+
+        (status, body).into_response()
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Deserialize)]
 pub struct ListBookmarksRequest {
-    pub id: Option<u64>,
-    pub title: Option<String>,
-    pub url: Option<String>,
-    pub description: Option<String>,
-    pub tags: Option<String>,
-
-    /// Perform exact search.
-    ///
-    /// *Exact search is turned off by default*
-    #[serde(default)]
-    pub exact: bool,
-
-    #[serde(default)]
-    pub descending: bool,
+    pub query: SearchQuery,
+    pub limit: Option<usize>,
 }
 
 async fn search(
-    State(state): State<Arc<SharedState>>,
+    State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<ListBookmarksRequest>,
-) -> Result<axum::Json<Vec<Bookmark>>, HttpError> {
-    let app = state.app.clone();
+) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    log::debug!("payload: {payload:?}");
+    let mut query = payload.query;
+    query.limit = payload.limit;
 
-    let search_query = SearchQuery {
-        id: payload.id,
-        title: payload.title,
-        url: payload.url,
-        description: payload.description,
-        tags: payload.tags.map(parse_tags),
-        exact: payload.exact,
-        limit: None,
-    };
+    let bookmarks = app_service
+        .search_bookmarks(query, false)
+        .context("Failed to search bookmarks")?;
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-
-        app.search(search_query)
-            .map(|mut bookmarks| {
-                if payload.descending {
-                    bookmarks.reverse();
-                }
-                bookmarks
-            })
-            .map(Into::into)
-            .map_err(Into::into)
-    })
+    Ok(axum::Json(bookmarks))
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 pub struct BookmarkCreateRequest {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -263,92 +165,85 @@ pub struct BookmarkCreateRequest {
     pub no_headless: bool,
 }
 
-impl Debug for BookmarkCreateRequest {
+impl std::fmt::Debug for BookmarkCreateRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BookmarkCreateRequest {{ title: {:?}, description: {:?}, tags: {:?}, url: {:?}, image_b64: [REDUCTED], icon_b64: [REDUCTED], async_meta: {:?}, no_meta: {:?}, no_headless: {:?} }}", self.title, self.description, self.tags, self.url, self.async_meta, self.no_meta, self.no_headless)
+        f.debug_struct("BookmarkCreateRequest")
+            .field("title", &self.title)
+            .field("description", &self.description)
+            .field("tags", &self.tags)
+            .field("url", &self.url)
+            .field(
+                "image_b64",
+                &self.image_b64.as_ref().map(|_| "[BASE64_DATA]"),
+            )
+            .field("icon_b64", &self.icon_b64.as_ref().map(|_| "[BASE64_DATA]"))
+            .field("async_meta", &self.async_meta)
+            .field("no_meta", &self.no_meta)
+            .field("no_headless", &self.no_headless)
+            .finish()
     }
 }
 
 async fn create(
-    State(state): State<Arc<SharedState>>,
+    State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<BookmarkCreateRequest>,
-) -> Result<axum::Json<Bookmark>, HttpError> {
-    log::debug!("payload: {payload:?}");
+) -> Result<axum::Json<Bookmark>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    // we turn off metadata fetch requet by default to
-    // upload custom files and then initiate fetch request
+    let mut create = BookmarkCreate {
+        title: payload.title,
+        description: payload.description,
+        tags: payload.tags.map(|tags| {
+            tags.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        }),
+        url: payload.url,
+        ..Default::default()
+    };
 
-    let meta_opts = {
-        if payload.no_meta {
+    // Handle base64 image/icon uploads
+    if let Some(image_b64) = payload.image_b64 {
+        let image_data = base64::engine::general_purpose::STANDARD
+            .decode(image_b64)
+            .context("Failed to decode base64 image data")?;
+        let image_id = format!("{}.png", Eid::new());
+        state.storage_mgr.write(&image_id, &image_data);
+        create.image_id = Some(image_id);
+    }
+
+    if let Some(icon_b64) = payload.icon_b64 {
+        let icon_data = base64::engine::general_purpose::STANDARD
+            .decode(icon_b64)
+            .context("Failed to decode base64 icon data")?;
+        let icon_id = format!("{}.png", Eid::new());
+        state.storage_mgr.write(&icon_id, &icon_data);
+        create.icon_id = Some(icon_id);
+    }
+
+    let add_opts = AddOpts {
+        no_https_upgrade: false,
+        async_meta: payload.async_meta,
+        meta_opts: if payload.no_meta {
             None
         } else {
             Some(MetaOptions {
                 no_headless: payload.no_headless,
             })
-        }
+        },
+        skip_rules: false,
     };
 
-    let opts = AddOpts {
-        no_https_upgrade: false,
-        async_meta: payload.async_meta,
-        meta_opts: None,
-        skip_rules: true,
-    };
+    let bookmark = app_service
+        .create_bookmark(create, add_opts)
+        .context("Failed to create bookmark")?;
 
-    let bmark_create = crate::bookmarks::BookmarkCreate {
-        title: payload.title,
-        description: payload.description,
-        tags: payload.tags.map(parse_tags),
-        url: payload.url,
-        ..Default::default()
-    };
-
-    let app = state.app.clone();
-
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-
-        let bmark = app.create(bmark_create, opts)?;
-
-        if let Some(cover) = payload.image_b64 {
-            let file = STANDARD
-                .decode(cover)
-                .map_err(|err| AppError::Other(err.into()))?;
-
-            let file = images::convert(file, Some((800, 800)), true)?;
-            app.upload_cover(bmark.id, file)?;
-        }
-
-        if let Some(icon) = payload.icon_b64 {
-            let file = STANDARD
-                .decode(icon)
-                .map_err(|err| AppError::Other(err.into()))?;
-            let file = images::convert(file, None, true)?;
-            app.upload_icon(bmark.id, file)?;
-        }
-
-        if let Some(meta_opts) = meta_opts {
-            let refresh_meta_opts = RefreshMetadataOpts {
-                async_meta: payload.async_meta,
-                meta_opts,
-            };
-            app.refresh_metadata(bmark.id, refresh_meta_opts)?;
-        };
-
-        Ok(app
-            .search(bookmarks::SearchQuery {
-                id: Some(bmark.id),
-                ..Default::default()
-            })?
-            .first()
-            .unwrap()
-            .clone()
-            .into())
-    })
+    Ok(axum::Json(bookmark))
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 pub struct BookmarkUpdateRequest {
     pub id: u64,
     pub title: Option<String>,
@@ -362,119 +257,137 @@ pub struct BookmarkUpdateRequest {
     pub icon_b64: Option<String>,
 }
 
-impl Debug for BookmarkUpdateRequest {
+impl std::fmt::Debug for BookmarkUpdateRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BookmarkUpdateRequest {{ id: {}, title: {:?}, description: {:?}, tags: {:?}, append_tags: {:?}, remove_tags: {:?}, url: {:?}, image_b64: [REDUCTED], icon_b64: [REDUCTED] }}", self.id, self.title, self.description, self.tags, self.append_tags, self.remove_tags, self.url)
+        f.debug_struct("BookmarkUpdateRequest")
+            .field("id", &self.id)
+            .field("title", &self.title)
+            .field("description", &self.description)
+            .field("tags", &self.tags)
+            .field("append_tags", &self.append_tags)
+            .field("remove_tags", &self.remove_tags)
+            .field("url", &self.url)
+            .field(
+                "image_b64",
+                &self.image_b64.as_ref().map(|_| "[BASE64_DATA]"),
+            )
+            .field("icon_b64", &self.icon_b64.as_ref().map(|_| "[BASE64_DATA]"))
+            .finish()
     }
 }
 
 async fn update(
-    State(state): State<Arc<SharedState>>,
+    State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<BookmarkUpdateRequest>,
-) -> Result<axum::Json<Bookmark>, HttpError> {
-    log::debug!("payload: {payload:?}",);
+) -> Result<axum::Json<Bookmark>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    let app = state.app.clone();
-
-    let bmark_update = BookmarkUpdate {
+    let mut update = BookmarkUpdate {
         title: payload.title,
         description: payload.description,
-        tags: payload.tags.map(parse_tags),
-        remove_tags: payload.remove_tags.map(parse_tags),
-        append_tags: payload.append_tags.map(parse_tags),
+        tags: payload.tags.map(|tags| {
+            tags.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        }),
+        append_tags: payload.append_tags.map(|tags| {
+            tags.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        }),
+        remove_tags: payload.remove_tags.map(|tags| {
+            tags.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        }),
         url: payload.url,
         ..Default::default()
     };
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-        let mut bmark = app.update(payload.id, bmark_update)?;
+    // Handle base64 image/icon uploads
+    if let Some(image_b64) = payload.image_b64 {
+        let image_data = base64::engine::general_purpose::STANDARD
+            .decode(image_b64)
+            .context("Failed to decode base64 image data")?;
+        let image_id = format!("{}.png", Eid::new());
+        state.storage_mgr.write(&image_id, &image_data);
+        update.image_id = Some(image_id);
+    }
 
-        if let Some(cover) = payload.image_b64 {
-            let file = STANDARD.decode(cover)?;
-            let file = images::convert(file, Some((800, 800)), true)?;
-            bmark = app.upload_cover(bmark.id, file)?;
-        }
+    if let Some(icon_b64) = payload.icon_b64 {
+        let icon_data = base64::engine::general_purpose::STANDARD
+            .decode(icon_b64)
+            .context("Failed to decode base64 icon data")?;
+        let icon_id = format!("{}.png", Eid::new());
+        state.storage_mgr.write(&icon_id, &icon_data);
+        update.icon_id = Some(icon_id);
+    }
 
-        if let Some(icon) = payload.icon_b64 {
-            let file = STANDARD.decode(icon)?;
-            let file = images::convert(file, None, true)?;
-            bmark = app.upload_icon(bmark.id, file)?;
-        }
+    let bookmark = app_service
+        .update_bookmark(payload.id, update)
+        .context("Failed to update bookmark")?;
 
-        Ok(bmark.into())
-    })
+    Ok(axum::Json(bookmark))
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 pub struct BookmarkDeleteRequest {
-    pub id: u64,
+    pub _id: u64,
 }
 
 async fn delete(
-    State(state): State<Arc<SharedState>>,
+    State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<BookmarkUpdateRequest>,
-) -> Result<(), HttpError> {
-    log::debug!("payload: {payload:?}");
+) -> Result<(), AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    let app = state.app.clone();
+    app_service
+        .delete_bookmark(payload.id)
+        .context("Failed to delete bookmark")?;
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-        app.delete(payload.id).map(|_| ()).map_err(Into::into)
-    })
+    Ok(())
 }
 
 async fn search_delete(
-    State(state): State<Arc<SharedState>>,
+    State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<SearchQuery>,
-) -> Result<axum::Json<usize>, HttpError> {
-    log::debug!("payload: {payload:?}");
+) -> Result<axum::Json<usize>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    let app = state.app.clone();
+    let count = app_service
+        .search_and_delete(payload)
+        .context("Failed to delete bookmarks")?;
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-        app.bmark_mgr
-            .search_delete(payload)
-            .map(Into::into)
-            .map_err(Into::into)
-    })
+    Ok(axum::Json(count))
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Deserialize)]
 pub struct SearchUpdateRequest {
     query: SearchQuery,
     update: BookmarkUpdate,
 }
 
 async fn search_update(
-    State(state): State<Arc<SharedState>>,
+    State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<SearchUpdateRequest>,
-) -> Result<axum::Json<usize>, HttpError> {
-    log::debug!("payload: {payload:?}");
+) -> Result<axum::Json<usize>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    let app = state.app.clone();
+    let count = app_service
+        .search_and_update(payload.query, payload.update)
+        .context("Failed to update bookmarks")?;
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-        app.search_update(payload.query, payload.update)
-            .map(Into::into)
-            .map_err(Into::into)
-    })
+    Ok(axum::Json(count))
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct FetchMetaRequest {
-    url: String,
-    opts: FetchMetadataOpts,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize)]
 pub struct RefreshMetadataRequest {
     pub id: u64,
 
@@ -490,82 +403,82 @@ pub struct RefreshMetadataRequest {
 }
 
 async fn refresh_metadata(
-    State(state): State<Arc<SharedState>>,
+    State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<RefreshMetadataRequest>,
-) -> Result<axum::Json<()>, HttpError> {
-    log::debug!("payload: {payload:?}");
+) -> Result<axum::Json<()>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    let app = state.app.clone();
+    let opts = RefreshMetadataOpts {
+        async_meta: payload.async_meta,
+        meta_opts: MetaOptions {
+            no_headless: payload.no_headless,
+        },
+    };
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-        app.refresh_metadata(
-            payload.id,
-            RefreshMetadataOpts {
-                async_meta: payload.async_meta,
-                meta_opts: MetaOptions {
-                    no_headless: payload.no_headless,
-                },
-            },
-        )
-        .map(Into::into)
-        .map_err(Into::into)
-    })
+    app_service
+        .refresh_metadata(payload.id, opts)
+        .context("Failed to refresh metadata")?;
+
+    Ok(axum::Json(()))
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TotalResponse {
     pub total: usize,
 }
-async fn total(
-    State(state): State<Arc<SharedState>>,
-) -> Result<axum::Json<TotalResponse>, HttpError> {
-    let app = state.app.clone();
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-        app.total()
-            .map(|total| TotalResponse { total }.into())
-            .map_err(Into::into)
-    })
+async fn total(
+    State(state): State<Arc<RwLock<SharedState>>>,
+) -> Result<axum::Json<TotalResponse>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
+
+    let total = app_service
+        .get_total_count()
+        .context("Failed to get total count")?;
+
+    Ok(axum::Json(TotalResponse { total }))
 }
 
-async fn tags(State(state): State<Arc<SharedState>>) -> Result<axum::Json<Vec<String>>, HttpError> {
-    let app = state.app.clone();
+async fn tags(
+    State(state): State<Arc<RwLock<SharedState>>>,
+) -> Result<axum::Json<Vec<String>>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        app.lazy_refresh_backend()?;
-        app.tags().map(Into::into).map_err(Into::into)
-    })
+    let tags = app_service.get_tags().context("Failed to get tags")?;
+
+    Ok(axum::Json(tags))
 }
 
 async fn get_config(
-    State(state): State<Arc<SharedState>>,
-) -> Result<axum::Json<Config>, HttpError> {
-    let app = state.app.clone();
+    State(state): State<Arc<RwLock<SharedState>>>,
+) -> Result<axum::Json<Config>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        Ok(app.config().read().unwrap().clone().into())
-    })
+    let config = app_service.get_config().context("Failed to get config")?;
+
+    let config_value = config.read().unwrap().clone();
+    Ok(axum::Json(config_value))
 }
 
 async fn update_config(
-    State(state): State<Arc<SharedState>>,
+    State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<Config>,
-) -> Result<axum::Json<Config>, HttpError> {
-    let app = state.app.clone();
+) -> Result<axum::Json<Config>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
 
-    tokio::task::block_in_place(move || {
-        let app = app.blocking_read();
-        *app.config().write().unwrap() = payload.clone();
-        Ok(app.config().read().unwrap().clone().into())
-    })
+    app_service
+        .update_config(payload.clone())
+        .context("Failed to update config")?;
+
+    Ok(axum::Json(payload))
 }
 
-async fn task_queue() -> Result<axum::Json<QueueDump>, HttpError> {
-    tokio::task::block_in_place(move || Ok(read_queue_dump().into()))
+async fn task_queue() -> Result<axum::Json<QueueDump>, AppError> {
+    let queue_dump = task_runner::read_queue_dump();
+    Ok(axum::Json(queue_dump))
 }

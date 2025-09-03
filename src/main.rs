@@ -66,13 +66,18 @@ fn main() -> anyhow::Result<()> {
         }
 
         Command::Daemon { .. } => {
+            log::debug!("Creating application manager...");
             let mut app_mgr = app::AppFactory::create_local_app()?;
 
             #[cfg(feature = "headless")]
+            log::debug!("Testing headless chrome launch...");
             scrape::headless::test_launch();
+            log::debug!("launched chrome successfully");
 
+            log::debug!("Starting queue processor...");
             app_mgr.run_queue();
             let paths = app::AppFactory::get_paths()?;
+            log::debug!("starting web server...");
             web::start_daemon(app_mgr, &paths.base_path);
             Ok(())
         }
@@ -98,7 +103,7 @@ fn main() -> anyhow::Result<()> {
                 count,
                 action,
             };
-            cli::handle_search(params, app_service.into_backend())
+            cli::handle_search(params, app_service)
         }
 
         Command::Add {
@@ -122,13 +127,12 @@ fn main() -> anyhow::Result<()> {
                 no_meta: meta_args.no_meta,
                 async_meta,
             };
-            cli::handle_add(params, app_service.into_backend())
+            cli::handle_add(params, app_service)
         }
 
-        Command::Meta {
-            url,
-            meta_args,
-        } => cli::handle_meta(url, meta_args.no_https_upgrade, meta_args.no_headless),
+        Command::Meta { url, meta_args } => {
+            cli::handle_meta(url, meta_args.no_https_upgrade, meta_args.no_headless)
+        }
 
         Command::Rule { action } => {
             let app_service = app::AppFactory::create_app_service()?;

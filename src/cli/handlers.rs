@@ -1,5 +1,5 @@
 use crate::{
-    app::backend::AppBackend,
+    app::service::AppService,
     config::Config,
     cli::commands::{SearchCommand, AddCommand, MetaCommand, RuleCommand, AddOptions, RuleAction, RuleUpdateAction, SearchCommandParams},
 };
@@ -34,7 +34,7 @@ pub struct AddParams {
     pub async_meta: bool,
 }
 
-pub fn handle_search(params: SearchParams, app_mgr: Box<dyn AppBackend>) -> Result<()> {
+pub fn handle_search(params: SearchParams, app_service: AppService) -> Result<()> {
     // Convert ActionArgs to ActionCommand
     let action_command = params.action.map(|action| match action {
         ActionArgs::Update { url, title, description, tags, append_tags, remove_tags } => {
@@ -58,10 +58,10 @@ pub fn handle_search(params: SearchParams, app_mgr: Box<dyn AppBackend>) -> Resu
         action: action_command,
     })?;
     
-    search_command.execute(app_mgr).map_err(|e| anyhow::anyhow!(e))
+    search_command.execute(app_service).map_err(|e| anyhow::anyhow!(e))
 }
 
-pub fn handle_add(params: AddParams, app_mgr: Box<dyn AppBackend>) -> Result<()> {
+pub fn handle_add(params: AddParams, app_service: AppService) -> Result<()> {
     let options = AddOptions {
         use_editor: params.use_editor,
         no_https_upgrade: params.no_https_upgrade,
@@ -71,7 +71,7 @@ pub fn handle_add(params: AddParams, app_mgr: Box<dyn AppBackend>) -> Result<()>
     };
 
     let add_command = AddCommand::new(params.url, params.title, params.description, params.tags, options)?;
-    add_command.execute(app_mgr).map_err(|e| anyhow::anyhow!(e))
+    add_command.execute(app_service).map_err(|e| anyhow::anyhow!(e))
 }
 
 pub fn handle_meta(url: String, _no_https_upgrade: bool, no_headless: bool) -> Result<()> {

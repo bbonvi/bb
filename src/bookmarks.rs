@@ -91,19 +91,11 @@ pub struct SearchQuery {
 
 pub trait BookmarkManager: Send + Sync {
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>>;
-    fn total(&self) -> anyhow::Result<usize>;
-    fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark>;
-    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>>;
-    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>>;
-
+    fn search_update(&self, query: SearchQuery, update: BookmarkUpdate) -> anyhow::Result<usize>;
     fn search_delete(&self, query: SearchQuery) -> anyhow::Result<usize>;
-    fn search_update(
-        &self,
-        query: SearchQuery,
-        bmark_update: BookmarkUpdate,
-    ) -> anyhow::Result<usize>;
-
-    fn refresh(&self) -> anyhow::Result<()>;
+    fn create(&self, bookmark: BookmarkCreate) -> anyhow::Result<Bookmark>;
+    fn update(&self, id: u64, update: BookmarkUpdate) -> anyhow::Result<Bookmark>;
+    fn delete(&self, id: u64) -> anyhow::Result<()>;
 }
 
 impl SearchQuery {
@@ -285,7 +277,7 @@ impl BookmarkManager for BackendCsv {
         Ok(bmark)
     }
 
-    fn delete(&self, id: u64) -> anyhow::Result<Option<bool>> {
+    fn delete(&self, id: u64) -> anyhow::Result<()> {
         let mut bmarks = self.list.write().unwrap();
         let result = bmarks.iter().position(|b| b.id == id).map(|idx| {
             bmarks.remove(idx);
@@ -298,58 +290,59 @@ impl BookmarkManager for BackendCsv {
             self.save();
         }
 
-        Ok(result)
+        Ok(())
     }
 
-    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Option<Bookmark>> {
+    fn update(&self, id: u64, bmark_update: BookmarkUpdate) -> anyhow::Result<Bookmark> {
         let mut bmarks = self.list.write().unwrap();
 
-        let bmark = if let Some(bmark) = bmarks.iter_mut().find(|b| b.id == id) {
-            if let Some(title) = bmark_update.title {
-                bmark.title = title;
-            }
-            if let Some(descr) = bmark_update.description {
-                bmark.description = descr;
-            }
+        let bmark_idx = bmarks.iter().position(|b| b.id == id)
+            .ok_or_else(|| anyhow::anyhow!("Bookmark with id {} not found", id))?;
 
-            if let Some(tags) = bmark_update.tags {
-                bmark.tags = tags;
-                let mut seen = HashSet::new();
-                bmark.tags.retain(|item| seen.insert(item.clone()));
-            }
+        let bmark = &mut bmarks[bmark_idx];
 
-            if let Some(delete_tags) = bmark_update.remove_tags {
-                bmark
-                    .tags
-                    .retain(|item| !delete_tags.iter().any(|t| t == item));
-            }
+        if let Some(title) = bmark_update.title {
+            bmark.title = title;
+        }
+        if let Some(descr) = bmark_update.description {
+            bmark.description = descr;
+        }
 
-            if let Some(mut tags) = bmark_update.append_tags {
-                bmark.tags.append(&mut tags);
-                let mut seen = HashSet::new();
-                bmark.tags.retain(|item| seen.insert(item.clone()));
-            }
+        if let Some(tags) = bmark_update.tags {
+            bmark.tags = tags;
+            let mut seen = HashSet::new();
+            bmark.tags.retain(|item| seen.insert(item.clone()));
+        }
 
-            if let Some(url) = bmark_update.url {
-                bmark.url = url;
-            }
+        if let Some(delete_tags) = bmark_update.remove_tags {
+            bmark
+                .tags
+                .retain(|item| !delete_tags.iter().any(|t| t == item));
+        }
 
-            if let Some(image_id) = bmark_update.image_id {
-                bmark.image_id = Some(image_id);
-            }
-            if let Some(icon_id) = bmark_update.icon_id {
-                bmark.icon_id = Some(icon_id);
-            }
-            Some(bmark.clone())
-        } else {
-            None
-        };
+        if let Some(mut tags) = bmark_update.append_tags {
+            bmark.tags.append(&mut tags);
+            let mut seen = HashSet::new();
+            bmark.tags.retain(|item| seen.insert(item.clone()));
+        }
 
+        if let Some(url) = bmark_update.url {
+            bmark.url = url;
+        }
+
+        if let Some(image_id) = bmark_update.image_id {
+            bmark.image_id = Some(image_id);
+        }
+        if let Some(icon_id) = bmark_update.icon_id {
+            bmark.icon_id = Some(icon_id);
+        }
+
+        let result = bmark.clone();
         drop(bmarks);
 
         self.save();
 
-        Ok(bmark)
+        Ok(result)
     }
 
     fn search_delete(&self, query: SearchQuery) -> anyhow::Result<usize> {
@@ -429,10 +422,7 @@ impl BookmarkManager for BackendCsv {
         Ok(count)
     }
 
-    fn total(&self) -> anyhow::Result<usize> {
-        let bmarks = self.list.read().unwrap();
-        Ok(bmarks.len())
-    }
+
 
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
         let bmarks = self.list.read().unwrap();
@@ -551,12 +541,7 @@ impl BookmarkManager for BackendCsv {
         Ok(output)
     }
 
-    fn refresh(&self) -> anyhow::Result<()> {
-        let mut list = self.list.write().unwrap();
-        let backend = Self::load(&self.path)?;
-        *list = backend.list.write().unwrap().clone();
-        Ok(())
-    }
+
 }
 
 #[cfg(test)]

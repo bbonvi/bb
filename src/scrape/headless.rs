@@ -75,9 +75,10 @@ pub fn apply_css_rules(body: &headless_chrome::browser::tab::element::Element) {
 }
 
 pub fn test_launch() {
-    headless_chrome::Browser::new(
+    let browser = headless_chrome::Browser::new(
         LaunchOptionsBuilder::default()
             .sandbox(false)
+            .headless(true)
             .path(
                 std::env::var("CHROME_PATH")
                     .ok()
@@ -87,6 +88,8 @@ pub fn test_launch() {
             .unwrap(),
     )
     .expect("could not launch chromium");
+    let tab = browser.new_tab().unwrap();
+    tab.close(false).unwrap();
 }
 
 pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {

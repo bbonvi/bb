@@ -220,20 +220,4 @@ impl AppBackend for AppRemote {
 
         Ok(handle_response(resp)?)
     }
-
-    fn upload_cover(
-        &self,
-        _id: u64,
-        _file: Vec<u8>,
-    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
-        unimplemented!()
-    }
-
-    fn upload_icon(
-        &self,
-        _id: u64,
-        _file: Vec<u8>,
-    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
-        unimplemented!()
-    }
 }

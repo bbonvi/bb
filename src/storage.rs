@@ -3,10 +3,9 @@ use std::{path::PathBuf, str::FromStr};
 use crate::eid::Eid;
 
 pub trait StorageManager: Send + Sync {
+    fn write(&self, ident: &str, data: &[u8]);
     fn read(&self, ident: &str) -> Vec<u8>;
     fn exists(&self, ident: &str) -> bool;
-    fn write(&self, ident: &str, data: &[u8]);
-    fn delete(&self, ident: &str);
 }
 
 #[derive(Clone)]
@@ -46,11 +45,5 @@ impl StorageManager for BackendLocal {
         std::fs::write(&temp_path, data).unwrap();
 
         std::fs::rename(&temp_path, &path).unwrap();
-    }
-
-    fn delete(&self, ident: &str) {
-        let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
-
-        std::fs::remove_file(&path).unwrap()
     }
 }

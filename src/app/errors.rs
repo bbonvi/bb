@@ -1,11 +1,5 @@
 #[derive(thiserror::Error, Debug)]
 pub enum AppError {
-    #[error("bookmark not found")]
-    NotFound,
-
-    #[error("bookmark with this url already exists at id {0}")]
-    AlreadyExists(u64),
-
     #[error("reqwest error: {0:?}")]
     Reqwest(#[from] reqwest::Error),
 

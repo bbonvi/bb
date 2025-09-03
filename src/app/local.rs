@@ -8,12 +8,10 @@ use crate::{
 };
 
 use super::task_runner::{self, Status, Task};
-use anyhow::{anyhow, Context};
-use homedir::my_home;
+use anyhow::anyhow;
 use std::{
     collections::HashMap,
     sync::{mpsc, Arc, RwLock},
-    time::SystemTime,
 };
 
 use super::{backend::*, errors::AppError};
@@ -27,32 +25,6 @@ pub struct AppLocal {
     task_queue_handle: Option<std::thread::JoinHandle<()>>,
 
     config: Arc<RwLock<Config>>,
-
-    bmarks_last_modified: Arc<RwLock<SystemTime>>,
-}
-
-pub fn bmarks_modtime() -> SystemTime {
-    use std::path::Path;
-
-    let base_path = std::env::var("BB_BASE_PATH").unwrap_or(format!(
-        "{}/.local/share/bb",
-        my_home()
-            .expect("couldnt find home dir")
-            .expect("couldnt find home dir")
-            .to_string_lossy()
-    ));
-
-    let bookmarks_path = format!("{base_path}/bookmarks.csv");
-
-    let meta = std::fs::metadata(Path::new(&bookmarks_path));
-    if let Err(err) = &meta {
-        if err.kind() == std::io::ErrorKind::NotFound { return SystemTime::now() }
-    };
-
-    let bookmarks_metadata = meta.expect("couldnt read bookmarks.json");
-    bookmarks_metadata
-        .modified()
-        .expect("couldnt get bookmarks.json modtime")
 }
 
 impl AppLocal {
@@ -109,7 +81,6 @@ impl AppLocal {
             tags_cache: Arc::new(RwLock::new(Vec::new())),
             task_queue_handle: None,
             config,
-            bmarks_last_modified: Arc::new(RwLock::new(bmarks_modtime())),
         }
     }
 }
@@ -157,14 +128,12 @@ impl AppBackend for AppLocal {
                     meta,
                     self.storage_mgr.clone(),
                     self.bmark_mgr.clone(),
-                )?
-                .context("bmark not found")?;
+                )?;
             };
 
             // apply rules
             let rules = &self.config.read().unwrap().rules;
-            Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?
-                .ok_or_else(|| anyhow!("bmark not found"))?;
+            Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?;
         };
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
@@ -192,7 +161,7 @@ impl AppBackend for AppLocal {
         //     return Err(AppError::AlreadyExists(b.id));
         // }
         if let Some(b) = self.search(query)?.first() {
-            return Err(AppError::AlreadyExists(b.id));
+            return Err(AppError::Other(anyhow::anyhow!("Bookmark with URL '{}' already exists at id {}", url, b.id)));
         };
 
         // create empty bookmark
@@ -219,13 +188,12 @@ impl AppBackend for AppLocal {
                         },
                     )?;
 
-                    let bmark = Self::merge_metadata(
+                                          let bmark = Self::merge_metadata(
                         bmark.clone(),
                         meta,
                         self.storage_mgr.clone(),
                         self.bmark_mgr.clone(),
-                    )?
-                    .context("bmark not found")?;
+                    )?;
 
                     Ok(bmark) as anyhow::Result<bookmarks::Bookmark>
                 };
@@ -233,8 +201,7 @@ impl AppBackend for AppLocal {
                 // apply rules
                 if !opts.skip_rules {
                     let rules = &self.config.read().unwrap().rules;
-                    let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?
-                        .ok_or_else(|| anyhow!("bmark not found"))?;
+                                          let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?;
                     return Ok(with_meta.map(|_| with_rules)?);
                 }
 
@@ -243,8 +210,7 @@ impl AppBackend for AppLocal {
         } else if !opts.skip_rules {
             // if no metadata apply Rules.
             let rules = &self.config.read().unwrap().rules;
-            return Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?
-                .ok_or(AppError::NotFound);
+                          return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?);
         }
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
@@ -270,14 +236,13 @@ impl AppBackend for AppLocal {
                 .first()
             {
                 log::info!("already exists{id}");
-                return Err(AppError::AlreadyExists(b.id));
+                return Err(AppError::Other(anyhow::anyhow!("Bookmark with URL '{}' already exists at id {}", bmark_update.url.as_ref().unwrap(), b.id)));
             };
         }
 
         let bmark = self
             .bmark_mgr
-            .update(id, bmark_update)?
-            .ok_or(AppError::NotFound)?;
+            .update(id, bmark_update)?;
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
 
@@ -285,10 +250,7 @@ impl AppBackend for AppLocal {
     }
 
     fn delete(&self, id: u64) -> anyhow::Result<(), AppError> {
-        self.bmark_mgr
-            .delete(id)?
-            .ok_or(AppError::NotFound)
-            .map(|_| ())?;
+        self.bmark_mgr.delete(id)?;
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
 
@@ -313,8 +275,11 @@ impl AppBackend for AppLocal {
         Ok(search_update)
     }
 
+
+
     fn total(&self) -> anyhow::Result<usize, AppError> {
-        Ok(self.bmark_mgr.total()?)
+        let bookmarks = self.bmark_mgr.search(bookmarks::SearchQuery::default())?;
+        Ok(bookmarks.len())
     }
 
     fn search(
@@ -372,76 +337,6 @@ impl AppBackend for AppLocal {
 
         Ok(self.tags_cache.read().unwrap().to_vec())
     }
-
-    fn upload_cover(
-        &self,
-        id: u64,
-        file: Vec<u8>,
-    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
-        let bmarks = self.bmark_mgr.search(bookmarks::SearchQuery {
-            id: Some(id),
-            ..Default::default()
-        })?;
-        let bmark = bmarks.first().ok_or(AppError::NotFound)?;
-
-        let mut bmark_update = bookmarks::BookmarkUpdate {
-            ..Default::default()
-        };
-
-        let filetype = infer::get(&file)
-            .map(|ftype| ftype.extension())
-            .unwrap_or("png")
-            .to_string();
-
-        let image_id = format!("{}.{}", Eid::new(), filetype);
-
-        self.storage_mgr.write(&image_id, &file);
-
-        bmark_update.image_id = Some(image_id.to_string());
-
-        if let Some(old_image) = &bmark.image_id {
-            if self.storage_mgr.exists(old_image) {
-                self.storage_mgr.delete(old_image);
-            }
-        }
-
-        self.bmark_mgr
-            .update(id, bmark_update)?
-            .ok_or(AppError::NotFound)
-    }
-
-    fn upload_icon(&self, id: u64, file: Vec<u8>) -> anyhow::Result<bookmarks::Bookmark, AppError> {
-        let bmarks = self.bmark_mgr.search(bookmarks::SearchQuery {
-            id: Some(id),
-            ..Default::default()
-        })?;
-        let bmark = bmarks.first().ok_or(AppError::NotFound)?;
-
-        let mut bmark_update = bookmarks::BookmarkUpdate {
-            ..Default::default()
-        };
-
-        let filetype = infer::get(&file)
-            .map(|ftype| ftype.extension())
-            .unwrap_or("png")
-            .to_string();
-
-        let icon_id = format!("{}.{}", Eid::new(), filetype);
-
-        self.storage_mgr.write(&icon_id, &file);
-
-        bmark_update.icon_id = Some(icon_id.to_string());
-
-        if let Some(old_icon) = &bmark.icon_id {
-            if self.storage_mgr.exists(old_icon) {
-                self.storage_mgr.delete(old_icon);
-            }
-        }
-
-        self.bmark_mgr
-            .update(id, bmark_update)?
-            .ok_or(AppError::NotFound)
-    }
 }
 
 impl AppLocal {
@@ -483,20 +378,6 @@ impl AppLocal {
         Ok(())
     }
 
-    pub fn lazy_refresh_backend(&self) -> anyhow::Result<()> {
-        let mut last_modified = self.bmarks_last_modified.write().unwrap();
-        let modtime = bmarks_modtime();
-
-        if *last_modified < modtime {
-            self.bmark_mgr.refresh()?;
-            *last_modified = bmarks_modtime();
-        }
-
-        self.config().write().unwrap().reload();
-
-        Ok(())
-    }
-
     pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> anyhow::Result<Metadata> {
         let mut url_parsed = reqwest::Url::parse(url).unwrap();
         let mut tried_https = false;
@@ -525,7 +406,7 @@ impl AppLocal {
         meta: Metadata,
         storage_mgr: Arc<dyn storage::StorageManager>,
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
-    ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
+    ) -> anyhow::Result<bookmarks::Bookmark> {
         let mut bmark_update = bookmarks::BookmarkUpdate {
             ..Default::default()
         };
@@ -569,7 +450,7 @@ impl AppLocal {
         id: u64,
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
         rules: &[Rule],
-    ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
+    ) -> anyhow::Result<bookmarks::Bookmark> {
         let query = bookmarks::SearchQuery {
             id: Some(id),
             ..Default::default()
@@ -637,17 +518,7 @@ impl AppLocal {
         bmark_mgr.update(bmark.id, bmark_update)
     }
 
-    pub fn wait_task_queue_finish(&mut self) {
-        self.task_queue_handle.take().unwrap().join().unwrap();
-    }
-
-    pub fn shutdown(&self) {
-        if let Err(err) = self.task_tx.as_ref().unwrap().send(Task::Shutdown) {
-            log::error!("{err}");
-        }
-    }
-
-    fn schedule_fetch_and_update_metadata(
+    pub fn schedule_fetch_and_update_metadata(
         &self,
         bookmark: &bookmarks::Bookmark,
         meta_opts: FetchMetadataOpts,
@@ -677,7 +548,6 @@ impl AppLocal {
             tags_cache: Arc::new(RwLock::new(Vec::new())),
             task_queue_handle,
             config,
-            bmarks_last_modified: Arc::new(RwLock::new(bmarks_modtime())),
         }
     }
 

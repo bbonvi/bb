@@ -17,11 +17,6 @@ impl AppService {
         Self { backend }
     }
 
-    /// Convert the service back to its backend
-    pub fn into_backend(self) -> Box<dyn AppBackend> {
-        self.backend
-    }
-
     // MARK: - Bookmark Operations
 
     /// Search bookmarks with optional count-only mode
@@ -181,25 +176,6 @@ impl AppService {
         Ok(tags)
     }
 
-    /// Get unique tags with counts
-    pub fn get_tags_with_counts(&self) -> Result<Vec<(String, usize)>> {
-        let bookmarks = self.backend.search(SearchQuery::default())
-            .context("Failed to get bookmarks for tag analysis")?;
-        
-        let mut tag_counts = std::collections::HashMap::new();
-        
-        for bookmark in bookmarks {
-            for tag in &bookmark.tags {
-                *tag_counts.entry(tag.clone()).or_insert(0) += 1;
-            }
-        }
-        
-        let mut result: Vec<_> = tag_counts.into_iter().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by count descending
-        
-        Ok(result)
-    }
-
     // MARK: - Configuration Management
 
     /// Get the current configuration
@@ -220,52 +196,6 @@ impl AppService {
             .context("Failed to update configuration")?;
         
         Ok(())
-    }
-
-    // MARK: - File Operations
-
-    /// Upload a cover image for a bookmark
-    pub fn upload_cover(&self, id: u64, file: Vec<u8>) -> Result<Bookmark> {
-        // Validate the file
-        self.validate_image_file(&file)?;
-        
-        // Verify the bookmark exists
-        let bookmarks = self.backend.search(SearchQuery {
-            id: Some(id),
-            ..Default::default()
-        }).context("Failed to verify bookmark exists")?;
-        
-        if bookmarks.is_empty() {
-            anyhow::bail!("Bookmark with ID {} not found", id);
-        }
-        
-        // Upload the cover
-        let bookmark = self.backend.upload_cover(id, file)
-            .context("Failed to upload cover image")?;
-        
-        Ok(bookmark)
-    }
-
-    /// Upload an icon for a bookmark
-    pub fn upload_icon(&self, id: u64, file: Vec<u8>) -> Result<Bookmark> {
-        // Validate the file
-        self.validate_image_file(&file)?;
-        
-        // Verify the bookmark exists
-        let bookmarks = self.backend.search(SearchQuery {
-            id: Some(id),
-            ..Default::default()
-        }).context("Failed to verify bookmark exists")?;
-        
-        if bookmarks.is_empty() {
-            anyhow::bail!("Bookmark with ID {} not found", id);
-        }
-        
-        // Upload the icon
-        let bookmark = self.backend.upload_icon(id, file)
-            .context("Failed to upload icon")?;
-        
-        Ok(bookmark)
     }
 
     // MARK: - Private Validation Methods
@@ -388,37 +318,6 @@ impl AppService {
         
         if config.task_queue_max_threads > 100 {
             anyhow::bail!("Task queue max threads cannot exceed 100");
-        }
-        
-        Ok(())
-    }
-
-    /// Validate image file
-    fn validate_image_file(&self, file: &[u8]) -> Result<()> {
-        if file.is_empty() {
-            anyhow::bail!("Image file cannot be empty");
-        }
-        
-        if file.len() > 10 * 1024 * 1024 { // 10MB limit
-            anyhow::bail!("Image file size cannot exceed 10MB");
-        }
-        
-        // Basic file type validation
-        if file.len() < 4 {
-            anyhow::bail!("Invalid image file format");
-        }
-        
-        // Check for common image file signatures
-        let is_valid = match &file[0..4] {
-            [0xFF, 0xD8, 0xFF, _] => true, // JPEG
-            [0x89, 0x50, 0x4E, 0x47] => true, // PNG
-            [0x47, 0x49, 0x46, 0x38] => true, // GIF
-            [0x52, 0x49, 0x46, 0x46] => true, // WebP (RIFF)
-            _ => false,
-        };
-        
-        if !is_valid {
-            anyhow::bail!("Unsupported image file format. Supported: JPEG, PNG, GIF, WebP");
         }
         
         Ok(())
