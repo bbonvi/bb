@@ -52,15 +52,12 @@ pub fn start_queue(
         let config = config.clone();
 
         // graceful shutdown
-        match &task {
-            Task::Shutdown => {
-                log::info!("{}", thread_counter.load(Ordering::Relaxed));
-                while thread_counter.load(Ordering::Relaxed) > 0 {
-                    sleep(Duration::from_millis(100));
-                }
-                return;
+        if let Task::Shutdown = &task {
+            log::info!("{}", thread_counter.load(Ordering::Relaxed));
+            while thread_counter.load(Ordering::Relaxed) > 0 {
+                sleep(Duration::from_millis(100));
             }
-            _ => {}
+            return;
         };
 
         let id = save_task(task.clone(), Status::Pending);
@@ -118,7 +115,7 @@ pub fn write_queue_dump(queue_dump: &QueueDump) {
     let filename = "task-queue.json";
 
     let queue_dump_str = serde_json::to_string_pretty(&queue_dump).unwrap();
-    store.write(&filename, &queue_dump_str.as_bytes());
+    store.write(filename, queue_dump_str.as_bytes());
 }
 
 pub fn remove_task(id: Eid) {
@@ -226,7 +223,7 @@ impl Task {
                 let fetch_meta_result = handle_metadata();
 
                 let rules = &config.read().unwrap().rules;
-                match AppLocal::apply_rules(bmark_id, bmark_mgr.clone(), &rules) {
+                match AppLocal::apply_rules(bmark_id, bmark_mgr.clone(), rules) {
                     Ok(_) => match fetch_meta_result {
                         Ok(_) => Status::Done,
                         Err(err) => Status::Error(err.to_string()),

@@ -16,7 +16,7 @@ pub struct BackendLocal {
 
 impl BackendLocal {
     pub fn new(storage_dir: &str) -> Self {
-        let path = PathBuf::from_str(&storage_dir).unwrap();
+        let path = PathBuf::from_str(storage_dir).unwrap();
         std::fs::create_dir_all(&path).unwrap();
         BackendLocal { base_dir: path }
     }

@@ -62,7 +62,7 @@ pub fn migrate() {
                     }
                 }
 
-                log::info!("{}", format!("http://buku.localhost/cached/{}", url));
+                log::info!("http://buku.localhost/cached/{}", url);
                 if let Ok(resp) = http_client
                     .get(format!("http://buku.localhost/cached/{}", url))
                     .basic_auth("bn", Some("cleanBeaverZ"))
@@ -88,7 +88,7 @@ pub fn migrate() {
                         title: Some(title.to_string()),
                         description: Some(description.to_string()),
                         tags: Some(
-                            tags.into_iter()
+                            tags.iter()
                                 .map(|t| {
                                     if let serde_json::Value::String(t) = t {
                                         t.clone()

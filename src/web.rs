@@ -215,7 +215,7 @@ async fn search(
         title: payload.title,
         url: payload.url,
         description: payload.description,
-        tags: payload.tags.map(|tags| parse_tags(tags)),
+        tags: payload.tags.map(parse_tags),
         exact: payload.exact,
         limit: None,
     };
@@ -298,7 +298,7 @@ async fn create(
     let bmark_create = crate::bookmarks::BookmarkCreate {
         title: payload.title,
         description: payload.description,
-        tags: payload.tags.map(|tags| parse_tags(tags)),
+        tags: payload.tags.map(parse_tags),
         url: payload.url,
         ..Default::default()
     };
@@ -336,7 +336,7 @@ async fn create(
             app.refresh_metadata(bmark.id, refresh_meta_opts)?;
         };
 
-        return Ok(app
+        Ok(app
             .search(bookmarks::SearchQuery {
                 id: Some(bmark.id),
                 ..Default::default()
@@ -344,7 +344,7 @@ async fn create(
             .first()
             .unwrap()
             .clone()
-            .into());
+            .into())
     })
 }
 
@@ -398,7 +398,7 @@ async fn update(
         }
 
         if let Some(icon) = payload.icon_b64 {
-            let file = STANDARD.decode(icon).map_err(|err| err)?;
+            let file = STANDARD.decode(icon)?;
             let file = images::convert(file, None, true)?;
             bmark = app.upload_icon(bmark.id, file)?;
         }

@@ -46,10 +46,7 @@ pub fn bmarks_modtime() -> SystemTime {
 
     let meta = std::fs::metadata(Path::new(&bookmarks_path));
     if let Err(err) = &meta {
-        match err.kind() {
-            std::io::ErrorKind::NotFound => return SystemTime::now(),
-            _ => {}
-        }
+        if err.kind() == std::io::ErrorKind::NotFound { return SystemTime::now() }
     };
 
     let bookmarks_metadata = meta.expect("couldnt read bookmarks.json");
@@ -100,7 +97,7 @@ impl AppLocal {
     }
 
     pub fn new(config: Arc<RwLock<Config>>, path: &str, storage_mgr: BackendLocal) -> Self {
-        let bmark_mgr = Arc::new(bookmarks::BackendCsv::load(&path).unwrap());
+        let bmark_mgr = Arc::new(bookmarks::BackendCsv::load(path).unwrap());
         let storage_mgr = Arc::new(storage_mgr);
 
         bmark_mgr.save();
@@ -138,7 +135,7 @@ impl AppBackend for AppLocal {
 
         if opts.async_meta {
             self.schedule_fetch_and_update_metadata(
-                &bmark,
+                bmark,
                 FetchMetadataOpts {
                     no_https_upgrade: true,
                     meta_opts: opts.meta_opts.clone(),
@@ -166,7 +163,7 @@ impl AppBackend for AppLocal {
 
             // apply rules
             let rules = &self.config.read().unwrap().rules;
-            Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
+            Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?
                 .ok_or_else(|| anyhow!("bmark not found"))?;
         };
 
@@ -236,7 +233,7 @@ impl AppBackend for AppLocal {
                 // apply rules
                 if !opts.skip_rules {
                     let rules = &self.config.read().unwrap().rules;
-                    let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
+                    let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?
                         .ok_or_else(|| anyhow!("bmark not found"))?;
                     return Ok(with_meta.map(|_| with_rules)?);
                 }
@@ -246,8 +243,8 @@ impl AppBackend for AppLocal {
         } else if !opts.skip_rules {
             // if no metadata apply Rules.
             let rules = &self.config.read().unwrap().rules;
-            return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), &rules)?
-                .ok_or(AppError::NotFound)?);
+            return Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?
+                .ok_or(AppError::NotFound);
         }
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
@@ -403,8 +400,8 @@ impl AppBackend for AppLocal {
         bmark_update.image_id = Some(image_id.to_string());
 
         if let Some(old_image) = &bmark.image_id {
-            if self.storage_mgr.exists(&old_image) {
-                self.storage_mgr.delete(&old_image);
+            if self.storage_mgr.exists(old_image) {
+                self.storage_mgr.delete(old_image);
             }
         }
 
@@ -436,8 +433,8 @@ impl AppBackend for AppLocal {
         bmark_update.icon_id = Some(icon_id.to_string());
 
         if let Some(old_icon) = &bmark.icon_id {
-            if self.storage_mgr.exists(&old_icon) {
-                self.storage_mgr.delete(&old_icon);
+            if self.storage_mgr.exists(old_icon) {
+                self.storage_mgr.delete(old_icon);
             }
         }
 
@@ -470,8 +467,7 @@ impl AppLocal {
 
         let tags: Vec<String> = bmarks
             .into_iter()
-            .map(|bmark| bmark.tags)
-            .flatten()
+            .flat_map(|bmark| bmark.tags)
             .collect();
 
         let mut counts = HashMap::new();
@@ -502,7 +498,7 @@ impl AppLocal {
     }
 
     pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> anyhow::Result<Metadata> {
-        let mut url_parsed = reqwest::Url::parse(&url).unwrap();
+        let mut url_parsed = reqwest::Url::parse(url).unwrap();
         let mut tried_https = false;
         if url_parsed.scheme() == "http" && !opts.no_https_upgrade {
             log::warn!("http url provided. trying https first");
@@ -510,7 +506,7 @@ impl AppLocal {
             tried_https = true;
         }
 
-        let err = match fetch_meta(&url_parsed.to_string(), opts.meta_opts.clone()) {
+        let err = match fetch_meta(url_parsed.as_ref(), opts.meta_opts.clone()) {
             Ok(m) => return Ok(m),
             Err(err) => Err(err),
         };
@@ -518,10 +514,10 @@ impl AppLocal {
         if tried_https {
             log::warn!("https attempt failed. trying http.");
             url_parsed.set_scheme("http").unwrap();
-            return fetch_meta(&url_parsed.to_string(), opts.meta_opts.clone());
+            return fetch_meta(url_parsed.as_ref(), opts.meta_opts.clone());
         }
 
-        return err;
+        err
     }
 
     pub fn merge_metadata(
@@ -543,26 +539,26 @@ impl AppLocal {
         }
 
         if let Some(ref image) = meta.image {
-            let filetype = infer::get(&image)
+            let filetype = infer::get(image)
                 .map(|ftype| ftype.extension())
                 .unwrap_or("png")
                 .to_string();
 
             let image_id = format!("{}.{}", Eid::new(), filetype);
 
-            storage_mgr.write(&image_id, &image);
+            storage_mgr.write(&image_id, image);
             bmark_update.image_id = Some(image_id.to_string());
         };
 
         if let Some(ref icon) = meta.icon {
-            let filetype = infer::get(&icon)
+            let filetype = infer::get(icon)
                 .map(|ftype| ftype.extension())
                 .unwrap_or("png")
                 .to_string();
 
             let icon_id = format!("{}.{}", Eid::new(), filetype);
 
-            storage_mgr.write(&icon_id, &icon);
+            storage_mgr.write(&icon_id, icon);
             bmark_update.icon_id = Some(icon_id.to_string());
         };
 
@@ -572,7 +568,7 @@ impl AppLocal {
     pub fn apply_rules(
         id: u64,
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
-        rules: &Vec<Rule>,
+        rules: &[Rule],
     ) -> anyhow::Result<Option<bookmarks::Bookmark>> {
         let query = bookmarks::SearchQuery {
             id: Some(id),
@@ -611,7 +607,6 @@ impl AppLocal {
                 title: bmark_update.title.clone(),
                 description: bmark_update.description.clone(),
                 tags: bmark_update.tags.clone(),
-                ..Default::default()
             };
 
             if !rule.is_match(&record) {

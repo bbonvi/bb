@@ -79,7 +79,7 @@ impl PeekalinkFetcher {
             .map(|s| s.to_owned());
 
         let image_url = Self::image_from_nested(
-            &resp,
+            resp,
             &[
                 // YouTube
                 &["youtubeVideo", "thumbnail", "original"],
@@ -107,7 +107,7 @@ impl PeekalinkFetcher {
         )
         .or_else(|| {
             Self::image_from_nested(
-                &resp,
+                resp,
                 &[
                     &["image", "original"],
                     &["image", "large"],

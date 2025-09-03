@@ -1,17 +1,14 @@
 use crate::eid::Eid;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Default)]
 pub enum EditorValue<T> {
     Set(T),
     Unset,
+    #[default]
     Ignore,
 }
 
-impl<T> Default for EditorValue<T> {
-    fn default() -> Self {
-        EditorValue::Ignore
-    }
-}
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct EditorBookmark {
@@ -66,7 +63,7 @@ fn parse_editor_bookmark(input: &str) -> anyhow::Result<EditorBookmark> {
 
         if line.is_empty() {
             if let CurrLine::Description = curr_line {
-                description.push_str("\n");
+                description.push('\n');
                 description.push_str(&line);
             }
 
@@ -87,7 +84,7 @@ fn parse_editor_bookmark(input: &str) -> anyhow::Result<EditorBookmark> {
                 curr_line = CurrLine::None;
             }
             CurrLine::Description => {
-                description.push_str("\n");
+                description.push('\n');
                 description.push_str(&line);
             }
             CurrLine::None => {}
@@ -103,9 +100,10 @@ fn parse_editor_bookmark(input: &str) -> anyhow::Result<EditorBookmark> {
         anyhow::bail!("url cannot be empty!")
     }
 
-    let mut editor_bookmark = EditorBookmark::default();
-
-    editor_bookmark.url = url;
+    let mut editor_bookmark = EditorBookmark {
+        url,
+        ..Default::default()
+    };
 
     if !title.is_empty() {
         if &title == "-" {

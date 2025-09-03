@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use std::{cmp::Ordering, error::Error, thread::sleep, time::Duration};
 
 use crate::metadata::Metadata;
-const USER_AGENT_DEFAULT: &'static str =
+const USER_AGENT_DEFAULT: &str =
     "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0";
 
 fn get_error(error: &reqwest::Error) -> String {
@@ -165,9 +165,7 @@ pub fn get_data_from_ddg_html(resp_text: String, url: &str) -> Option<Metadata> 
         }
     }
 
-    if title.is_none() {
-        return None;
-    }
+    title.as_ref()?;
 
     Some(Metadata {
         title,
@@ -214,8 +212,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
                 "og:Description",
             ]
             .into_iter()
-            .find(|name| *name == meta_key)
-            .is_some()
+            .any(|name| name == meta_key)
         {
             description = Some(meta_value.to_string());
         }
@@ -224,8 +221,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         if keywords.is_none()
             && ["Keywords", "keywords"]
                 .into_iter()
-                .find(|name| *name == meta_key)
-                .is_some()
+                .any(|name| name == meta_key)
         {
             keywords = Some(meta_value.to_string());
         }
@@ -234,8 +230,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         if image_url.is_none()
             && ["og:image", "twitter:image"]
                 .into_iter()
-                .find(|name| *name == meta_key)
-                .is_some()
+                .any(|name| name == meta_key)
         {
             image_url = Some(meta_value.to_string());
         }

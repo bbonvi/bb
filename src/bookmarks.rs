@@ -231,7 +231,7 @@ impl BackendCsv {
         csv_wrt.write_record(CSV_HEADERS).unwrap();
         for bmark in bmarks.iter() {
             csv_wrt
-                .write_record(&[
+                .write_record([
                     &bmark.id.to_string(),
                     &bmark.url,
                     &bmark.title,
@@ -321,7 +321,7 @@ impl BookmarkManager for BackendCsv {
             if let Some(delete_tags) = bmark_update.remove_tags {
                 bmark
                     .tags
-                    .retain(|item| delete_tags.iter().find(|t| *t == item).is_none());
+                    .retain(|item| !delete_tags.iter().any(|t| t == item));
             }
 
             if let Some(mut tags) = bmark_update.append_tags {
@@ -360,7 +360,7 @@ impl BookmarkManager for BackendCsv {
         let mut bmarks = self.list.write().unwrap();
         *bmarks = bmarks
             .iter()
-            .filter(|b| delete_ids.iter().find(|bb| b.id == bb.id).is_none())
+            .filter(|b| !delete_ids.iter().any(|bb| b.id == bb.id))
             .cloned()
             .collect::<Vec<Bookmark>>();
 
@@ -380,7 +380,7 @@ impl BookmarkManager for BackendCsv {
         let count = results.len();
         let mut bmarks = self.list.write().unwrap();
         for bmark in bmarks.iter_mut() {
-            if results.iter().find(|b| b.id == bmark.id).is_none() {
+            if !results.iter().any(|b| b.id == bmark.id) {
                 continue;
             }
 
@@ -400,7 +400,7 @@ impl BookmarkManager for BackendCsv {
             if let Some(ref delete_tags) = bmark_update.remove_tags {
                 bmark
                     .tags
-                    .retain(|item| delete_tags.iter().find(|t| *t == item).is_none());
+                    .retain(|item| !delete_tags.iter().any(|t| t == item));
             }
 
             if let Some(ref tags) = bmark_update.append_tags {
@@ -526,13 +526,11 @@ impl BookmarkManager for BackendCsv {
                         } else {
                             has_match = true;
                         }
+                    } else if !bmark_tags.any(|tag_b| tag == tag_b || tag_b.contains(teg_delim)) {
+                        has_match = false;
+                        break;
                     } else {
-                        if !bmark_tags.any(|tag_b| tag == tag_b || tag_b.contains(teg_delim)) {
-                            has_match = false;
-                            break;
-                        } else {
-                            has_match = true;
-                        }
+                        has_match = true;
                     }
                 }
             };

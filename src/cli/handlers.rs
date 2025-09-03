@@ -23,7 +23,7 @@ pub fn handle_search(
     app_mgr: Box<dyn AppBackend>,
 ) -> Result<()> {
     let query = SearchQuery {
-        id: id.clone(),
+        id,
         title: title.clone(),
         url: url.clone(),
         description: description.clone(),
@@ -112,7 +112,6 @@ pub fn handle_add(
                         }
                         if let Some(tags) = rule_tags {
                             let mut curr_tags = (editor_defaults.tags.map(parse_tags))
-                                .take()
                                 .unwrap_or_default();
                             curr_tags.append(&mut tags.clone());
                             editor_defaults.tags = Some(curr_tags.join(" "));
@@ -172,11 +171,11 @@ pub fn handle_meta(url: String, _no_https_upgrade: bool, no_headless: bool) -> R
     let meta = crate::metadata::fetch_meta(&url, meta_opts)?;
 
     if let Some(ref image) = meta.image {
-        std::fs::write("screenshot.png", &image).unwrap();
+        std::fs::write("screenshot.png", image).unwrap();
     };
 
     if let Some(ref icon) = meta.icon {
-        std::fs::write("icon.png", &icon).unwrap();
+        std::fs::write("icon.png", icon).unwrap();
     };
 
     println!("{}", serde_json::to_string_pretty(&meta).unwrap());
@@ -252,7 +251,7 @@ pub fn handle_rule(action: super::types::RulesArgs, config: &mut Config) -> Resu
                         }
                     }
                 }
-                println!("");
+                println!();
             }
         }
     };

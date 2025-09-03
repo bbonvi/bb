@@ -85,6 +85,6 @@ impl Config {
         let store = storage::BackendLocal::new(&self.base_path);
 
         let config_str = serde_yml::to_string(&self).unwrap();
-        store.write("config.yaml", &config_str.as_bytes());
+        store.write("config.yaml", config_str.as_bytes());
     }
 }
