@@ -2,6 +2,9 @@ use clap::{Parser, Subcommand};
 
 mod handlers;
 mod types;
+mod commands;
+mod errors;
+mod validation;
 
 pub use handlers::*;
 pub use types::*;
