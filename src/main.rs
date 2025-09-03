@@ -72,8 +72,8 @@ fn main() -> anyhow::Result<()> {
             scrape::headless::test_launch();
 
             app_mgr.run_queue();
-            let (base_path, _, _) = app::AppFactory::get_paths()?;
-            web::start_daemon(app_mgr, &base_path);
+            let paths = app::AppFactory::get_paths()?;
+            web::start_daemon(app_mgr, &paths.base_path);
             Ok(())
         }
 
