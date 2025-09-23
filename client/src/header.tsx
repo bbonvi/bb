@@ -179,6 +179,16 @@ function Header(props: HeaderProps) {
         ref={ref => props.onRef(ref)}
         className="header top-0 left-0 right-0 fixed z-40 bg-gray-900 motion-safe:bg-gray-900/80 motion-safe:backdrop-blur-2xl p-5 shadow-lg flex flex-wrap gap-2"
     >
+        <AutosizeInput
+            onInput={e => props.onFuzzy(e.currentTarget.value)}
+            type="text"
+            extraWidth={10}
+            placeholderIsMinWidth
+            value={props.fuzzy}
+            placeholder="Fuzzy search"
+            className="!flex"
+            inputClassName={inputTextClassNames + "auto-size"}
+        />
         <TagInput
             isSearch
             listenEvent
@@ -216,16 +226,6 @@ function Header(props: HeaderProps) {
             placeholderIsMinWidth
             value={props.description}
             placeholder="Description"
-            className="!flex"
-            inputClassName={inputTextClassNames + "auto-size"}
-        />
-        <AutosizeInput
-            onInput={e => props.onFuzzy(e.currentTarget.value)}
-            type="text"
-            extraWidth={10}
-            placeholderIsMinWidth
-            value={props.fuzzy}
-            placeholder="Fuzzy search"
             className="!flex"
             inputClassName={inputTextClassNames + "auto-size"}
         />
