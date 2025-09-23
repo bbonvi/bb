@@ -527,6 +527,10 @@ impl BookmarkManager for BackendCsv {
                         has_match = true;
                     }
                 }
+
+                if !has_match {
+                    continue;
+                }
             };
 
             // Fuzzy search - matches across title, description, url, and tags
