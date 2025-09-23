@@ -1,0 +1,146 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import * as api from '../api';
+import * as bmarksSlice from '../store/bmarksSlice';
+import { RootState } from '../store';
+import { Bmark } from '../api';
+import isEqual from 'lodash.isequal';
+import store from '../store';
+import { SettingsState } from '../settings';
+
+interface UseBookmarkSearchProps {
+    settings: SettingsState;
+    settingsUpdated: number;
+    showAll: boolean;
+}
+
+export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBookmarkSearchProps) {
+    const dispatch = useDispatch();
+    const bmarks = useSelector((state: RootState) => state.bmarks.value);
+
+    // Search form state
+    const [inputTags, _setInputTags] = useState("");
+    const [inputTitle, _setInputTitle] = useState("");
+    const [inputUrl, _setInputUrl] = useState("");
+    const [inputDescription, _setInputDescription] = useState("");
+    const [inputFuzzy, _setInputFuzzy] = useState("");
+
+    const formRefs = useRef({
+        inputTags: inputTags,
+        inputTitle: inputTitle,
+        inputUrl: inputUrl,
+        inputDescription: inputDescription
+    });
+
+    const setInputTags = (val: string) => {
+        formRefs.current.inputTags = val;
+        return _setInputTags(val);
+    };
+
+    const setInputTitle = (val: string) => {
+        formRefs.current.inputTitle = val;
+        return _setInputTitle(val);
+    };
+
+    const setInputUrl = (val: string) => {
+        formRefs.current.inputUrl = val;
+        return _setInputUrl(val);
+    };
+
+    const setInputDescription = (val: string) => {
+        formRefs.current.inputDescription = val;
+        return _setInputDescription(val);
+    };
+
+    const setInputFuzzy = (val: string) => {
+        return _setInputFuzzy(val);
+    };
+
+    const getBmarks = async (props: {
+        tags: string,
+        title: string,
+        url: string,
+        description: string,
+        fuzzy: string,
+    }) => {
+        const tagsFetch = props.tags.trim().replaceAll(" ", ",").split(",");
+
+        const shouldRefresh = props.tags.length
+            || props.title
+            || props.url
+            || props.description
+            || props.fuzzy
+            || showAll;
+
+        if (!shouldRefresh) {
+            return [];
+        }
+
+        return api.fetchBmarks({
+            tags: tagsFetch.join(","),
+            title: props.title,
+            url: props.url,
+            description: props.description,
+            fuzzy: props.fuzzy,
+        }).then(b => b.reverse());
+    };
+
+    function updateBmarksIfNeeded(bmarks: Bmark[]) {
+        const excluded = bmarks;
+        if (!isEqual(store.getState().bmarks.value, excluded)) {
+            dispatch(bmarksSlice.updateAll(excluded));
+            return true;
+        }
+        return false;
+    }
+
+    const refreshBmarks = () => getBmarks({
+        tags: inputTags,
+        title: inputTitle,
+        description: inputDescription,
+        url: inputUrl,
+        fuzzy: inputFuzzy,
+    }).then(updateBmarksIfNeeded);
+
+    function excludeHiddenTags(bmarks: Bmark[]) {
+        const currentWorkspace = settings.workspaceState.workspaces[settings.workspaceState.currentWorkspace];
+        const { blacklist, whitelist } = currentWorkspace.tags;
+
+        if (whitelist.length > 0) {
+            return bmarks.filter(bmark => bmark.tags.some(t => whitelist.find(wt => t === wt))).filter(bmark => {
+                return !bmark.tags.some(t => blacklist.find(wt => t === wt));
+            });
+        }
+
+        return bmarks.filter(bmark => {
+            return !bmark.tags.some(t => blacklist.find(wt => t === wt));
+        });
+    }
+
+    const bmarksFiltered = useMemo(() => {
+        return excludeHiddenTags(bmarks);
+    }, [bmarks, settingsUpdated, settings.workspaceState.currentWorkspace]);
+
+    return {
+        // State
+        inputTags,
+        inputTitle,
+        inputUrl,
+        inputDescription,
+        inputFuzzy,
+        bmarksFiltered,
+
+        // Setters
+        setInputTags,
+        setInputTitle,
+        setInputUrl,
+        setInputDescription,
+        setInputFuzzy,
+
+        // Actions
+        refreshBmarks,
+        getBmarks,
+        updateBmarksIfNeeded,
+        excludeHiddenTags,
+    };
+}

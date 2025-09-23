@@ -1,49 +1,25 @@
 import './App.css';
-import { memo, MutableRefObject, useEffect, useMemo, useRef, useState } from 'react';
-import { Bmark, BookmarkCreate, Config, UpdateBmark } from './api';
+import { memo, MutableRefObject, useEffect, useRef, useState } from 'react';
+import { Bmark, Config, UpdateBmark } from './api';
 import * as api from './api';
 import { areEqual, VariableSizeGrid as Grid } from 'react-window';
 import Header from './header';
 import Bookmark, { CreateBookmark } from './bookmark';
-import toast, { Toaster } from 'react-hot-toast';
-import { deepClone, findRunningTask, isModKey, useLocalStorage } from './helpers';
+import { Toaster } from 'react-hot-toast';
+import { deepClone, useLocalStorage } from './helpers';
 import { useDispatch, useSelector } from 'react-redux';
 import * as taskQueueSlice from './store/taskQueueSlice';
-import * as bmarksSlice from './store/bmarksSlice';
 import * as globalSlice from './store/globalSlice';
 import store, { RootState } from './store';
-import isEqual from 'lodash.isequal';
 import Settings, { SettingsState } from './settings';
-import { defaultWorkspace, WorkspaceState } from './workspaces';
+import { defaultWorkspace } from './workspaces';
 import IframePopup from './popup';
+import { useBookmarkSearch } from './hooks/useBookmarkSearch';
+import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
+import { useBookmarkCRUD } from './hooks/useBookmarkCRUD';
+import { useGridLayout } from './hooks/useGridLayout';
 
 
-let DEFAULT_COLUMNS = 4;
-const innerWidth = window.innerWidth - 10;
-
-if (innerWidth < 768) {
-    DEFAULT_COLUMNS = 1
-} else if (innerWidth < 1024) {
-    DEFAULT_COLUMNS = 2
-} else if (innerWidth < 1280) {
-    DEFAULT_COLUMNS = 3
-}
-
-let MIN_ROW_HEIGHT = 400;
-if (DEFAULT_COLUMNS <= 2) {
-    MIN_ROW_HEIGHT = 525
-}
-
-// deterministic shuffle
-function shuffleArray(arr: any[], seed: number = 1) {
-    const array = [...arr];
-    let random = function() {
-        var x = Math.sin(seed++) * 10000;
-        return x - Math.floor(x);
-    };
-    array.sort(() => random() - 0.5);
-    return array;
-}
 
 function App() {
     const [total, setTotal] = useState<number>(-1);
@@ -60,101 +36,63 @@ function App() {
     }
 
     const [shuffleSeed, setShuffleSeed] = useState(Date.now());
-
-    const updating = useRef(0);
+    const [showAll, setShowAll] = useState(false);
+    const [showIframePopup, setShowIframePopup] = useState<Bmark | undefined | null>();
+    const [shuffle, setShuffle] = useState(false);
+    const [settingsUpdated, setSettingsUpdated] = useState(Date.now());
+    const [creating, setCreating] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const [pastedUrl, setPastedUrl] = useState<string>();
 
     const dispatch = useDispatch();
-    const bmarks = useSelector((state: RootState) => state.bmarks.value);
-    const focused = useSelector((state: RootState) => state.global.focusedIdx);
     const editingId = useSelector((state: RootState) => state.global.editing);
-
-    const setBmarks = (bmarks: Bmark[]) => dispatch(bmarksSlice.updateAll(bmarks));
-    const setFocused = (idx: number) => dispatch(globalSlice.setFocusedIdx(idx))
-    const setEditingId = (idx: number) => dispatch(globalSlice.setEditing(idx))
-
-    const [showAll, setShowAll] = useState(false);
-
-    const [showIframePopup, setShowIframePopup] = useState<Bmark | undefined | null>();
-
-    const [shuffle, setShuffle] = useState(false);
-
-    const [columns, setColumns] = useState(DEFAULT_COLUMNS);
-
-    const [renderKey, _setRenderKey] = useState(0);
-    const [settingsUpdated, setSettingsUpdated] = useState(Date.now());
-
-    const bmarksShuffled = useMemo(() => {
-        let bookmarks = excludeHiddenTags(bmarks);
-        if (shuffle) {
-            bookmarks = shuffleArray(bookmarks, shuffleSeed);
-        }
-
-        return bookmarks;
-    }, [bmarks, shuffleSeed, settingsUpdated, settings.workspaceState.currentWorkspace]);
+    const setEditingId = (idx: number) => dispatch(globalSlice.setEditing(idx));
 
     useEffect(() => {
         setShuffleSeed(Date.now());
     }, [shuffle]);
 
-    const rerenderList = () => {
-        _setRenderKey(Date.now())
-    };
-
-    // const hiddenByDefault: string[] = useMemo(() => {
-    //     if (ignoreHidden) {
-    //         return []
-    //     }
-    //
-    //     return settings.hiddenTags;
-    //
-    // }, [ignoreHidden, config, settings.hiddenTags, bmarks]);
-
-
-    const [loaded, setLoaded] = useState(false);
-    const [creating, setCreating] = useState(false);
-    const [showSettings, setShowSettings] = useState(false);
-
     const gridRef = useRef<Grid<Bmark[]>>()
-
     const containerRef = useRef<HTMLDivElement>();
     const headerRef = useRef<HTMLDivElement>();
 
-    // forms
-    const [inputTags, _setInputTags] = useState("");
-    const [inputTitle, _setInputTitle] = useState("");
-    const [inputUrl, _setInputUrl] = useState("");
-    const [inputDescription, _setInputDescription] = useState("");
-    const [inputFuzzy, _setInputFuzzy] = useState("");
-    const formRefs = useRef({ inputTags: inputTags, inputTitle: inputTitle, inputUrl: inputUrl, inputDescription: inputDescription });
+    // Custom hooks
+    const searchHook = useBookmarkSearch({ settings, settingsUpdated, showAll });
+    const gridHook = useGridLayout({ bmarks: searchHook.bmarksFiltered, shuffleSeed, shuffle });
 
-    const [pastedUrl, setPastedUrl] = useState<string>();
+    const refreshTags = (): Promise<void> => {
+        return new Promise((resolve, reject) => {
+            setTimeout(() => {
+                api.fetchTags().then(t => {
+                    if (JSON.stringify(t) !== JSON.stringify(tags)) {
+                        setTags(t)
+                    }
+                }).then(() => resolve()).catch(reject);
+            }, 300);
+        });
+    };
 
-    const setInputTags = (val: string) => {
-        formRefs.current.inputTags = val;
-        return _setInputTags(val)
-    }
+    const crudHook = useBookmarkCRUD({
+        setEditingId,
+        setCreating,
+        refreshTags,
+        refreshTotal,
+    });
 
-    const setInputTitle = (val: string) => {
-        formRefs.current.inputTitle = val;
-        return _setInputTitle(val)
-    }
+    const keyboardHook = useKeyboardNavigation({
+        bmarks: gridHook.bmarksShuffled,
+        columns: gridHook.columns,
+        showSettings,
+        creating,
+        editingId,
+        setCreating,
+        setEditingId,
+        setPastedUrl,
+        handleDelete: crudHook.handleDelete,
+        containerRef: containerRef as React.RefObject<HTMLDivElement>,
+    });
 
-    const setInputUrl = (val: string) => {
-        formRefs.current.inputUrl = val;
-        return _setInputUrl(val)
-    }
-
-    const setInputDescription = (val: string) => {
-        formRefs.current.inputDescription = val;
-        return _setInputDescription(val)
-    }
-
-    const setInputFuzzy = (val: string) => {
-        return _setInputFuzzy(val)
-    }
-
-    // misc
-    const refreshTimerRef = useRef({ "1": 0, "2": 0, "3": 0, });
+    const refreshTimerRef = useRef({ "1": 0, "2": 0 });
 
     function refreshTotal() {
         clearTimeout(refreshTimerRef.current["2"]);
@@ -175,123 +113,18 @@ function App() {
         })
     }
 
-    function refreshTags() {
-        return new Promise((resolve, reject) => {
-            // HACK: tags are cached and revalidated asynchronously
-            //       so we give backend some time to process them.
-            //       300ms should be plenty
-            setTimeout(() => {
-                api.fetchTags().then(t => {
-                    if (JSON.stringify(t) !== JSON.stringify(tags)) {
-                        setTags(t)
-                    }
-                }).then(resolve).catch(reject);
-            }, 300);
-        });
-    }
-
-    function setCols() {
-        const innerWidth = window.innerWidth;
-
-        let cols = DEFAULT_COLUMNS;
-        if (innerWidth < 768) {
-            cols = 1
-        } else if (innerWidth < 1024) {
-            cols = 2
-        } else if (innerWidth < 1280) {
-            cols = 3
-        } else if (innerWidth < 1920) {
-            cols = 4
-        } else {
-            cols = 5
-        }
-
-        MIN_ROW_HEIGHT = 400;
-        if (cols <= 2) {
-            MIN_ROW_HEIGHT = 525
-        }
-
-        setColumns(cols);
-        return cols;
-    }
-
-    const getBmarks = async (props: {
-        tags: string,
-        title: string,
-        url: string,
-        description: string,
-        fuzzy: string,
-    }) => {
-        const tagsFetch = props.tags.trim().replaceAll(" ", ",").split(",");
-
-        const shouldRefresh = props.tags.length
-            || props.title
-            || props.url
-            || props.description
-            || props.fuzzy
-            || showAll;
-
-        if (!shouldRefresh) {
-            return []
-        }
-
-
-        return api.fetchBmarks({
-            tags: tagsFetch.join(","),
-            title: props.title,
-            url: props.url,
-            description: props.description,
-            fuzzy: props.fuzzy,
-        }).then(b => b.reverse())
-    }
-
-    function updateBmarksIfNeeded(bmarks: Bmark[]) {
-        // const excluded = excludeHiddenTags(bmarks);
-        const excluded = bmarks;
-        if (!isEqual(store.getState().bmarks.value, excluded)) {
-            dispatch(bmarksSlice.updateAll(excluded))
-            return true
-        }
-
-        return false
-    }
-
-    const refreshBmarks = () => getBmarks({
-        tags: inputTags,
-        title: inputTitle,
-        description: inputDescription,
-        url: inputUrl,
-        fuzzy: inputFuzzy,
-    })
-        .then(updateBmarksIfNeeded);
-
-    function excludeHiddenTags(bmarks: Bmark[]) {
-        const currentWorkspace = settings.workspaceState.workspaces[settings.workspaceState.currentWorkspace];
-        const { blacklist, whitelist } = currentWorkspace.tags;
-
-        if (whitelist.length > 0) {
-            return bmarks.filter(bmark => bmark.tags.some(t => whitelist.find(wt => t === wt))).filter(bmark => {
-                return !bmark.tags.some(t => blacklist.find(wt => t === wt))
-            })
-        }
-
-        return bmarks
-            .filter(bmark => {
-                return !bmark.tags.some(t => blacklist.find(wt => t === wt))
-            })
-    }
 
     const refreshAll = async () => {
         return Promise.all([
             // refresh bookmarks
-            getBmarks({
-                tags: inputTags,
-                title: inputTitle,
-                description: inputDescription,
-                url: inputUrl,
-                fuzzy: inputFuzzy.replace(/^#/, "")
+            searchHook.getBmarks({
+                tags: searchHook.inputTags,
+                title: searchHook.inputTitle,
+                description: searchHook.inputDescription,
+                url: searchHook.inputUrl,
+                fuzzy: searchHook.inputFuzzy.replace(/^#/, "")
             })
-                .then(updateBmarksIfNeeded),
+                .then(searchHook.updateBmarksIfNeeded),
 
             // refresh config
             api.fetchConfig()
@@ -312,25 +145,28 @@ function App() {
     }
 
     useEffect(() => {
-        refreshAll().then(() => {
-            // setCols()
-            const len = store.getState().bmarks.value.length;
-            // setSizes(new Array(Math.ceil(len / columns)).fill(MIN_ROW_HEIGHT));
-        });
+        refreshAll();
     }, []);
 
+    // Set initial focus when bookmarks are first loaded
     useEffect(() => {
-        refreshBmarks().then(changed => {
+        if (keyboardHook.focused === -1 && gridHook.bmarksShuffled.length > 0) {
+            keyboardHook.setFocused(0);
+        }
+    }, [gridHook.bmarksShuffled.length, keyboardHook.focused]);
+
+    useEffect(() => {
+        searchHook.refreshBmarks().then(changed => {
             if (changed) {
                 setEditingId(-1);
                 gridRef.current?.scrollTo({ scrollTop: 0 });
-                setFocused(0);
+                keyboardHook.setFocused(0);
             }
         });
 
         const timerId = setInterval(() => {
             // do not refresh data as long as something's being saved/delete/refreshed
-            if (updating.current > 0 || store.getState().global.editing >= 0) {
+            if (crudHook.updating.current > 0 || store.getState().global.editing >= 0) {
                 return
             }
 
@@ -340,320 +176,35 @@ function App() {
         return () => {
             clearInterval(timerId)
         }
-    }, [inputTags, inputTitle, inputUrl, inputDescription, inputFuzzy, showAll, settingsUpdated]);
+    }, [searchHook.inputTags, searchHook.inputTitle, searchHook.inputUrl, searchHook.inputDescription, searchHook.inputFuzzy, showAll, settingsUpdated]);
 
-    async function refreshTaskQueue(): Promise<boolean> {
-        const tasks = await api.fetchTaskQueue();
-
-        const taskQueue = store.getState().taskQueue.value
-        dispatch(taskQueueSlice.update(tasks));
-
-        return taskQueue.now! != tasks.now
-
-    }
 
     useEffect(() => {
         refreshConfig();
         refreshTags();
-        refreshTaskQueue();
+        crudHook.refreshTaskQueue();
     }, []);
 
     useEffect(() => {
         api.fetchTotal().then(setTotal);
-
-        const onResize = () => {
-            cancelAnimationFrame(refreshTimerRef.current["3"]);
-            refreshTimerRef.current["3"] = requestAnimationFrame(() => {
-                setCols()
-                rerenderList();
-            }) as any;
-        };
-
-        window.addEventListener("resize", onResize);
-
-        return () => {
-            window.removeEventListener("resize", onResize);
-        }
     }, []);
 
     useEffect(() => {
-        if (focused < 0) {
+        if (keyboardHook.focused < 0) {
             return
         }
 
-        const rowIndex = Math.floor(focused / columns);
-        const columnIndex = Math.floor(focused % columns);
+        const rowIndex = Math.floor(keyboardHook.focused / gridHook.columns);
+        const columnIndex = Math.floor(keyboardHook.focused % gridHook.columns);
 
         gridRef.current?.scrollToItem({ columnIndex, rowIndex });
-    }, [focused]);
+    }, [keyboardHook.focused, gridHook.columns]);
 
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (showSettings) {
-                return
-            }
-
-            // defocus inputs
-            if (
-                document.activeElement?.tagName === "INPUT"
-                || document.activeElement?.tagName === "TEXTAREA"
-                || (document.activeElement?.tagName === "SPAN" && (document.activeElement as any).contentEditable === "true")
-            ) {
-                if (e.code === "Escape") {
-                    (document.activeElement as any)?.blur()
-                    containerRef.current?.focus?.();
-                }
-
-                // defocus tags
-                if (e.code === "KeyK" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
-                    e.preventDefault();
-
-                    // if (document.activeElement?.closest(".tag-search")) {
-                    //     (document.querySelector(".header .tag-search") as any)?.blur();
-                    // }
-                }
-                return
-            }
-
-            // edit focused bmark
-            if (e.code === "KeyD" && !isModKey(e)) {
-                e.preventDefault();
-                const bmark = bmarks[focused];
-                if (bmark) {
-                    if (window.confirm(`Delete following bookmark?\n\n"${bmark.title}"\n`)) {
-                        handleDelete(bmark.id)
-                    }
-                } else {
-                    toast.error("bookmark not found");
-                }
-
-            }
-
-            // edit focused bmark
-            if (e.code === "KeyE" && !isModKey(e)) {
-                e.preventDefault();
-                const bmark = bmarks[focused];
-                if (bmark) {
-                    setEditingId(bmark.id)
-                }
-            }
-
-            // create new
-            if (e.code === "KeyN" && !isModKey(e)) {
-                e.preventDefault();
-                setPastedUrl(undefined);
-                setEditingId(-1);
-                setCreating(true);
-            }
-
-            // cancel edit
-            if (e.code === "Escape" && !isModKey(e)) {
-                e.preventDefault();
-                if (editingId) {
-                    setEditingId(-1);
-                }
-
-                if (creating) {
-                    setCreating(false);
-                    setPastedUrl(undefined);
-                }
-            }
-
-            // open focus
-            if (e.code === "Enter" && !isModKey(e)) {
-                e.preventDefault();
-                (document.querySelector("#bmark-" + bmarks[focused]?.id + " .bmark-url") as any)?.click()
-            }
-
-            // focus right
-            if (e.code === "KeyL" && !isModKey(e)) {
-                e.preventDefault();
-                setFocused(Math.min(bmarks.length - 1, focused + 1))
-                if (editingId) setEditingId(-1);
-            }
-
-            // focus left
-            if (e.code === "KeyH" && !isModKey(e)) {
-                e.preventDefault();
-                setFocused(Math.max(0, focused - 1))
-                if (editingId) setEditingId(-1);
-
-            }
-
-            // focus top
-            if (e.code === "KeyK" && !isModKey(e)) {
-                e.preventDefault();
-
-                if (focused - columns < 0) {
-                    return
-                }
-
-                if (editingId) setEditingId(-1);
-
-
-                setFocused(Math.max(0, focused - columns))
-            }
-
-            // focus tags
-            if (e.code === "KeyK" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
-                e.preventDefault();
-
-                (document.querySelector(".header .tag-search") as any)?.focus();
-            }
-
-            // focus bottom
-            if (e.code === "KeyJ" && !isModKey(e)) {
-                e.preventDefault();
-                // skip row if going from -1
-                const value = focused === -1 ? 0 : focused;
-
-                if (value + columns > bmarks.length - 1) {
-                    return
-                }
-
-                if (editingId) setEditingId(-1);
-
-                setFocused(Math.min(bmarks.length - 1, value + columns));
-            }
-        }
-
-        const onPaste = (e: any) => {
-            if (showSettings) {
-                return
-            }
-
-            try {
-                const text = e.clipboardData.getData('text');
-                const url = new URL(text);
-
-                const currentActive = document.activeElement?.tagName;
-                if (
-                    currentActive === "INPUT"
-                    || currentActive === "TEXTAREA"
-                    || (document.activeElement?.tagName === "SPAN" && (document.activeElement as any).contentEditable === "true")
-                ) {
-                    return
-                }
-                if (creating || editingId >= 0) {
-                    return
-                }
-
-                e.preventDefault();
-                setEditingId(-1);
-                setPastedUrl(url.toString());
-                setCreating(true);
-            } catch (_) {
-                setPastedUrl(undefined);
-            }
-        };
-
-
-        document.addEventListener("keydown", onKeyDown);
-        window.addEventListener("paste", onPaste);
-
-        return () => {
-            document.removeEventListener("keydown", onKeyDown);
-            window.removeEventListener('paste', onPaste);
-        }
-    }, [focused, bmarks, editingId, columns, creating, showSettings]);
-
-    const handleDelete = (id: number) => {
-        const currTask = findRunningTask(id)
-        if (currTask) {
-            toast.error("cannot delete while being processed");
-            return
-        }
-
-        updating.current += 1;
-        toast.promise(api.deleteBmark(id).then(() => {
-            dispatch(bmarksSlice.remove({ id }));
-
-            setEditingId(-1);
-            refreshTags();
-            refreshTotal();
-        }).finally(() => {
-            updating.current -= 1;
-        }), {
-            loading: 'Deleting...',
-            success: 'Deleted!',
-            error: (err) => err.message,
-        });
-    }
-
-    function handleFetchMeta(id: number) {
-        const currTask = findRunningTask(id)
-        if (currTask) {
-            toast.error("cannot update while being processed.");
-            return
-        }
-
-        toast.promise(
-            api.fetchMeta(id).then(() => {
-                setEditingId(-1);
-                refreshTaskQueue()
-                    .then(() => setTimeout(refreshTaskQueue, 200));
-            }),
-            {
-                loading: 'Requesting metadata refetch...',
-                success: 'Requested metadata refetch!',
-                error: (err) => err.message,
-            }
-        );
-    }
-
-    function handleSave(update: UpdateBmark) {
-        const currTask = findRunningTask(update.id);
-        if (currTask) {
-            toast.error("cannot update while being processed.");
-            return
-        }
-
-        updating.current += 1;
-
-        toast.promise(
-            api.updateBmark(update.id, update).then((bmark) => {
-                dispatch(bmarksSlice.update(bmark));
-                setEditingId(-1);
-                refreshTags();
-            }).finally(() => {
-                updating.current -= 1;
-            }),
-            {
-                loading: 'Saving...',
-                success: 'Saved!',
-                error: (err) => err.message,
-            }
-        );
-    }
 
     const onCreating = () => {
         setPastedUrl(undefined);
         setEditingId(-1);
         setCreating(true);
-    };
-
-    const onCreate = (bmark: BookmarkCreate) => {
-        updating.current += 1;
-        toast.promise(
-            api.createBmark({
-                ...bmark,
-            }).then((bmark) => {
-                dispatch(bmarksSlice.create(bmark));
-                setCreating(false);
-                setTimeout(() => {
-                    refreshTaskQueue();
-                }, 100);
-                refreshTags();
-            }).finally(() => {
-                updating.current -= 1;
-            }),
-            {
-                loading: 'Creating bookmark...',
-                success: 'Created!',
-                error: (err) => err.message,
-            }
-        );
-
     };
 
     if (!config) {
@@ -695,7 +246,7 @@ function App() {
                         tagList={tags}
                         className="shadow-[0_0px_50px_0px_rgba(0,0,0,0.3)]"
                         defaultUrl={pastedUrl}
-                        onCreate={onCreate}
+                        onCreate={crudHook.onCreate}
                     />
                 </div>
             </div>}
@@ -708,26 +259,26 @@ function App() {
                     shuffle={shuffle}
                     setShuffle={setShuffle}
                     tagList={tags}
-                    tags={inputTags}
+                    tags={searchHook.inputTags}
                     onRef={ref => headerRef.current = ref ?? undefined}
-                    onTags={setInputTags}
+                    onTags={searchHook.setInputTags}
                     onShowAll={setShowAll}
                     showAll={showAll}
-                    title={inputTitle}
+                    title={searchHook.inputTitle}
                     onNewBookmark={onCreating}
-                    onTitle={setInputTitle}
-                    url={inputUrl}
-                    onUrl={setInputUrl}
-                    description={inputDescription}
-                    onDescription={setInputDescription}
-                    fuzzy={inputFuzzy}
-                    onFuzzy={setInputFuzzy}
+                    onTitle={searchHook.setInputTitle}
+                    url={searchHook.inputUrl}
+                    onUrl={searchHook.setInputUrl}
+                    description={searchHook.inputDescription}
+                    onDescription={searchHook.setInputDescription}
+                    fuzzy={searchHook.inputFuzzy}
+                    onFuzzy={searchHook.setInputFuzzy}
                     total={total}
-                    count={bmarksShuffled.length}
-                    columns={columns}
+                    count={gridHook.bmarksShuffled.length}
+                    columns={gridHook.columns}
                     onColumns={(v) => {
-                        setColumns(v);
-                        rerenderList();
+                        gridHook.setColumns(v);
+                        gridHook.rerenderList();
                     }}
                 />
                 <div
@@ -737,19 +288,20 @@ function App() {
                     {(containerRef.current && headerRef.current && <GridView
                         tagList={tags}
                         setShowIframePopup={setShowIframePopup}
-                        key={renderKey}
+                        key={gridHook.renderKey}
                         gridRef={gridRef}
                         containerRef={containerRef.current}
-                        columns={columns}
-                        bmarks={bmarksShuffled}
+                        columns={gridHook.columns}
+                        bmarks={gridHook.bmarksShuffled}
                         headerRef={headerRef.current}
-                        focused={focused}
+                        focused={keyboardHook.focused}
                         setEditingId={setEditingId}
                         editingId={editingId}
-                        handleDelete={handleDelete}
-                        handleSave={handleSave}
-                        handleFetchMeta={handleFetchMeta}
+                        handleDelete={crudHook.handleDelete}
+                        handleSave={crudHook.handleSave}
+                        handleFetchMeta={crudHook.handleFetchMeta}
                         config={config}
+                        minRowHeight={gridHook.MIN_ROW_HEIGHT}
                     />)}
                 </div>
             </div>
@@ -773,6 +325,7 @@ interface GridViewProps {
     containerRef: HTMLDivElement;
     headerRef: HTMLDivElement;
     setShowIframePopup: (bmark: Bmark) => void;
+    minRowHeight: number;
 }
 
 function GridView(props: GridViewProps) {
@@ -800,25 +353,26 @@ function GridView(props: GridViewProps) {
     const innerHeight = window.innerHeight;
     return <Grid
         ref={ref => gridRef.current = (ref as any) ?? undefined}
-        columnCount={columns}
-        columnWidth={_ => Math.ceil((containerRect.width - 30) / columns)}
+        columnCount={props.columns}
+        columnWidth={_ => Math.ceil((containerRect.width - 30) / props.columns)}
         rowHeight={rowIndex => {
-            const idx = (rowIndex * columns) + 0;
-            return Math.max(...bmarks.slice(idx, idx + columns).map(b => sizes[b.id.toString()] ?? MIN_ROW_HEIGHT));
+            const idx = (rowIndex * props.columns) + 0;
+            return Math.max(...props.bmarks.slice(idx, idx + props.columns).map(b => sizes[b.id.toString()] ?? props.minRowHeight));
         }}
-        rowCount={Math.ceil(bmarks.length / columns)}
+        rowCount={Math.ceil(props.bmarks.length / props.columns)}
         height={innerHeight}
         itemData={{
-            bmarks, columns,
+            bmarks: props.bmarks, columns: props.columns,
             gridRef, headerRect,
             config: props.config,
             tagList: props.tagList,
-            focused, editingId, setEditingId,
-            handleDelete, handleSave, handleFetchMeta,
+            focused: props.focused, editingId: props.editingId, setEditingId: props.setEditingId,
+            handleDelete: props.handleDelete, handleSave: props.handleSave, handleFetchMeta: props.handleFetchMeta,
             setShowIframePopup,
+            minRowHeight: props.minRowHeight,
         }}
         itemKey={data => {
-            const idx = (data.rowIndex * columns) + data.columnIndex;
+            const idx = (data.rowIndex * props.columns) + data.columnIndex;
             return data.data.bmarks[idx]?.id ?? (data.rowIndex.toString + "-" + data.columnIndex.toString())
         }}
         width={Math.ceil(containerRect.width)}
@@ -854,7 +408,7 @@ const Row = memo(({ columnIndex, rowIndex, style, data }: any) => {
     if (!bmark) return null
     const onSize = (_: number, h: number) => {
         const current = sizes[bmark.id.toString()];
-        h = Math.max(MIN_ROW_HEIGHT, h + 20);
+        h = Math.max(data.minRowHeight || 400, h + 20);
         if (current && current >= h) {
             return
         }
