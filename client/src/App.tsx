@@ -89,6 +89,7 @@ function App() {
         setEditingId,
         setPastedUrl,
         handleDelete: crudHook.handleDelete,
+        handleSave: crudHook.handleSave,
         containerRef: containerRef as React.RefObject<HTMLDivElement>,
     });
 

@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../store';
 import * as globalSlice from '../store/globalSlice';
-import { Bmark } from '../api';
-import { isModKey } from '../helpers';
+import { Bmark, UpdateBmark } from '../api';
+import { isModKey, toBase64 } from '../helpers';
 import { toast } from 'react-hot-toast';
 
 interface UseKeyboardNavigationProps {
@@ -16,6 +16,7 @@ interface UseKeyboardNavigationProps {
     setEditingId: (id: number) => void;
     setPastedUrl: (url: string | undefined) => void;
     handleDelete: (id: number) => void;
+    handleSave: (update: UpdateBmark) => void;
     containerRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -29,6 +30,7 @@ export function useKeyboardNavigation({
     setEditingId,
     setPastedUrl,
     handleDelete,
+    handleSave,
     containerRef,
 }: UseKeyboardNavigationProps) {
     const dispatch = useDispatch();
@@ -160,28 +162,55 @@ export function useKeyboardNavigation({
                 return;
             }
 
-            try {
-                const text = e.clipboardData.getData('text');
-                const url = new URL(text);
+            // Check if we have image data in clipboard when editing
+            if (editingId >= 0 && e.clipboardData.files && e.clipboardData.files.length > 0) {
+                const file = e.clipboardData.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    e.preventDefault();
+                    e.stopPropagation();
 
-                const currentActive = document.activeElement as HTMLInputElement;
-                if (
-                    (currentActive?.tagName === "INPUT" && currentActive.type !== "checkbox")
-                    || currentActive?.tagName === "TEXTAREA"
-                    || (currentActive?.tagName === "SPAN" && currentActive.contentEditable === "true")
-                ) {
+                    toast.promise(
+                        toBase64(file).then(b64 => {
+                            const updateBmark: UpdateBmark = {
+                                id: editingId,
+                                image_b64: b64,
+                            };
+                            handleSave(updateBmark);
+                        }),
+                        {
+                            loading: 'Uploading image...',
+                            success: 'Image uploaded!',
+                            error: 'Failed to upload image',
+                        }
+                    );
                     return;
                 }
-                if (creating || editingId >= 0) {
-                    return;
-                }
+            }
 
-                e.preventDefault();
-                setEditingId(-1);
-                setPastedUrl(url.toString());
-                setCreating(true);
-            } catch (_) {
-                setPastedUrl(undefined);
+            // Allow normal text paste into inputs when editing
+            const currentActive = document.activeElement as HTMLInputElement;
+            if (
+                (currentActive?.tagName === "INPUT" && currentActive.type !== "checkbox")
+                || currentActive?.tagName === "TEXTAREA"
+                || (currentActive?.tagName === "SPAN" && currentActive.contentEditable === "true")
+            ) {
+                // Let the input handle the text paste normally
+                return;
+            }
+
+            // Handle URL paste for creating new bookmarks (existing functionality)
+            if (!creating && editingId < 0) {
+                try {
+                    const text = e.clipboardData.getData('text');
+                    const url = new URL(text);
+
+                    e.preventDefault();
+                    setEditingId(-1);
+                    setPastedUrl(url.toString());
+                    setCreating(true);
+                } catch (_) {
+                    setPastedUrl(undefined);
+                }
             }
         };
 
@@ -192,7 +221,7 @@ export function useKeyboardNavigation({
             document.removeEventListener("keydown", onKeyDown);
             window.removeEventListener('paste', onPaste);
         };
-    }, [focused, bmarks, editingId, columns, creating, showSettings, handleDelete, setCreating, setEditingId, setPastedUrl, containerRef]);
+    }, [focused, bmarks, editingId, columns, creating, showSettings, handleDelete, handleSave, setCreating, setEditingId, setPastedUrl, containerRef]);
 
     return {
         focused,
