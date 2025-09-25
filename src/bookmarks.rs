@@ -535,46 +535,39 @@ impl BookmarkManager for BackendCsv {
 
             // Fuzzy search - matches across title, description, url, and tags
             if let Some(fuzzy) = &query.fuzzy {
-                let mut fuzzy_match = false;
-
                 // For non-exact mode, split by whitespace and check each keyword
                 let keywords: Vec<&str> = fuzzy.split_whitespace().collect();
 
                 // A bookmark matches if ALL keywords are found in ANY field
-                let mut all_keywords_match = true;
+                let mut keywords_match = true;
 
                 for keyword in keywords {
-                    let mut keyword_matches = false;
-
                     // Check if this keyword starts with # for tag search
                     if bmark_tags.iter().any(|tag| tag.contains(keyword)) {
-                        keyword_matches = true;
+                        continue;
                     }
+
                     // Check title
                     if bookmark.title.to_lowercase().contains(keyword) {
-                        keyword_matches = true;
+                        continue;
                     }
 
                     // Check description
                     if bookmark.description.to_lowercase().contains(keyword) {
-                        keyword_matches = true;
+                        continue;
                     }
 
                     // Check URL
                     if bookmark.url.to_lowercase().contains(keyword) {
-                        keyword_matches = true;
+                        continue;
                     }
 
-                    // If any keyword doesn't match, the bookmark doesn't match
-                    if !keyword_matches {
-                        all_keywords_match = false;
-                        break;
-                    }
+                    // If we reach here, te keyword was not found in any field
+                    keywords_match = false;
+                    break;
                 }
 
-                fuzzy_match = all_keywords_match;
-
-                if !fuzzy_match {
+                if !keywords_match {
                     continue;
                 } else {
                     has_match = true;
@@ -585,11 +578,11 @@ impl BookmarkManager for BackendCsv {
                 output.push(bookmark.clone());
             }
 
-            // early return because we know there will be no matches after that point
-            // if has_match && (query.id.is_some() || (query.url.is_some() && query.exact))
-            if has_match && query.id.is_some()
-                || query.limit.is_some() && query.limit.unwrap_or_default() >= output.len()
-            {
+            let id_query = query.id.is_some();
+            let limit_reached =
+                query.limit.is_some() && output.len() >= query.limit.unwrap_or_default();
+
+            if id_query || limit_reached {
                 break;
             }
         }
