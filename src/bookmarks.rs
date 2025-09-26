@@ -510,30 +510,37 @@ impl BookmarkManager for BackendCsv {
                 .collect::<Vec<_>>();
 
             if let Some(tags) = &query_tags {
-                for (tag, teg_delim, neg_tag, neg_tag_delim) in tags {
-                    let mut bmark_tags = bmark_tags.iter();
-                    if let Some(neg_tag) = neg_tag {
-                        if bmark_tags.any(|tag_b| neg_tag == tag_b || tag_b.contains(neg_tag_delim))
+                if !tags.is_empty() {
+                    log::info!("Tag search for bookmark: {}", bookmark.title);
+                    log::info!("query Tags: {:?}", &query_tags);
+                    for (tag, teg_delim, neg_tag, neg_tag_delim) in tags {
+                        let mut bmark_tags = bmark_tags.iter();
+                        if let Some(neg_tag) = neg_tag {
+                            if bmark_tags
+                                .any(|tag_b| neg_tag == tag_b || tag_b.contains(neg_tag_delim))
+                            {
+                                has_match = false;
+                                break;
+                            } else {
+                                has_match = true;
+                            }
+                        } else if !bmark_tags.any(|tag_b| tag == tag_b || tag_b.contains(teg_delim))
                         {
                             has_match = false;
                             break;
                         } else {
                             has_match = true;
                         }
-                    } else if !bmark_tags.any(|tag_b| tag == tag_b || tag_b.contains(teg_delim)) {
-                        has_match = false;
-                        break;
-                    } else {
-                        has_match = true;
                     }
-                }
 
-                if !has_match {
-                    continue;
+                    if !has_match {
+                        continue;
+                    }
                 }
             };
 
             // Fuzzy search - matches across title, description, url, and tags
+            log::info!("Fuzzy search for bookmark: {}", bookmark.title);
             if let Some(fuzzy) = &query.fuzzy {
                 // For non-exact mode, split by whitespace and check each keyword
                 let keywords: Vec<&str> = fuzzy.split_whitespace().collect();
@@ -562,7 +569,10 @@ impl BookmarkManager for BackendCsv {
                         continue;
                     }
 
-                    // If we reach here, te keyword was not found in any field
+                    log::info!("{0}", bookmark.title);
+                    log::info!("No match for keyword: {}", keyword);
+
+                    // If we reach here, the keyword was not found in any field
                     keywords_match = false;
                     break;
                 }
