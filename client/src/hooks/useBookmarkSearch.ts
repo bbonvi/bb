@@ -23,7 +23,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
     const [inputTitle, _setInputTitle] = useState("");
     const [inputUrl, _setInputUrl] = useState("");
     const [inputDescription, _setInputDescription] = useState("");
-    const [inputFuzzy, _setInputFuzzy] = useState("");
+    const [inputKeyword, _setInputKeyword] = useState("");
 
     const formRefs = useRef({
         inputTags: inputTags,
@@ -52,8 +52,8 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         return _setInputDescription(val);
     };
 
-    const setInputFuzzy = (val: string) => {
-        return _setInputFuzzy(val);
+    const setInputKeyword = (val: string) => {
+        return _setInputKeyword(val);
     };
 
     const getBmarks = async (props: {
@@ -61,7 +61,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         title: string,
         url: string,
         description: string,
-        fuzzy: string,
+        keyword: string,
     }) => {
         const tagsFetch = props.tags.trim().replaceAll(" ", ",").split(",");
 
@@ -69,7 +69,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
             || props.title
             || props.url
             || props.description
-            || props.fuzzy
+            || props.keyword
             || showAll;
 
         if (!shouldRefresh) {
@@ -81,7 +81,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
             title: props.title,
             url: props.url,
             description: props.description,
-            fuzzy: props.fuzzy,
+            keyword: props.keyword,
         }).then(b => b.reverse());
     };
 
@@ -99,7 +99,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         title: inputTitle,
         description: inputDescription,
         url: inputUrl,
-        fuzzy: inputFuzzy,
+        keyword: inputKeyword,
     }).then(updateBmarksIfNeeded);
 
     function excludeHiddenTags(bmarks: Bmark[]) {
@@ -127,7 +127,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         inputTitle,
         inputUrl,
         inputDescription,
-        inputFuzzy,
+        inputKeyword,
         bmarksFiltered,
 
         // Setters
@@ -135,7 +135,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         setInputTitle,
         setInputUrl,
         setInputDescription,
-        setInputFuzzy,
+        setInputKeyword,
 
         // Actions
         refreshBmarks,

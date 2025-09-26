@@ -123,7 +123,7 @@ function App() {
                 title: searchHook.inputTitle,
                 description: searchHook.inputDescription,
                 url: searchHook.inputUrl,
-                fuzzy: searchHook.inputFuzzy.replace(/^#/, "")
+                keyword: searchHook.inputKeyword.replace(/^#/, "")
             })
                 .then(searchHook.updateBmarksIfNeeded),
 
@@ -177,7 +177,7 @@ function App() {
         return () => {
             clearInterval(timerId)
         }
-    }, [searchHook.inputTags, searchHook.inputTitle, searchHook.inputUrl, searchHook.inputDescription, searchHook.inputFuzzy, showAll, settingsUpdated]);
+    }, [searchHook.inputTags, searchHook.inputTitle, searchHook.inputUrl, searchHook.inputDescription, searchHook.inputKeyword, showAll, settingsUpdated]);
 
 
     useEffect(() => {
@@ -272,8 +272,8 @@ function App() {
                     onUrl={searchHook.setInputUrl}
                     description={searchHook.inputDescription}
                     onDescription={searchHook.setInputDescription}
-                    fuzzy={searchHook.inputFuzzy}
-                    onFuzzy={searchHook.setInputFuzzy}
+                    keyword={searchHook.inputKeyword}
+                    onKeyword={searchHook.setInputKeyword}
                     total={total}
                     count={gridHook.bmarksShuffled.length}
                     columns={gridHook.columns}

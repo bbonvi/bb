@@ -10,7 +10,7 @@ interface HeaderProps {
     title: string;
     url: string;
     description: string;
-    fuzzy: string;
+    keyword: string;
 
     count: number;
     total: number;
@@ -24,7 +24,7 @@ interface HeaderProps {
     onTitle: (val: string) => void;
     onUrl: (val: string) => void;
     onDescription: (val: string) => void;
-    onFuzzy: (val: string) => void;
+    onKeyword: (val: string) => void;
 
     onRef: (ref: HTMLDivElement | null) => void;
 
@@ -180,12 +180,12 @@ function Header(props: HeaderProps) {
         className="header top-0 left-0 right-0 fixed z-40 bg-gray-900 motion-safe:bg-gray-900/80 motion-safe:backdrop-blur-2xl p-5 shadow-lg flex flex-wrap gap-2"
     >
         <AutosizeInput
-            onInput={e => props.onFuzzy(e.currentTarget.value)}
+            onInput={e => props.onKeyword(e.currentTarget.value)}
             type="text"
             extraWidth={10}
             placeholderIsMinWidth
-            value={props.fuzzy}
-            placeholder="Fuzzy search"
+            value={props.keyword}
+            placeholder="Keyword search"
             className="!flex"
             inputClassName={inputTextClassNames + "auto-size"}
         />

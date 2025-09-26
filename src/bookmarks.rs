@@ -81,7 +81,7 @@ pub struct SearchQuery {
     pub url: Option<String>,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
-    pub fuzzy: Option<String>,
+    pub keyword: Option<String>,
 
     #[serde(default)]
     pub exact: bool,
@@ -111,7 +111,7 @@ impl SearchQuery {
             .tags
             .as_ref()
             .map(|tags| tags.iter().map(|t| t.to_lowercase()).collect::<Vec<_>>());
-        self.fuzzy = self.fuzzy.as_ref().map(|fuzzy| fuzzy.to_lowercase());
+        self.keyword = self.keyword.as_ref().map(|keyword| keyword.to_lowercase());
     }
 }
 
@@ -428,7 +428,6 @@ impl BookmarkManager for BackendCsv {
 
     fn search(&self, query: SearchQuery) -> anyhow::Result<Vec<Bookmark>> {
         let bmarks = self.list.read().unwrap();
-        log::info!("Search query: {:?}", query);
 
         let mut query = query;
         query.lowercase();
@@ -441,7 +440,7 @@ impl BookmarkManager for BackendCsv {
             && query.title.is_none()
             && (query.tags.is_none() || query.tags.clone().unwrap_or_default().is_empty())
             && query.id.is_none()
-            && query.fuzzy.is_none()
+            && query.keyword.is_none()
         {
             return Ok(bmarks.clone());
         }
@@ -511,8 +510,6 @@ impl BookmarkManager for BackendCsv {
 
             if let Some(tags) = &query_tags {
                 if !tags.is_empty() {
-                    log::info!("Tag search for bookmark: {}", bookmark.title);
-                    log::info!("query Tags: {:?}", &query_tags);
                     for (tag, teg_delim, neg_tag, neg_tag_delim) in tags {
                         let mut bmark_tags = bmark_tags.iter();
                         if let Some(neg_tag) = neg_tag {
@@ -539,11 +536,10 @@ impl BookmarkManager for BackendCsv {
                 }
             };
 
-            // Fuzzy search - matches across title, description, url, and tags
-            log::info!("Fuzzy search for bookmark: {}", bookmark.title);
-            if let Some(fuzzy) = &query.fuzzy {
+            // Keyword search - matches across title, description, url, and tags
+            if let Some(keyword) = &query.keyword {
                 // For non-exact mode, split by whitespace and check each keyword
-                let keywords: Vec<&str> = fuzzy.split_whitespace().collect();
+                let keywords: Vec<&str> = keyword.split_whitespace().collect();
 
                 // A bookmark matches if ALL keywords are found in ANY field
                 let mut keywords_match = true;
@@ -568,9 +564,6 @@ impl BookmarkManager for BackendCsv {
                     if bookmark.url.to_lowercase().contains(keyword) {
                         continue;
                     }
-
-                    log::info!("{0}", bookmark.title);
-                    log::info!("No match for keyword: {}", keyword);
 
                     // If we reach here, the keyword was not found in any field
                     keywords_match = false;
