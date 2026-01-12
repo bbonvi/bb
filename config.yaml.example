@@ -1,0 +1,10 @@
+task_queue_max_threads: 4
+rules:
+- url: mail.proton.me
+  action: !UpdateBookmark
+    tags:
+    - mail
+- url: huggingface.co
+  action: !UpdateBookmark
+    tags:
+    - ai
