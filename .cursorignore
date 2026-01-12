@@ -1,8 +1,0 @@
-target/
-client/
-.vim/
-config-test/
-data/
-screenshots/
-Cargo.lock
-LICENSE
