@@ -2,6 +2,23 @@
 
 This document contains the help content for the `bb` command-line program.
 
+## Authentication
+
+When `BB_AUTH_TOKEN` is set on the daemon, all API endpoints require authentication via the `Authorization` header:
+
+```
+Authorization: Bearer <token>
+```
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer your-secret-token" http://localhost:8080/api/config
+```
+
+When `BB_AUTH_TOKEN` is unset or empty, authentication is disabled and all requests pass through.
+
+---
+
 **Command Overview:**
 
 * [`bb`↴](#bb)
