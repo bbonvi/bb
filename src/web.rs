@@ -78,6 +78,9 @@ async fn start_app(app_service: AppService, base_path: &str) {
         .route("/api/task_queue", get(task_queue))
         .layer(auth_layer);
 
+    // Health endpoint - no auth required (for container health checks)
+    let health = Router::new().route("/api/health", get(health_check));
+
     let tracing_layer = tower_http::trace::TraceLayer::new_for_http()
         .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(tracing::Level::INFO))
         .on_response(tower_http::trace::DefaultOnResponse::new().level(tracing::Level::INFO));
@@ -86,6 +89,7 @@ async fn start_app(app_service: AppService, base_path: &str) {
         .merge(webui)
         .merge(uploads)
         .merge(api)
+        .merge(health)
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(tracing_layer)
         .with_state(shared_state.clone());
@@ -112,6 +116,10 @@ async fn shutdown_signal(_app_service: Arc<RwLock<SharedState>>) {
             log::info!("Received SIGTERM, shutting down web server");
         }
     }
+}
+
+async fn health_check() -> impl IntoResponse {
+    Json(serde_json::json!({"status": "ok"}))
 }
 
 pub fn start_daemon(app: crate::app::local::AppLocal, base_path: &str) {
