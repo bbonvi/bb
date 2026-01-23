@@ -4,6 +4,7 @@ use crate::{
         service::AppService,
         task_runner::{self, QueueDump},
     },
+    auth::{AuthConfig, AuthLayer},
     bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery},
     config::Config,
     eid::Eid,
@@ -54,7 +55,13 @@ async fn start_app(app_service: AppService, base_path: &str) {
 
     let uploads_path = format!("{base_path}/uploads");
 
-    let uploads = Router::new().nest_service("/api/file/", ServeDir::new(&uploads_path));
+    // Load auth config from environment
+    let auth_config = AuthConfig::from_env();
+    let auth_layer = AuthLayer::new(auth_config);
+
+    let uploads = Router::new()
+        .nest_service("/api/file/", ServeDir::new(&uploads_path))
+        .layer(auth_layer.clone());
 
     let api = Router::new()
         .route("/api/bookmarks/search", post(search))
@@ -68,7 +75,8 @@ async fn start_app(app_service: AppService, base_path: &str) {
         .route("/api/bookmarks/tags", post(tags))
         .route("/api/config", get(get_config))
         .route("/api/config", post(update_config))
-        .route("/api/task_queue", get(task_queue));
+        .route("/api/task_queue", get(task_queue))
+        .layer(auth_layer);
 
     let tracing_layer = tower_http::trace::TraceLayer::new_for_http()
         .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(tracing::Level::INFO))
