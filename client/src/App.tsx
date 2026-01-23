@@ -18,7 +18,7 @@ import { useBookmarkSearch } from './hooks/useBookmarkSearch';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useBookmarkCRUD } from './hooks/useBookmarkCRUD';
 import { useGridLayout } from './hooks/useGridLayout';
-import LoginGate, { getAuthToken } from './LoginGate';
+import LoginGate, { getAuthToken, clearAuthToken } from './LoginGate';
 
 type AuthState = 'checking' | 'required' | 'authenticated';
 
@@ -53,11 +53,20 @@ function useAuth() {
         checkAuth();
     };
 
-    return { authState, handleLogin };
+    const handleLogout = () => {
+        clearAuthToken();
+        setAuthState('required');
+    };
+
+    return { authState, handleLogin, handleLogout };
+}
+
+interface AppProps {
+    onLogout?: () => void;
 }
 
 function AuthWrapper() {
-    const { authState, handleLogin } = useAuth();
+    const { authState, handleLogin, handleLogout } = useAuth();
 
     if (authState === 'checking') {
         return <div className="dark:bg-gray-900 dark:text-gray-100 h-screen flex items-center justify-center">loading...</div>;
@@ -66,10 +75,10 @@ function AuthWrapper() {
         return <LoginGate onLogin={handleLogin} />;
     }
 
-    return <App />;
+    return <App onLogout={handleLogout} />;
 }
 
-function App() {
+function App({ onLogout }: AppProps) {
     const [total, setTotal] = useState<number>(-1);
     const [tags, setTags] = useState<string[]>([]);
     const [config, setConfig] = useState<Config>();
@@ -270,7 +279,7 @@ function App() {
                 className="fixed z-50 cursor-pointer motion-safe:backdrop-blur-xl bg-gray-900/40 top-0 left-0 right-0 bottom-0"
             >
                 <div onClick={e => e.stopPropagation()} className="m-auto z-50 w-full max-w-screen-lg cursor-auto py-2 h-full">
-                    <Settings settings={settings} onSave={(settings) => saveSettings(settings)} tags={tags} />
+                    <Settings settings={settings} onSave={(settings) => saveSettings(settings)} tags={tags} onLogout={onLogout} />
                 </div>
             </div>}
 

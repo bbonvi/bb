@@ -11,6 +11,7 @@ export interface SettingsProps {
     settings: SettingsState;
     tags: string[];
     onSave: (settings: SettingsState) => void;
+    onLogout?: () => void;
 }
 
 export interface SettingsState extends SerializableObject {
@@ -425,6 +426,16 @@ export function Settings(props: SettingsProps) {
         </div>
 
         <div className="px-3 flex flex-row gap-1 mb-4 w-full pt-1">
+            {props.onLogout && (
+                <div className="flex">
+                    <Button
+                        className="bg-red-600 hover:bg-red-700 text-gray-100"
+                        onClick={props.onLogout}
+                    >
+                        Logout
+                    </Button>
+                </div>
+            )}
             <div className="ml-auto flex">
                 <input
                     className="transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-500 shadow-sm hover:shadow-inner focus:shadow-inner text-gray-100 rounded outline-0 p-1 px-2 max-w-64 border-none"
