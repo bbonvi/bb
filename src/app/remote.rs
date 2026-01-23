@@ -12,39 +12,50 @@ use super::{backend::*, errors::AppError};
 pub struct AppRemote {
     remote_addr: String,
     basic_auth: Option<(String, Option<String>)>,
+    bearer_token: Option<String>,
 }
 
 impl AppRemote {
-    pub fn new(addr: &str, basic_auth: Option<(String, Option<String>)>) -> AppRemote {
+    pub fn new(
+        addr: &str,
+        basic_auth: Option<(String, Option<String>)>,
+        bearer_token: Option<String>,
+    ) -> AppRemote {
         let remote_addr = addr.strip_suffix("/").unwrap_or(addr).to_string();
 
         AppRemote {
             remote_addr,
             basic_auth,
+            bearer_token,
         }
     }
 
     fn get(&self, url: &str) -> reqwest::blocking::RequestBuilder {
         log::info!("{}{}", self.remote_addr, url);
         let url = format!("{}{}", self.remote_addr, url);
+        let client = reqwest::blocking::Client::new();
+        let request = client.get(&url);
 
-        match self.basic_auth.clone() {
-            Some((username, password)) => reqwest::blocking::Client::new()
-                .get(&url)
-                .basic_auth(username, password),
-            None => reqwest::blocking::Client::new().get(&url),
-        }
+        self.attach_auth(request)
     }
 
     fn post(&self, url: &str) -> reqwest::blocking::RequestBuilder {
         log::info!("{}{}", self.remote_addr, url);
         let url = format!("{}{}", self.remote_addr, url);
+        let client = reqwest::blocking::Client::new();
+        let request = client.post(&url);
 
-        match self.basic_auth.clone() {
-            Some((username, password)) => reqwest::blocking::Client::new()
-                .post(&url)
-                .basic_auth(username, password),
-            None => reqwest::blocking::Client::new().post(&url),
+        self.attach_auth(request)
+    }
+
+    fn attach_auth(&self, request: reqwest::blocking::RequestBuilder) -> reqwest::blocking::RequestBuilder {
+        // Bearer token takes precedence over basic auth
+        if let Some(ref token) = self.bearer_token {
+            request.bearer_auth(token)
+        } else if let Some((ref username, ref password)) = self.basic_auth {
+            request.basic_auth(username, password.clone())
+        } else {
+            request
         }
     }
 

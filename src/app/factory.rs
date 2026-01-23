@@ -68,7 +68,8 @@ impl AppFactory {
         if let Ok(backend_addr) = std::env::var("BB_ADDR") {
             log::info!("Using remote backend: {}", backend_addr);
             let basic_auth = Self::parse_basic_auth()?;
-            Ok(Box::new(AppRemote::new(&backend_addr, basic_auth)))
+            let bearer_token = Self::parse_bearer_token();
+            Ok(Box::new(AppRemote::new(&backend_addr, basic_auth, bearer_token)))
         } else {
             log::info!("Using local backend");
             let paths = Self::get_paths()?;
@@ -95,6 +96,14 @@ impl AppFactory {
             }
             Err(_) => Ok(None),
         }
+    }
+
+    /// Parse bearer token from environment
+    fn parse_bearer_token() -> Option<String> {
+        std::env::var("BB_AUTH_TOKEN")
+            .ok()
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
     }
 
     /// Validate application configuration
