@@ -18,8 +18,56 @@ import { useBookmarkSearch } from './hooks/useBookmarkSearch';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useBookmarkCRUD } from './hooks/useBookmarkCRUD';
 import { useGridLayout } from './hooks/useGridLayout';
+import LoginGate, { getAuthToken } from './LoginGate';
 
+type AuthState = 'checking' | 'required' | 'authenticated';
 
+function useAuth() {
+    const [authState, setAuthState] = useState<AuthState>('checking');
+
+    const checkAuth = async () => {
+        const hasToken = !!getAuthToken();
+
+        try {
+            await api.fetchConfig();
+            setAuthState('authenticated');
+        } catch (err: any) {
+            if (err?.message?.includes('401')) {
+                setAuthState(hasToken ? 'checking' : 'required');
+                if (hasToken) {
+                    // Token exists but might be invalid - axios interceptor will handle reload
+                }
+            } else {
+                // Network error or other issue - assume authenticated (will fail gracefully)
+                setAuthState('authenticated');
+            }
+        }
+    };
+
+    useEffect(() => {
+        checkAuth();
+    }, []);
+
+    const handleLogin = () => {
+        setAuthState('checking');
+        checkAuth();
+    };
+
+    return { authState, handleLogin };
+}
+
+function AuthWrapper() {
+    const { authState, handleLogin } = useAuth();
+
+    if (authState === 'checking') {
+        return <div className="dark:bg-gray-900 dark:text-gray-100 h-screen flex items-center justify-center">loading...</div>;
+    }
+    if (authState === 'required') {
+        return <LoginGate onLogin={handleLogin} />;
+    }
+
+    return <App />;
+}
 
 function App() {
     const [total, setTotal] = useState<number>(-1);
@@ -443,4 +491,4 @@ const Row = memo(({ columnIndex, rowIndex, style, data }: any) => {
     />
 }, areEqual)
 
-export default App;
+export default AuthWrapper;

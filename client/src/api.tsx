@@ -20,8 +20,13 @@ axios.interceptors.response.use(
     (response) => response,
     (error: AxiosError) => {
         if (error.response?.status === 401) {
+            const hadToken = !!getAuthToken();
             clearAuthToken();
-            window.location.reload();
+            // Only reload if user had a token that became invalid
+            // If no token existed, let the auth check handle showing login
+            if (hadToken) {
+                window.location.reload();
+            }
         }
         return Promise.reject(error);
     }
