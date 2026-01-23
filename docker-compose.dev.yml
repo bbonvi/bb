@@ -16,6 +16,8 @@ services:
     environment:
       RUST_LOG: "debug,bb=debug,tower_http=debug,axum::rejection=trace"
       RUST_BACKTRACE: "1"
+      # Uncomment to enable bearer token auth for API routes:
+      # BB_AUTH_TOKEN: "your-secret-token-here"
     ports:
       - "8080:8080"
     command: cargo watch -w src -w Cargo.toml -w Cargo.lock -x 'run -- daemon'
