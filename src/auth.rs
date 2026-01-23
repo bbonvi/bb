@@ -1,6 +1,21 @@
 //! Authentication module for bearer token validation.
 //!
-//! Provides constant-time token comparison and bearer header extraction.
+//! Provides constant-time token comparison, bearer header extraction,
+//! and tower middleware for protecting API routes.
+
+use axum::{
+    body::Body,
+    http::{header::AUTHORIZATION, Request, Response, StatusCode},
+    response::IntoResponse,
+    Json,
+};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
+use tower::{Layer, Service};
 
 /// Validates a provided token against the expected token using constant-time comparison.
 ///
@@ -54,6 +69,122 @@ pub fn extract_bearer_token(header: &str) -> Option<&str> {
     } else {
         None
     }
+}
+
+/// Configuration for the auth middleware.
+///
+/// When `expected_token` is `None`, authentication is disabled and all requests pass through.
+#[derive(Clone)]
+pub struct AuthConfig {
+    /// The expected token. If `None`, auth is disabled.
+    pub expected_token: Option<Arc<String>>,
+}
+
+impl AuthConfig {
+    /// Creates auth config from environment variable `BB_AUTH_TOKEN`.
+    ///
+    /// - If unset or empty: auth disabled (returns `None` expected_token)
+    /// - If set: auth enabled, logs warning if token < 16 chars
+    pub fn from_env() -> Self {
+        let token = std::env::var("BB_AUTH_TOKEN").ok();
+        let expected_token = token
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .map(|t| {
+                if t.len() < 16 {
+                    log::warn!("BB_AUTH_TOKEN is less than 16 characters - consider using a longer token");
+                }
+                Arc::new(t)
+            });
+
+        if expected_token.is_some() {
+            log::info!("Authentication enabled for API routes");
+        } else {
+            log::info!("Authentication disabled (BB_AUTH_TOKEN not set)");
+        }
+
+        Self { expected_token }
+    }
+}
+
+/// Tower Layer that applies authentication middleware.
+#[derive(Clone)]
+pub struct AuthLayer {
+    config: AuthConfig,
+}
+
+impl AuthLayer {
+    pub fn new(config: AuthConfig) -> Self {
+        Self { config }
+    }
+}
+
+impl<S> Layer<S> for AuthLayer {
+    type Service = AuthMiddleware<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        AuthMiddleware {
+            inner,
+            config: self.config.clone(),
+        }
+    }
+}
+
+/// Tower Service that validates bearer tokens on incoming requests.
+#[derive(Clone)]
+pub struct AuthMiddleware<S> {
+    inner: S,
+    config: AuthConfig,
+}
+
+impl<S> Service<Request<Body>> for AuthMiddleware<S>
+where
+    S: Service<Request<Body>, Response = Response<Body>> + Clone + Send + 'static,
+    S::Future: Send,
+{
+    type Response = Response<Body>;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        // If no token configured, pass through (auth disabled)
+        let Some(expected_token) = &self.config.expected_token else {
+            let future = self.inner.call(req);
+            return Box::pin(async move { future.await });
+        };
+
+        // Extract and validate token
+        let auth_header = req
+            .headers()
+            .get(AUTHORIZATION)
+            .and_then(|v| v.to_str().ok());
+
+        let provided_token = auth_header.and_then(extract_bearer_token);
+
+        let is_valid = provided_token
+            .map(|t| validate_token(t, expected_token))
+            .unwrap_or(false);
+
+        if is_valid {
+            let future = self.inner.call(req);
+            Box::pin(async move { future.await })
+        } else {
+            // Return 401 Unauthorized
+            Box::pin(async move {
+                Ok(unauthorized_response())
+            })
+        }
+    }
+}
+
+/// Creates a 401 Unauthorized response with JSON body.
+fn unauthorized_response() -> Response<Body> {
+    let body = Json(serde_json::json!({"error": "Unauthorized"}));
+    (StatusCode::UNAUTHORIZED, body).into_response()
 }
 
 #[cfg(test)]
