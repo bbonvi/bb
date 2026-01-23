@@ -55,7 +55,6 @@ COPY --from=node_builder /app/build /client/build
 COPY --from=rust_builder /usr/local/bin/bb /usr/local/bin/bb
 
 ENV RUST_LOG="info,bb=info,tower_http::trace::on_response=warn"
-ENV PEEKALINK_API_KEY="sk_d0yoaet9psm3g5l5x8h10nk1pw4lhey6"
 
 EXPOSE 8080
 
