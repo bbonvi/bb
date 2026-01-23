@@ -71,6 +71,23 @@ pub fn extract_bearer_token(header: &str) -> Option<&str> {
     }
 }
 
+/// Extracts the token from URL query parameter `?token=...`.
+///
+/// Used for authenticating requests where headers cannot be set (e.g., `<img src>`).
+/// Returns `None` if the query string doesn't contain a valid token parameter.
+pub fn extract_query_token(query: Option<&str>) -> Option<&str> {
+    let query = query?;
+    for pair in query.split('&') {
+        if let Some(value) = pair.strip_prefix("token=") {
+            let value = value.trim();
+            if !value.is_empty() {
+                return Some(value);
+            }
+        }
+    }
+    None
+}
+
 /// Configuration for the auth middleware.
 ///
 /// When `expected_token` is `None`, authentication is disabled and all requests pass through.
@@ -157,13 +174,18 @@ where
             return Box::pin(async move { future.await });
         };
 
-        // Extract and validate token
+        // Extract token from Authorization header (preferred)
         let auth_header = req
             .headers()
             .get(AUTHORIZATION)
             .and_then(|v| v.to_str().ok());
+        let header_token = auth_header.and_then(extract_bearer_token);
 
-        let provided_token = auth_header.and_then(extract_bearer_token);
+        // Fall back to query param token (for <img src> and similar)
+        let query_token = extract_query_token(req.uri().query());
+
+        // Header takes precedence over query param
+        let provided_token = header_token.or(query_token);
 
         let is_valid = provided_token
             .map(|t| validate_token(t, expected_token))
@@ -235,6 +257,24 @@ mod tests {
         assert_eq!(extract_bearer_token("Bearer "), None);
         assert_eq!(extract_bearer_token("Bearersecret123"), None);
         assert_eq!(extract_bearer_token("secret123"), None);
+    }
+
+    #[test]
+    fn test_extract_query_token_valid() {
+        assert_eq!(extract_query_token(Some("token=secret123")), Some("secret123"));
+        assert_eq!(extract_query_token(Some("foo=bar&token=secret123")), Some("secret123"));
+        assert_eq!(extract_query_token(Some("token=secret123&foo=bar")), Some("secret123"));
+        assert_eq!(extract_query_token(Some("a=1&token=mytoken&b=2")), Some("mytoken"));
+    }
+
+    #[test]
+    fn test_extract_query_token_invalid() {
+        assert_eq!(extract_query_token(None), None);
+        assert_eq!(extract_query_token(Some("")), None);
+        assert_eq!(extract_query_token(Some("foo=bar")), None);
+        assert_eq!(extract_query_token(Some("token=")), None);
+        assert_eq!(extract_query_token(Some("tokens=secret")), None);
+        assert_eq!(extract_query_token(Some("mytoken=secret")), None);
     }
 
     // ========== Middleware integration tests ==========
@@ -370,6 +410,44 @@ mod tests {
             let body = resp.into_body().collect().await.unwrap().to_bytes();
             let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(json["error"], "Unauthorized");
+        }
+
+        #[tokio::test]
+        async fn valid_token_in_query_param_returns_200() {
+            let app = test_app(Some("secret-token-1234"));
+
+            let req = Request::builder()
+                .uri("/test?token=secret-token-1234")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn invalid_token_in_query_param_returns_401() {
+            let app = test_app(Some("secret-token-1234"));
+
+            let req = Request::builder()
+                .uri("/test?token=wrong-token")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        #[tokio::test]
+        async fn header_takes_precedence_over_query_param() {
+            let app = test_app(Some("secret-token-1234"));
+
+            // Valid header, invalid query param - should pass (header wins)
+            let req = Request::builder()
+                .uri("/test?token=wrong-token")
+                .header(AUTHORIZATION, "Bearer secret-token-1234")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
         }
     }
 }
