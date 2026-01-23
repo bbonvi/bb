@@ -1,6 +1,8 @@
 services:
   backend:
-    image: rust:bookworm
+    build:
+      context: .
+      dockerfile: dev.Dockerfile
     working_dir: /app
     volumes:
       - ./src:/app/src:cached
@@ -16,12 +18,7 @@ services:
       RUST_BACKTRACE: "1"
     ports:
       - "8080:8080"
-    command: >
-      bash -c "
-        apt-get update && apt-get install -y chromium --no-install-recommends &&
-        cargo install cargo-watch --locked &&
-        cargo watch -x 'run -- daemon'
-      "
+    command: cargo watch -w src -w Cargo.toml -w Cargo.lock -x 'run -- daemon'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/config"]
       interval: 10s
