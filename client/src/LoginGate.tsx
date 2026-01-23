@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import axios from 'axios';
 
 export const AUTH_TOKEN_KEY = 'bb_auth_token';
 
@@ -21,16 +22,36 @@ interface LoginGateProps {
 export default function LoginGate({ onLogin }: LoginGateProps) {
     const [token, setToken] = useState('');
     const [error, setError] = useState('');
+    const [verifying, setVerifying] = useState(false);
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         const trimmed = token.trim();
         if (!trimmed) {
             setError('Token is required');
             return;
         }
-        setAuthToken(trimmed);
-        onLogin();
+
+        setVerifying(true);
+        setError('');
+
+        try {
+            // Verify token before storing - make request with token header directly
+            await axios.get('/api/config', {
+                headers: { Authorization: `Bearer ${trimmed}` }
+            });
+            // Token valid - store and proceed
+            setAuthToken(trimmed);
+            onLogin();
+        } catch (err: any) {
+            if (err?.response?.status === 401) {
+                setError('Invalid token');
+            } else {
+                setError('Connection error');
+            }
+        } finally {
+            setVerifying(false);
+        }
     };
 
     return (
@@ -52,7 +73,8 @@ export default function LoginGate({ onLogin }: LoginGateProps) {
                             }}
                             placeholder="Enter your token"
                             autoFocus
-                            className="w-full transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-600 text-gray-100 rounded outline-0 p-3 px-4"
+                            disabled={verifying}
+                            className="w-full transition-all bg-gray-700 hover:bg-gray-600/90 focus:bg-gray-600 text-gray-100 rounded outline-0 p-3 px-4 disabled:opacity-50"
                         />
                     </div>
                     {error && (
@@ -60,9 +82,10 @@ export default function LoginGate({ onLogin }: LoginGateProps) {
                     )}
                     <button
                         type="submit"
-                        className="w-full transition-all bg-gray-600 hover:bg-gray-500 shadow-sm hover:shadow-inner rounded p-3 font-medium"
+                        disabled={verifying}
+                        className="w-full transition-all bg-gray-600 hover:bg-gray-500 shadow-sm hover:shadow-inner rounded p-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Login
+                        {verifying ? 'Verifying...' : 'Login'}
                     </button>
                 </form>
             </div>
