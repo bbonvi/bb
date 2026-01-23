@@ -1,9 +1,31 @@
 import axios, { AxiosError } from 'axios';
+import { getAuthToken, clearAuthToken } from './LoginGate';
 
 const configHeaders = {
     "content-type": "application/json",
     "Accept": "application/json"
 };
+
+// Request interceptor: attach Bearer token if available
+axios.interceptors.request.use((config) => {
+    const token = getAuthToken();
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+// Response interceptor: handle 401 by clearing token and reloading
+axios.interceptors.response.use(
+    (response) => response,
+    (error: AxiosError) => {
+        if (error.response?.status === 401) {
+            clearAuthToken();
+            window.location.reload();
+        }
+        return Promise.reject(error);
+    }
+);
 
 export interface Bmark {
     id: number,
