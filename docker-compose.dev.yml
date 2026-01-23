@@ -22,7 +22,7 @@ services:
       - "8080:8080"
     command: cargo watch -w src -w Cargo.toml -w Cargo.lock -x 'run -- daemon'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/config"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
