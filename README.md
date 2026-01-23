@@ -88,19 +88,38 @@ To install bb, follow these steps:
    ```
 
 ### Running daemon in docker
-```bash
 
+**Quick start:**
+```bash
 # build with headless chrome
 docker build -t bb:latest -f daemon.Dockerfile .
-# build without headless chrome
-docker build --build-arg NO_HEADLESS=true -t bb:latest -f daemon.Dockerfile .
-
-docker volume create bb-data
 
 # run and open http://localhost:8080
 docker run --rm -it -v bb-data:/root/.local/share/bb -p 8080:8080 --name bb-daemon bb:latest
-
 ```
+
+**Production deployment with docker-compose:**
+```bash
+# Copy and configure environment
+cp .env.example .env
+# Edit .env and set BB_AUTH_TOKEN (required)
+
+# Build and start
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
+```
+
+The compose file includes:
+- Automatic restarts
+- Health checks
+- Memory limits (2GB)
+- Log rotation
+- Cloudflare DNS (1.1.1.1)
 
 ### WebUI
 

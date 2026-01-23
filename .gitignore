@@ -9,3 +9,4 @@ bookmarks*csv
 buku.json
 config.yaml
 uploads/
+.env

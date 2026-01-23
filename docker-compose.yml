@@ -1,0 +1,64 @@
+services:
+  bb:
+    build:
+      context: .
+      dockerfile: daemon.Dockerfile
+      # Uncomment to build without headless chrome (smaller image, no screenshots):
+      # args:
+      #   NO_HEADLESS: "true"
+    image: bb:latest
+    container_name: bb
+    restart: unless-stopped
+
+    # Required for chromium sandboxing in some environments.
+    # Remove if not using headless chrome or if causing issues.
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    security_opt:
+      - seccomp=unconfined
+
+    volumes:
+      - ${BB_DATA_PATH:-bb-data}:/root/.local/share/bb
+      # Optional: mount custom config
+      # - ./config.yaml:/root/.local/share/bb/config.yaml:ro
+
+    environment:
+      RUST_LOG: ${RUST_LOG:-info,bb=info,tower_http::trace::on_response=warn}
+      CHROME_PATH: /usr/bin/chromium-browser
+      BB_AUTH_TOKEN: ${BB_AUTH_TOKEN:?BB_AUTH_TOKEN is required}
+      # Optional: external API for link previews
+      PEEKALINK_API_KEY: ${PEEKALINK_API_KEY:-}
+      # Optional: proxy for metadata fetching
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      OPT_PROXY: ${OPT_PROXY:-}
+
+    ports:
+      - "${BB_HOST:-127.0.0.1}:${BB_PORT:-8080}:8080"
+
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/config"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 256M
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  bb-data:
