@@ -65,7 +65,9 @@ export default function LoginGate({ onLogin }: LoginGateProps) {
                         </label>
                         <input
                             id="auth-token"
+                            name="password"
                             type="password"
+                            autoComplete="current-password"
                             value={token}
                             onChange={(e) => {
                                 setToken(e.target.value);
