@@ -25,12 +25,12 @@ ENV CFLAGS="-fPIC"
 
 RUN if [ "$NO_HEADLESS" = "true" ]; then \
         echo "building without chromium" && \
-        cargo install --no-default-features \
+        cargo install --locked --no-default-features \
                 --target=$(cat /target.txt | cut -d"-" -f2-) \
                 --root /usr/local/ --path ./ ; \
     else \
         echo "building with chromium" && \
-        cargo install --target=$(cat /target.txt | cut -d"-" -f2-) --root /usr/local/ --path ./ ; \
+        cargo install --locked --target=$(cat /target.txt | cut -d"-" -f2-) --root /usr/local/ --path ./ ; \
     fi
 
 #########################
