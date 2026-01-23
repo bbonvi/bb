@@ -18,6 +18,7 @@ services:
       - "8080:8080"
     command: >
       bash -c "
+        apt-get update && apt-get install -y chromium --no-install-recommends &&
         cargo install cargo-watch --locked &&
         cargo watch -x 'run -- daemon'
       "
