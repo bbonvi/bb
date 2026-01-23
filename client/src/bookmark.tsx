@@ -6,9 +6,17 @@ import { Bmark, BookmarkCreate, Config, Task, UpdateBmark } from "./api";
 import Button, { ButtonConfirm } from "./button";
 import { TagInput } from "./components";
 import { findRunningTask, isModKey, toBase64 } from "./helpers";
+import { getAuthToken } from "./LoginGate";
 import { RootState } from "./store";
 
 const BLANK_IMG = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
+/** Constructs authenticated URL for file endpoints */
+function fileUrl(fileId: string | undefined): string {
+    if (!fileId) return BLANK_IMG;
+    const token = getAuthToken();
+    return token ? `/api/file/${fileId}?token=${encodeURIComponent(token)}` : `/api/file/${fileId}`;
+}
 
 // Iframe Popup Component
 function Url(props: { url: string }) {
@@ -295,7 +303,7 @@ function Bookmark(props: Props) {
                             alt={bmark.title}
                             style={{ objectPosition: "50% 30%" }}
                             className={"object-cover z-10 w-full aspect-video " + (currentTask || dragStart ? "opacity-50" : "")}
-                            src={bmark.image_id && !dragOverCover ? `/api/file/${bmark.image_id}` : BLANK_IMG}
+                            src={!dragOverCover ? fileUrl(bmark.image_id) : BLANK_IMG}
                         />
                     </a>
                     {currentTask && <div className="absolute top-0 left-1 right-0 flex bottom-0 font-bold text-2xl leading-6 mb-1">
@@ -335,7 +343,7 @@ function Bookmark(props: Props) {
                                         "rounded-sm aspect-square self-center inline-block cursor-pointer hover:opacity-70 "
                                         + (dragStart ? "opacity-50" : "")
                                     }
-                                    src={bmark.icon_id && !dragOverIcon ? `/api/file/${bmark.icon_id}` : BLANK_IMG}
+                                    src={!dragOverIcon ? fileUrl(bmark.icon_id) : BLANK_IMG}
                                     onClick={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
