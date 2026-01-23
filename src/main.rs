@@ -2,6 +2,7 @@ use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod app;
+mod auth;
 mod bookmarks;
 mod buku_migrate;
 mod cli;
