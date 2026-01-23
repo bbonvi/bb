@@ -23,7 +23,11 @@ import LoginGate, { getAuthToken, clearAuthToken } from './LoginGate';
 type AuthState = 'checking' | 'required' | 'authenticated';
 
 function useAuth() {
-    const [authState, setAuthState] = useState<AuthState>('checking');
+    // Initialize synchronously: if no token, show login form immediately
+    // This ensures the form is in DOM on first paint for password managers
+    const [authState, setAuthState] = useState<AuthState>(() =>
+        getAuthToken() ? 'checking' : 'required'
+    );
 
     const checkAuth = async () => {
         const hasToken = !!getAuthToken();

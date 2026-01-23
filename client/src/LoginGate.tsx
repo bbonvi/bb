@@ -58,7 +58,7 @@ export default function LoginGate({ onLogin }: LoginGateProps) {
         <div className="dark:bg-gray-900 dark:text-gray-100 h-screen flex items-center justify-center">
             <div className="bg-gray-800 rounded-lg shadow-lg p-8 w-full max-w-md">
                 <h1 className="text-2xl font-semibold mb-6 text-center">Authentication Required</h1>
-                <form onSubmit={handleSubmit} action="#" method="post">
+                <form id="login-form" onSubmit={handleSubmit} action="#" method="post">
                     {/* Hidden username field for password manager compatibility */}
                     <input
                         type="text"
