@@ -104,7 +104,30 @@ docker run --rm -it -v bb-data:/root/.local/share/bb -p 8080:8080 --name bb-daem
 
 ### WebUI
 
-When running bb as daemon, you can access webui at [http://localhost:8080/](http://localhost:8080/) 
+When running bb as daemon, you can access webui at [http://localhost:8080/](http://localhost:8080/)
+
+### Authentication
+
+bb supports optional bearer token authentication for API routes. When enabled, both the web UI and CLI client require a valid token to access the API.
+
+**Enable authentication:**
+
+```bash
+# Set a secure token (16+ characters recommended)
+BB_AUTH_TOKEN=your-secret-token-here bb daemon
+```
+
+**CLI client with auth:**
+
+```bash
+BB_ADDR=http://localhost:8080 BB_AUTH_TOKEN=your-secret-token-here bb search
+```
+
+**Behavior:**
+- When `BB_AUTH_TOKEN` is unset or empty, authentication is disabled (backwards compatible)
+- When set, all `/api/*` requests require `Authorization: Bearer <token>` header
+- Static files (web UI assets) are always accessible without authentication
+- The web UI will prompt for the token on first access when auth is enabled 
 
 
 # API
@@ -119,7 +142,8 @@ When running bb as daemon, you can access webui at [http://localhost:8080/](http
 | `RUST_LOG`            | log level | error | warn |
 | `BB_BASE_PATH`        | Base path for bookmarks, configs and thumbnails       | `~/.local/share/bb`   | `~/.local/share/bb`     |
 | `BB_ADDR`             | Daemon http address                                   |                       | `http://localhost:8080` |
-| `BB_BASIC_AUTH`       | Optional basic auth for daemon authorization.         |                       | `myusername:mypassword` |
+| `BB_AUTH_TOKEN`       | Bearer token for API authentication. When set, all API requests require `Authorization: Bearer <token>` header. |                       | `my-secret-token-1234` |
+| `BB_BASIC_AUTH`       | Optional basic auth for daemon authorization (deprecated, use `BB_AUTH_TOKEN`). |                       | `myusername:mypassword` |
 | `HTTP_PROXY`          | Proxy for all meta requests                           |                       | `socks5://127.0.0.1:8060` |
 | `OPT_PROXY`           | An optional proxy that will be used in case default (no proxy/HTTP_PROXY) request fails. Useful if bb needs to access region locked website, but you don't want to increase the probability of captcha. | | `socks5://127.0.0.1:8060` |
 | `CHROME_PATH`         | A path to chromium binary                             | `chromium`            | `/usr/sbin/chromium`    |
