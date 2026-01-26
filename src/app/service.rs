@@ -133,8 +133,9 @@ impl AppService {
         let lexical_results = score_lexical(query, &bookmark_data);
         let lexical_ids: Vec<u64> = lexical_results.iter().map(|r| r.id).collect();
 
-        // 3. RRF fusion
-        let hybrid_results = rrf_fusion(&semantic_ids, &lexical_ids);
+        // 3. Weighted RRF fusion
+        let semantic_weight = service.semantic_weight();
+        let hybrid_results = rrf_fusion(&semantic_ids, &lexical_ids, semantic_weight);
 
         // Build lookup map and reorder bookmarks
         let id_to_bookmark: HashMap<u64, Bookmark> =
@@ -763,6 +764,7 @@ mod tests {
             default_threshold: 0.35,
             embedding_parallelism: "auto".to_string(),
             download_timeout_secs: 300,
+            semantic_weight: 0.6,
         }
     }
 

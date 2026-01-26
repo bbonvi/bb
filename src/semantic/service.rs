@@ -110,6 +110,11 @@ impl SemanticSearchService {
         self.config.default_threshold
     }
 
+    /// Get the configured semantic weight for hybrid search.
+    pub fn semantic_weight(&self) -> f32 {
+        self.config.semantic_weight
+    }
+
     /// Search for semantically similar bookmarks.
     ///
     /// # Arguments
@@ -497,6 +502,7 @@ mod tests {
             default_threshold: 0.35,
             embedding_parallelism: "auto".to_string(),
             download_timeout_secs: 300,
+            semantic_weight: 0.6,
         }
     }
 

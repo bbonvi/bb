@@ -1,13 +1,21 @@
 //! Hybrid search combining semantic and lexical rankings.
 //!
-//! Uses Reciprocal Rank Fusion (RRF) to merge results from both
+//! Uses Weighted Reciprocal Rank Fusion (RRF) to merge results from both
 //! semantic (embedding-based) and lexical (keyword-based) search.
+//!
+//! The semantic weight (α) controls the balance:
+//! - α=0.5: Equal weight to both (classic RRF)
+//! - α=0.6: 60% semantic, 40% lexical (default)
+//! - α=1.0: Pure semantic ranking
 
 use std::collections::HashMap;
 
 /// RRF constant (standard value from literature).
 /// Higher k reduces the impact of high-ranking items.
 const RRF_K: f32 = 60.0;
+
+/// Default semantic weight for hybrid search.
+pub const DEFAULT_SEMANTIC_WEIGHT: f32 = 0.6;
 
 /// Result from hybrid search with combined score.
 #[derive(Debug, Clone)]
@@ -22,22 +30,33 @@ pub struct HybridResult {
     pub lexical_rank: Option<usize>,
 }
 
-/// Fuse semantic and lexical rankings using Reciprocal Rank Fusion (RRF).
+/// Fuse semantic and lexical rankings using Weighted Reciprocal Rank Fusion (RRF).
 ///
-/// RRF formula: score(d) = 1/(k + rank_semantic) + 1/(k + rank_lexical)
+/// Weighted RRF formula:
+///   score(d) = α * 1/(k + rank_semantic) + (1-α) * 1/(k + rank_lexical)
+///
+/// Where α (semantic_weight) controls the balance between semantic and lexical ranking.
 ///
 /// # Arguments
 /// * `semantic_ids` - IDs from semantic search, ordered by similarity (best first)
 /// * `lexical_ids` - IDs from lexical search, ordered by relevance (best first)
+/// * `semantic_weight` - Weight for semantic ranking [0.0, 1.0]. Default: 0.6
 ///
 /// # Returns
 /// Combined results sorted by RRF score (highest first).
-pub fn rrf_fusion(semantic_ids: &[u64], lexical_ids: &[u64]) -> Vec<HybridResult> {
+pub fn rrf_fusion(
+    semantic_ids: &[u64],
+    lexical_ids: &[u64],
+    semantic_weight: f32,
+) -> Vec<HybridResult> {
     let mut scores: HashMap<u64, HybridResult> = HashMap::new();
+
+    let sem_weight = semantic_weight.clamp(0.0, 1.0);
+    let lex_weight = 1.0 - sem_weight;
 
     // Process semantic results
     for (rank, &id) in semantic_ids.iter().enumerate() {
-        let rrf_score = 1.0 / (RRF_K + rank as f32 + 1.0); // rank is 0-indexed, add 1
+        let rrf_score = sem_weight / (RRF_K + rank as f32 + 1.0); // rank is 0-indexed, add 1
         scores.insert(
             id,
             HybridResult {
@@ -51,7 +70,7 @@ pub fn rrf_fusion(semantic_ids: &[u64], lexical_ids: &[u64]) -> Vec<HybridResult
 
     // Process lexical results (add to existing or create new)
     for (rank, &id) in lexical_ids.iter().enumerate() {
-        let rrf_score = 1.0 / (RRF_K + rank as f32 + 1.0);
+        let rrf_score = lex_weight / (RRF_K + rank as f32 + 1.0);
 
         scores
             .entry(id)
@@ -84,14 +103,14 @@ mod tests {
 
     #[test]
     fn test_rrf_empty_inputs() {
-        let results = rrf_fusion(&[], &[]);
+        let results = rrf_fusion(&[], &[], 0.5);
         assert!(results.is_empty());
     }
 
     #[test]
     fn test_rrf_semantic_only() {
         let semantic = vec![1, 2, 3];
-        let results = rrf_fusion(&semantic, &[]);
+        let results = rrf_fusion(&semantic, &[], 0.5);
 
         assert_eq!(results.len(), 3);
 
@@ -107,7 +126,7 @@ mod tests {
     #[test]
     fn test_rrf_lexical_only() {
         let lexical = vec![1, 2, 3];
-        let results = rrf_fusion(&[], &lexical);
+        let results = rrf_fusion(&[], &lexical, 0.5);
 
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].id, 1);
@@ -118,20 +137,20 @@ mod tests {
     }
 
     #[test]
-    fn test_rrf_both_rankings_boost() {
-        // Item 1 is in both rankings
+    fn test_rrf_both_rankings_boost_equal_weight() {
+        // Item 1 is in both rankings (using equal weight 0.5)
         let semantic = vec![1, 2];
         let lexical = vec![1, 3];
 
-        let results = rrf_fusion(&semantic, &lexical);
+        let results = rrf_fusion(&semantic, &lexical, 0.5);
 
         // Item 1 should be boosted to the top
         assert_eq!(results[0].id, 1);
         assert_eq!(results[0].semantic_rank, Some(1));
         assert_eq!(results[0].lexical_rank, Some(1));
 
-        // Score should be sum of both RRF scores
-        let expected_score = 2.0 / (RRF_K + 1.0);
+        // Score should be weighted sum: 0.5/61 + 0.5/61 = 1.0/61
+        let expected_score = 1.0 / (RRF_K + 1.0);
         assert!((results[0].score - expected_score).abs() < 0.001);
     }
 
@@ -143,7 +162,7 @@ mod tests {
         let semantic = vec![1, 2];
         let lexical = vec![3, 4, 1];
 
-        let results = rrf_fusion(&semantic, &lexical);
+        let results = rrf_fusion(&semantic, &lexical, 0.5);
 
         // Find result for item 1
         let item1 = results.iter().find(|r| r.id == 1).unwrap();
@@ -155,16 +174,14 @@ mod tests {
     }
 
     #[test]
-    fn test_rrf_preserves_ordering() {
+    fn test_rrf_preserves_ordering_equal_weight() {
         // Semantic: 1 > 2 > 3 > 4
         // Lexical:  4 > 3 > 2 > 1
-        // Item 1: sem=1, lex=4 -> RRF(1) + RRF(4)
-        // Item 4: sem=4, lex=1 -> RRF(4) + RRF(1)
-        // Both should tie! (same ranks, just swapped)
+        // With equal weights, items 1 and 4 should tie (same ranks swapped)
         let semantic = vec![1, 2, 3, 4];
         let lexical = vec![4, 3, 2, 1];
 
-        let results = rrf_fusion(&semantic, &lexical);
+        let results = rrf_fusion(&semantic, &lexical, 0.5);
 
         // Items 1 and 4 should have same score
         let item1 = results.iter().find(|r| r.id == 1).unwrap();
@@ -178,12 +195,12 @@ mod tests {
     }
 
     #[test]
-    fn test_rrf_k_constant() {
-        // With k=60, rank 1 gives 1/61 ≈ 0.0164
+    fn test_rrf_k_constant_with_weight() {
+        // With k=60 and weight=0.6, semantic rank 1 gives 0.6/61
         let semantic = vec![1];
-        let results = rrf_fusion(&semantic, &[]);
+        let results = rrf_fusion(&semantic, &[], 0.6);
 
-        let expected = 1.0 / 61.0;
+        let expected = 0.6 / 61.0;
         assert!((results[0].score - expected).abs() < 0.0001);
     }
 
@@ -192,16 +209,63 @@ mod tests {
         let semantic: Vec<u64> = (1..=100).collect();
         let lexical: Vec<u64> = (50..=150).collect();
 
-        let results = rrf_fusion(&semantic, &lexical);
+        let results = rrf_fusion(&semantic, &lexical, 0.6);
 
         // Items 50-100 appear in both
-        // Item 50: sem_rank=50, lex_rank=1 -> should rank high due to lexical boost
         let item50 = results.iter().find(|r| r.id == 50).unwrap();
         assert!(item50.semantic_rank.is_some());
         assert!(item50.lexical_rank.is_some());
 
-        // Total unique items: 1-49 (50 items) + 50-150 (101 items unique from lexical)
-        // Actually: 1-100 (100 items) + 101-150 (50 items) = 150 items
+        // Total unique items: 1-100 + 101-150 = 150 items
         assert_eq!(results.len(), 150);
+    }
+
+    #[test]
+    fn test_rrf_semantic_weight_favors_semantic() {
+        // Semantic: 1 > 2
+        // Lexical:  2 > 1
+        // With sem_weight=0.8, semantic ranking should dominate
+        let semantic = vec![1, 2];
+        let lexical = vec![2, 1];
+
+        let results = rrf_fusion(&semantic, &lexical, 0.8);
+
+        // Item 1 should win due to higher semantic weight
+        // Item 1: sem=1, lex=2 -> 0.8/61 + 0.2/62
+        // Item 2: sem=2, lex=1 -> 0.8/62 + 0.2/61
+        assert_eq!(results[0].id, 1);
+    }
+
+    #[test]
+    fn test_rrf_lexical_weight_favors_lexical() {
+        // Semantic: 1 > 2
+        // Lexical:  2 > 1
+        // With sem_weight=0.2, lexical ranking should dominate
+        let semantic = vec![1, 2];
+        let lexical = vec![2, 1];
+
+        let results = rrf_fusion(&semantic, &lexical, 0.2);
+
+        // Item 2 should win due to higher lexical weight
+        assert_eq!(results[0].id, 2);
+    }
+
+    #[test]
+    fn test_rrf_weight_clamping() {
+        // Test that out-of-range weights are clamped
+        let semantic = vec![1];
+        let lexical = vec![2];
+
+        // Weight > 1.0 should be clamped to 1.0
+        let results = rrf_fusion(&semantic, &lexical, 1.5);
+        let expected_sem_score = 1.0 / 61.0; // Full weight on semantic
+        assert!((results[0].score - expected_sem_score).abs() < 0.0001);
+        assert_eq!(results[0].id, 1); // Semantic result with weight=1.0
+
+        // Weight < 0.0 should be clamped to 0.0
+        let results = rrf_fusion(&semantic, &lexical, -0.5);
+        let expected_lex_score = 1.0 / 61.0; // Full weight on lexical
+        assert!((results[0].score - expected_lex_score).abs() < 0.0001);
+        assert_eq!(results[0].id, 2); // Lexical result with sem_weight=0.0
     }
 }

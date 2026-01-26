@@ -1005,6 +1005,7 @@ mod tests {
                 default_threshold: 0.35,
                 embedding_parallelism: "auto".to_string(),
                 download_timeout_secs: 300,
+                semantic_weight: 0.6,
             };
             let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
 
@@ -1044,6 +1045,7 @@ mod tests {
                 default_threshold: 0.35,
                 embedding_parallelism: "auto".to_string(),
                 download_timeout_secs: 300,
+                semantic_weight: 0.6,
             };
             let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
 
@@ -1086,6 +1088,7 @@ mod tests {
                 default_threshold: 0.35,
                 embedding_parallelism: "auto".to_string(),
                 download_timeout_secs: 300,
+                semantic_weight: 0.6,
             };
             let semantic_service = Arc::new(SemanticSearchService::new(sem_config.clone(), test_dir.clone()));
 

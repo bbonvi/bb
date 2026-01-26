@@ -12,6 +12,8 @@ const DEFAULT_SEMANTIC_MODEL: &str = "all-MiniLM-L6-v2";
 const DEFAULT_SEMANTIC_THRESHOLD: f32 = 0.35;
 /// Default model download timeout in seconds
 const DEFAULT_DOWNLOAD_TIMEOUT_SECS: u64 = 300;
+/// Default semantic weight in hybrid search (0.0-1.0, higher = favor semantic over lexical)
+const DEFAULT_SEMANTIC_WEIGHT: f32 = 0.6;
 
 /// Configuration for semantic search functionality
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -35,6 +37,12 @@ pub struct SemanticSearchConfig {
     /// Timeout for model download in seconds
     #[serde(default = "default_download_timeout_secs")]
     pub download_timeout_secs: u64,
+
+    /// Weight for semantic ranking in hybrid search [0.0, 1.0]
+    /// Higher values favor semantic (embedding) similarity over lexical (keyword) matching.
+    /// Default: 0.6 (60% semantic, 40% lexical)
+    #[serde(default = "default_semantic_weight")]
+    pub semantic_weight: f32,
 }
 
 impl Default for SemanticSearchConfig {
@@ -45,6 +53,7 @@ impl Default for SemanticSearchConfig {
             default_threshold: DEFAULT_SEMANTIC_THRESHOLD,
             embedding_parallelism: "auto".to_string(),
             download_timeout_secs: DEFAULT_DOWNLOAD_TIMEOUT_SECS,
+            semantic_weight: DEFAULT_SEMANTIC_WEIGHT,
         }
     }
 }
@@ -63,6 +72,10 @@ fn default_embedding_parallelism() -> String {
 
 fn default_download_timeout_secs() -> u64 {
     DEFAULT_DOWNLOAD_TIMEOUT_SECS
+}
+
+fn default_semantic_weight() -> f32 {
+    DEFAULT_SEMANTIC_WEIGHT
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -129,6 +142,13 @@ impl Config {
 
         if sem.download_timeout_secs == 0 {
             panic!("semantic_search.download_timeout_secs must be greater than 0");
+        }
+
+        if !(0.0..=1.0).contains(&sem.semantic_weight) {
+            panic!(
+                "semantic_search.semantic_weight must be between 0.0 and 1.0, got {}",
+                sem.semantic_weight
+            );
         }
     }
 
