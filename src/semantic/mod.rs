@@ -17,7 +17,7 @@ mod storage;
 
 pub use embeddings::EmbeddingModel;
 pub use index::VectorIndex;
-pub use preprocess::preprocess_content;
+pub use preprocess::{content_hash, preprocess_content};
 pub use storage::{VectorStorage, VectorStorageError};
 
 /// Default embedding model name
