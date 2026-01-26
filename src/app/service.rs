@@ -192,6 +192,97 @@ impl AppService {
         }
     }
 
+    /// Revalidate a bookmark's semantic index entry after update.
+    ///
+    /// Compares content hashes to detect changes. Re-embeds only if content
+    /// (title/description) has changed. Logs warnings on failure but does not
+    /// propagate errors to avoid failing bookmark updates.
+    fn revalidate_bookmark_for_semantic(&self, bookmark: &Bookmark) {
+        let service = match &self.semantic_service {
+            Some(s) if s.is_enabled() => s,
+            _ => return, // No service or disabled
+        };
+
+        // Compute current content hash
+        let new_hash = content_hash(&bookmark.title, &bookmark.description);
+        let bookmark_id = bookmark.id;
+
+        // Check if hash changed (requires index access)
+        let needs_reembed = service
+            .with_index_mut(|index, _model| {
+                match index.get(bookmark_id) {
+                    Some(entry) => entry.content_hash != new_hash,
+                    None => true, // Entry missing, needs embedding
+                }
+            })
+            .unwrap_or(true); // On error, assume needs re-embed
+
+        if !needs_reembed {
+            log::debug!(
+                "Bookmark {} content unchanged, skipping re-embed",
+                bookmark_id
+            );
+            return;
+        }
+
+        // Preprocess content - skip if empty
+        let content = match preprocess_content(&bookmark.title, &bookmark.description) {
+            Some(c) => c,
+            None => {
+                // Content is now empty - remove from index
+                log::debug!(
+                    "Bookmark {} has no content, removing from semantic index",
+                    bookmark_id
+                );
+                let _ = service.with_index_mut(|index, _| {
+                    index.remove(bookmark_id);
+                });
+                let _ = service.save_index();
+                return;
+            }
+        };
+
+        // Generate embedding and update index
+        let result = service.with_index_mut(|index, model| {
+            match model.embed(&content) {
+                Ok(embedding) => {
+                    if let Err(e) = index.insert(bookmark_id, new_hash, embedding) {
+                        log::warn!(
+                            "Failed to update embedding for bookmark {}: {}",
+                            bookmark_id,
+                            e
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to generate embedding for bookmark {}: {}",
+                        bookmark_id,
+                        e
+                    );
+                }
+            }
+        });
+
+        if let Err(e) = result {
+            log::warn!(
+                "Failed to access semantic index for bookmark {}: {}",
+                bookmark_id,
+                e
+            );
+            return;
+        }
+
+        // Persist to storage
+        if let Err(e) = service.save_index() {
+            log::warn!(
+                "Failed to save semantic index after updating bookmark {}: {}",
+                bookmark_id,
+                e
+            );
+        }
+    }
+
     /// Update an existing bookmark
     pub fn update_bookmark(&self, id: u64, update: BookmarkUpdate) -> Result<Bookmark> {
         // Validate the update
@@ -202,11 +293,19 @@ impl AppService {
             self.check_url_conflict(id, new_url)?;
         }
 
+        // Check if content (title/description) is being updated for semantic revalidation
+        let content_changed = update.title.is_some() || update.description.is_some();
+
         // Perform the update
         let bookmark = self
             .backend
             .update(id, update)
             .context("Failed to update bookmark")?;
+
+        // Revalidate semantic index if content changed (best-effort)
+        if content_changed {
+            self.revalidate_bookmark_for_semantic(&bookmark);
+        }
 
         Ok(bookmark)
     }

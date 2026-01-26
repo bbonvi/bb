@@ -1178,4 +1178,395 @@ mod index_maintenance {
 
         let _ = std::fs::remove_dir_all(&test_dir);
     }
+
+    // =========================================================================
+    // D.2 Update Revalidation Tests
+    //
+    // These tests verify that bookmark updates properly revalidate the
+    // semantic index entry when content changes.
+    // =========================================================================
+
+    /// Mock backend that supports both create and update operations.
+    struct UpdateableMockBackend {
+        bookmarks: RwLock<Vec<Bookmark>>,
+        next_id: AtomicU64,
+    }
+
+    impl UpdateableMockBackend {
+        fn new() -> Self {
+            Self {
+                bookmarks: RwLock::new(Vec::new()),
+                next_id: AtomicU64::new(1),
+            }
+        }
+
+        fn with_bookmarks(bookmarks: Vec<Bookmark>) -> Self {
+            let max_id = bookmarks.iter().map(|b| b.id).max().unwrap_or(0);
+            Self {
+                bookmarks: RwLock::new(bookmarks),
+                next_id: AtomicU64::new(max_id + 1),
+            }
+        }
+    }
+
+    impl AppBackend for UpdateableMockBackend {
+        fn create(&self, create: BookmarkCreate, _: AddOpts) -> Result<Bookmark, AppError> {
+            let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+
+            let bookmark = Bookmark {
+                id,
+                url: create.url,
+                title: create.title.unwrap_or_default(),
+                description: create.description.unwrap_or_default(),
+                tags: create.tags.unwrap_or_default(),
+                image_id: None,
+                icon_id: None,
+            };
+
+            self.bookmarks.write().unwrap().push(bookmark.clone());
+            Ok(bookmark)
+        }
+
+        fn update(&self, id: u64, update: BookmarkUpdate) -> Result<Bookmark, AppError> {
+            let mut bookmarks = self.bookmarks.write().unwrap();
+            let bookmark = bookmarks
+                .iter_mut()
+                .find(|b| b.id == id)
+                .ok_or_else(|| AppError::Other(anyhow::anyhow!("Bookmark {} not found", id)))?;
+
+            if let Some(title) = update.title {
+                bookmark.title = title;
+            }
+            if let Some(description) = update.description {
+                bookmark.description = description;
+            }
+            if let Some(url) = update.url {
+                bookmark.url = url;
+            }
+            if let Some(tags) = update.tags {
+                bookmark.tags = tags;
+            }
+
+            Ok(bookmark.clone())
+        }
+
+        fn search(&self, query: SearchQuery) -> Result<Vec<Bookmark>, AppError> {
+            let bookmarks = self.bookmarks.read().unwrap();
+            if let Some(id) = query.id {
+                Ok(bookmarks.iter().filter(|b| b.id == id).cloned().collect())
+            } else if query.url.is_some() && query.exact {
+                // For duplicate check - return empty (no duplicates)
+                Ok(Vec::new())
+            } else {
+                Ok(bookmarks.clone())
+            }
+        }
+
+        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<(), AppError> {
+            unimplemented!()
+        }
+
+        fn delete(&self, _: u64) -> Result<(), AppError> {
+            unimplemented!()
+        }
+
+        fn search_delete(&self, _: SearchQuery) -> Result<usize, AppError> {
+            unimplemented!()
+        }
+
+        fn search_update(&self, _: SearchQuery, _: BookmarkUpdate) -> Result<usize, AppError> {
+            unimplemented!()
+        }
+
+        fn total(&self) -> Result<usize, AppError> {
+            Ok(self.bookmarks.read().unwrap().len())
+        }
+
+        fn tags(&self) -> Result<Vec<String>, AppError> {
+            unimplemented!()
+        }
+
+        fn config(&self) -> Result<Arc<RwLock<Config>>, AppError> {
+            Ok(Arc::new(RwLock::new(Config::default())))
+        }
+
+        fn update_config(&self, _: Config) -> Result<(), AppError> {
+            unimplemented!()
+        }
+    }
+
+    /// Test that updating bookmark content triggers re-embedding.
+    ///
+    /// This is the core acceptance test for D.2: "Updated bookmark reflects
+    /// new content in semantic search."
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_update_content_triggers_reembed() {
+        use crate::semantic::content_hash;
+
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        let backend = Box::new(UpdateableMockBackend::new());
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        // Create a bookmark about cooking
+        let create = BookmarkCreate {
+            url: "https://example.com/topic".to_string(),
+            title: Some("Cooking Recipes".to_string()),
+            description: Some("Best chocolate cake recipes".to_string()),
+            tags: None,
+            image_id: None,
+            icon_id: None,
+        };
+        let bookmark = service
+            .create_bookmark(create, AddOpts::default())
+            .expect("Create failed");
+        let id = bookmark.id;
+
+        // Get original hash
+        let original_hash = content_hash(&bookmark.title, &bookmark.description);
+
+        // Verify: finds cooking content
+        let cooking_results = semantic_service
+            .search("chocolate desserts baking", None, Some(0.3), 10)
+            .expect("Search failed");
+        assert!(
+            cooking_results.contains(&id),
+            "Should find cooking content before update"
+        );
+
+        // Update to machine learning content
+        let update = BookmarkUpdate {
+            title: Some("Machine Learning Guide".to_string()),
+            description: Some("Neural networks and deep learning".to_string()),
+            ..Default::default()
+        };
+        let updated = service.update_bookmark(id, update).expect("Update failed");
+
+        // Verify: hash changed
+        let new_hash = content_hash(&updated.title, &updated.description);
+        assert_ne!(original_hash, new_hash, "Content hash should change after update");
+
+        // Verify: now finds ML content
+        let ml_results = semantic_service
+            .search("artificial intelligence neural networks", None, Some(0.3), 10)
+            .expect("Search failed");
+        assert!(
+            ml_results.contains(&id),
+            "Should find ML content after update. Got: {:?}",
+            ml_results
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that updating only non-content fields does NOT trigger re-embed.
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_update_non_content_no_reembed() {
+        use crate::semantic::content_hash;
+
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        let backend = Box::new(UpdateableMockBackend::new());
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        // Create a bookmark
+        let create = BookmarkCreate {
+            url: "https://example.com/original".to_string(),
+            title: Some("Test Bookmark".to_string()),
+            description: Some("Test description".to_string()),
+            tags: None,
+            image_id: None,
+            icon_id: None,
+        };
+        let bookmark = service
+            .create_bookmark(create, AddOpts::default())
+            .expect("Create failed");
+        let id = bookmark.id;
+
+        // Get hash before update
+        let hash_before = content_hash(&bookmark.title, &bookmark.description);
+
+        // Update only URL and tags (not title/description)
+        let update = BookmarkUpdate {
+            url: Some("https://example.com/new-url".to_string()),
+            tags: Some(vec!["new-tag".to_string()]),
+            ..Default::default()
+        };
+        let updated = service.update_bookmark(id, update).expect("Update failed");
+
+        // Hash should be unchanged (title/description unchanged)
+        let hash_after = content_hash(&updated.title, &updated.description);
+        assert_eq!(hash_before, hash_after, "Hash should not change for non-content updates");
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that update works without semantic service (no panic).
+    #[test]
+    fn test_update_without_semantic_service() {
+        let bookmark = Bookmark {
+            id: 1,
+            url: "https://example.com/test".to_string(),
+            title: "Original Title".to_string(),
+            description: "Original description".to_string(),
+            tags: vec![],
+            image_id: None,
+            icon_id: None,
+        };
+
+        let backend = Box::new(UpdateableMockBackend::with_bookmarks(vec![bookmark]));
+        let service = AppService::new(backend);
+
+        let update = BookmarkUpdate {
+            title: Some("Updated Title".to_string()),
+            ..Default::default()
+        };
+
+        // Should succeed without panic
+        let result = service.update_bookmark(1, update);
+        assert!(result.is_ok(), "Update should succeed without semantic service");
+    }
+
+    /// Test that update works when semantic search is disabled.
+    #[test]
+    fn test_update_with_semantic_disabled() {
+        let test_dir = test_dir();
+
+        let bookmark = Bookmark {
+            id: 1,
+            url: "https://example.com/test".to_string(),
+            title: "Original Title".to_string(),
+            description: "Original description".to_string(),
+            tags: vec![],
+            image_id: None,
+            icon_id: None,
+        };
+
+        let config = SemanticSearchConfig {
+            enabled: false,
+            ..enabled_semantic_config()
+        };
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+
+        let backend = Box::new(UpdateableMockBackend::with_bookmarks(vec![bookmark]));
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        let update = BookmarkUpdate {
+            title: Some("Updated Title".to_string()),
+            description: Some("Updated description".to_string()),
+            ..Default::default()
+        };
+
+        // Should succeed, but no indexing happens
+        let result = service.update_bookmark(1, update);
+        assert!(result.is_ok(), "Update should succeed when disabled");
+
+        // Index should remain empty
+        assert_eq!(
+            semantic_service.indexed_count(),
+            0,
+            "Should not index when disabled"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that updating content to empty removes from index.
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_update_to_empty_removes_from_index() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        let backend = Box::new(UpdateableMockBackend::new());
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        // Create a bookmark with content
+        let create = BookmarkCreate {
+            url: "https://example.com/content".to_string(),
+            title: Some("Test Bookmark".to_string()),
+            description: Some("Test description".to_string()),
+            tags: None,
+            image_id: None,
+            icon_id: None,
+        };
+        service
+            .create_bookmark(create, AddOpts::default())
+            .expect("Create failed");
+
+        assert_eq!(semantic_service.indexed_count(), 1, "Should be indexed after create");
+
+        // Update to empty content
+        let update = BookmarkUpdate {
+            title: Some(String::new()),
+            description: Some(String::new()),
+            ..Default::default()
+        };
+        service.update_bookmark(1, update).expect("Update failed");
+
+        // Should be removed from index
+        assert_eq!(
+            semantic_service.indexed_count(),
+            0,
+            "Should be removed from index when content becomes empty"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that update re-embeds missing entry (not previously indexed).
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_update_indexes_missing_entry() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        // Bookmark exists in backend but NOT in semantic index
+        let bookmark = Bookmark {
+            id: 42,
+            url: "https://example.com/orphan".to_string(),
+            title: "Orphan Bookmark".to_string(),
+            description: "Not indexed yet".to_string(),
+            tags: vec![],
+            image_id: None,
+            icon_id: None,
+        };
+
+        let backend = Box::new(UpdateableMockBackend::with_bookmarks(vec![bookmark]));
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        assert_eq!(semantic_service.indexed_count(), 0, "Should start empty");
+
+        // Update the bookmark - should trigger indexing since entry is missing
+        let update = BookmarkUpdate {
+            title: Some("Updated Orphan".to_string()),
+            ..Default::default()
+        };
+        service.update_bookmark(42, update).expect("Update failed");
+
+        // Should now be indexed
+        assert_eq!(
+            semantic_service.indexed_count(),
+            1,
+            "Missing entry should be indexed on update"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
 }
