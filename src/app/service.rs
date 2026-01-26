@@ -70,8 +70,10 @@ impl AppService {
                         query_limit,
                         service,
                     )?;
+                } else {
+                    // Semantic search explicitly requested but disabled in config
+                    anyhow::bail!("Semantic search is disabled in configuration");
                 }
-                // If disabled, results pass through unranked (C.3 will add error handling)
             }
             // If no service (remote mode), results pass through
             // Remote backend handles semantic search on its end
@@ -421,5 +423,197 @@ impl AppService {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::backend::{AddOpts, AppBackend, RefreshMetadataOpts};
+    use crate::app::errors::AppError;
+    use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate};
+    use crate::config::SemanticSearchConfig;
+    use std::path::PathBuf;
+
+    /// Mock backend that returns preconfigured bookmarks
+    struct MockBackend {
+        bookmarks: Vec<Bookmark>,
+    }
+
+    impl MockBackend {
+        fn new(bookmarks: Vec<Bookmark>) -> Self {
+            Self { bookmarks }
+        }
+    }
+
+    impl AppBackend for MockBackend {
+        fn create(&self, _: BookmarkCreate, _: AddOpts) -> anyhow::Result<Bookmark, AppError> {
+            unimplemented!()
+        }
+
+        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
+            unimplemented!()
+        }
+
+        fn update(&self, _: u64, _: BookmarkUpdate) -> anyhow::Result<Bookmark, AppError> {
+            unimplemented!()
+        }
+
+        fn delete(&self, _: u64) -> anyhow::Result<(), AppError> {
+            unimplemented!()
+        }
+
+        fn search_delete(&self, _: SearchQuery) -> anyhow::Result<usize, AppError> {
+            unimplemented!()
+        }
+
+        fn search_update(&self, _: SearchQuery, _: BookmarkUpdate) -> anyhow::Result<usize, AppError> {
+            unimplemented!()
+        }
+
+        fn total(&self) -> anyhow::Result<usize, AppError> {
+            Ok(self.bookmarks.len())
+        }
+
+        fn tags(&self) -> anyhow::Result<Vec<String>, AppError> {
+            unimplemented!()
+        }
+
+        fn search(&self, _query: SearchQuery) -> anyhow::Result<Vec<Bookmark>, AppError> {
+            Ok(self.bookmarks.clone())
+        }
+
+        fn config(&self) -> anyhow::Result<Arc<RwLock<Config>>, AppError> {
+            Ok(Arc::new(RwLock::new(Config::default())))
+        }
+
+        fn update_config(&self, _: Config) -> anyhow::Result<(), AppError> {
+            unimplemented!()
+        }
+    }
+
+    fn create_test_bookmark(id: u64, title: &str) -> Bookmark {
+        Bookmark {
+            id,
+            title: title.to_string(),
+            url: format!("https://example.com/{}", id),
+            description: String::new(),
+            tags: vec![],
+            image_id: None,
+            icon_id: None,
+        }
+    }
+
+    fn disabled_semantic_config() -> SemanticSearchConfig {
+        SemanticSearchConfig {
+            enabled: false,
+            model: "all-MiniLM-L6-v2".to_string(),
+            default_threshold: 0.35,
+            embedding_parallelism: "auto".to_string(),
+            download_timeout_secs: 300,
+        }
+    }
+
+    fn enabled_semantic_config() -> SemanticSearchConfig {
+        SemanticSearchConfig {
+            enabled: true,
+            ..disabled_semantic_config()
+        }
+    }
+
+    #[test]
+    fn test_search_without_semantic_returns_all_results() {
+        let bookmarks = vec![
+            create_test_bookmark(1, "Machine Learning Guide"),
+            create_test_bookmark(2, "Cooking Recipes"),
+        ];
+        let backend = Box::new(MockBackend::new(bookmarks.clone()));
+        let service = AppService::new(backend);
+
+        let query = SearchQuery::default();
+        let results = service.search_bookmarks(query, false).unwrap();
+
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_search_with_semantic_disabled_returns_error() {
+        // GIVEN: A service with semantic search disabled
+        let bookmarks = vec![
+            create_test_bookmark(1, "Machine Learning Guide"),
+            create_test_bookmark(2, "Cooking Recipes"),
+        ];
+        let backend = Box::new(MockBackend::new(bookmarks));
+
+        let config = disabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(
+            config,
+            PathBuf::from("/tmp/test"),
+        ));
+
+        let service = AppService::with_semantic(backend, semantic_service);
+
+        // WHEN: A search is performed with semantic parameter
+        let query = SearchQuery {
+            semantic: Some("artificial intelligence".to_string()),
+            ..Default::default()
+        };
+        let result = service.search_bookmarks(query, false);
+
+        // THEN: An error is returned indicating semantic search is disabled
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("disabled") || err_msg.contains("Disabled"),
+            "Expected error message to mention 'disabled', got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_search_without_semantic_param_works_when_disabled() {
+        // GIVEN: A service with semantic search disabled
+        let bookmarks = vec![
+            create_test_bookmark(1, "Machine Learning Guide"),
+            create_test_bookmark(2, "Cooking Recipes"),
+        ];
+        let backend = Box::new(MockBackend::new(bookmarks.clone()));
+
+        let config = disabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(
+            config,
+            PathBuf::from("/tmp/test"),
+        ));
+
+        let service = AppService::with_semantic(backend, semantic_service);
+
+        // WHEN: A search is performed WITHOUT semantic parameter
+        let query = SearchQuery::default();
+        let result = service.search_bookmarks(query, false);
+
+        // THEN: Results are returned normally (no error)
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_search_with_semantic_no_service_passes_through() {
+        // GIVEN: A service without semantic service (remote mode)
+        let bookmarks = vec![
+            create_test_bookmark(1, "Machine Learning Guide"),
+        ];
+        let backend = Box::new(MockBackend::new(bookmarks.clone()));
+        let service = AppService::new(backend);
+
+        // WHEN: A search is performed with semantic parameter
+        let query = SearchQuery {
+            semantic: Some("AI".to_string()),
+            ..Default::default()
+        };
+        let result = service.search_bookmarks(query, false);
+
+        // THEN: Results pass through (remote backend handles semantic)
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 1);
     }
 }
