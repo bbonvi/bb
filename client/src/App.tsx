@@ -184,7 +184,8 @@ function App({ onLogout }: AppProps) {
                 title: searchHook.inputTitle,
                 description: searchHook.inputDescription,
                 url: searchHook.inputUrl,
-                keyword: searchHook.inputKeyword.replace(/^#/, "")
+                keyword: searchHook.inputKeyword.replace(/^#/, ""),
+                semantic: searchHook.inputSemantic,
             })
                 .then(searchHook.updateBmarksIfNeeded),
 

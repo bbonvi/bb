@@ -24,6 +24,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
     const [inputUrl, _setInputUrl] = useState("");
     const [inputDescription, _setInputDescription] = useState("");
     const [inputKeyword, _setInputKeyword] = useState("");
+    const [inputSemantic, _setInputSemantic] = useState("");
 
     const formRefs = useRef({
         inputTags: inputTags,
@@ -56,12 +57,17 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         return _setInputKeyword(val);
     };
 
+    const setInputSemantic = (val: string) => {
+        return _setInputSemantic(val);
+    };
+
     const getBmarks = async (props: {
         tags: string,
         title: string,
         url: string,
         description: string,
         keyword: string,
+        semantic: string,
     }) => {
         const tagsFetch = props.tags.trim().replaceAll(" ", ",").split(",");
 
@@ -70,6 +76,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
             || props.url
             || props.description
             || props.keyword
+            || props.semantic
             || showAll;
 
         if (!shouldRefresh) {
@@ -82,6 +89,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
             url: props.url,
             description: props.description,
             keyword: props.keyword,
+            semantic: props.semantic || undefined,
         }).then(b => b.reverse());
     };
 
@@ -100,6 +108,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         description: inputDescription,
         url: inputUrl,
         keyword: inputKeyword,
+        semantic: inputSemantic,
     }).then(updateBmarksIfNeeded);
 
     function excludeHiddenTags(bmarks: Bmark[]) {
@@ -128,6 +137,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         inputUrl,
         inputDescription,
         inputKeyword,
+        inputSemantic,
         bmarksFiltered,
 
         // Setters
@@ -136,6 +146,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         setInputUrl,
         setInputDescription,
         setInputKeyword,
+        setInputSemantic,
 
         // Actions
         refreshBmarks,

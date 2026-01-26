@@ -52,6 +52,8 @@ export interface SearchQuery {
     description?: string,
     tags?: string,
     keyword?: string,
+    semantic?: string,
+    threshold?: number,
     exact?: boolean,
     descending?: boolean,
 }
