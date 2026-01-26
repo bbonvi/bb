@@ -50,10 +50,13 @@ bb includes local semantic search powered by [fastembed](https://github.com/Anus
 
 ### How It Works
 
-1. When you create or update a bookmark, bb generates an embedding from the title and description
+1. When you create or update a bookmark, bb generates an embedding from the title, description, tags, and URL domain
 2. Embeddings are stored in `vectors.bin` alongside your bookmarks
-3. Semantic search ranks bookmarks by cosine similarity to your query
-4. Results are filtered by your other search criteria (tags, title, etc.) first, then ranked semantically
+3. Hybrid search combines two ranking methods:
+   - **Semantic ranking** — cosine similarity between query and bookmark embeddings
+   - **Lexical ranking** — keyword matching against title, description, and tags
+4. Results are merged using Reciprocal Rank Fusion (RRF) — items appearing in both rankings get boosted
+5. Other search criteria (tags, title filters) are applied before semantic ranking
 
 ### Configuration
 
