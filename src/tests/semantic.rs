@@ -804,3 +804,378 @@ mod backend_integration {
         let _ = std::fs::remove_dir_all(&test_dir);
     }
 }
+
+// =============================================================================
+// D.1 Index Maintenance Tests: Embedding on Bookmark Create
+//
+// These tests verify that new bookmarks are automatically embedded and indexed
+// for semantic search when created through AppService.
+// =============================================================================
+
+mod index_maintenance {
+    use crate::app::backend::{AddOpts, AppBackend, RefreshMetadataOpts};
+    use crate::app::errors::AppError;
+    use crate::app::service::AppService;
+    use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery};
+    use crate::config::{Config, SemanticSearchConfig};
+    use crate::semantic::SemanticSearchService;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Arc, RwLock};
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn test_dir() -> PathBuf {
+        let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!(
+            "bb-index-maintenance-{}-{}",
+            std::process::id(),
+            counter
+        ));
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn enabled_semantic_config() -> SemanticSearchConfig {
+        SemanticSearchConfig {
+            enabled: true,
+            model: "all-MiniLM-L6-v2".to_string(),
+            default_threshold: 0.35,
+            embedding_parallelism: "auto".to_string(),
+            download_timeout_secs: 300,
+        }
+    }
+
+    /// Mock backend that supports create and tracks created bookmarks.
+    struct CreateMockBackend {
+        bookmarks: RwLock<Vec<Bookmark>>,
+        next_id: AtomicU64,
+    }
+
+    impl CreateMockBackend {
+        fn new() -> Self {
+            Self {
+                bookmarks: RwLock::new(Vec::new()),
+                next_id: AtomicU64::new(1),
+            }
+        }
+    }
+
+    impl AppBackend for CreateMockBackend {
+        fn create(&self, create: BookmarkCreate, _: AddOpts) -> Result<Bookmark, AppError> {
+            let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+
+            let bookmark = Bookmark {
+                id,
+                url: create.url,
+                title: create.title.unwrap_or_default(),
+                description: create.description.unwrap_or_default(),
+                tags: create.tags.unwrap_or_default(),
+                image_id: None,
+                icon_id: None,
+            };
+
+            self.bookmarks.write().unwrap().push(bookmark.clone());
+            Ok(bookmark)
+        }
+
+        fn search(&self, _: SearchQuery) -> Result<Vec<Bookmark>, AppError> {
+            // Return empty for duplicate check
+            Ok(Vec::new())
+        }
+
+        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<(), AppError> {
+            unimplemented!()
+        }
+
+        fn update(&self, _: u64, _: BookmarkUpdate) -> Result<Bookmark, AppError> {
+            unimplemented!()
+        }
+
+        fn delete(&self, _: u64) -> Result<(), AppError> {
+            unimplemented!()
+        }
+
+        fn search_delete(&self, _: SearchQuery) -> Result<usize, AppError> {
+            unimplemented!()
+        }
+
+        fn search_update(&self, _: SearchQuery, _: BookmarkUpdate) -> Result<usize, AppError> {
+            unimplemented!()
+        }
+
+        fn total(&self) -> Result<usize, AppError> {
+            Ok(self.bookmarks.read().unwrap().len())
+        }
+
+        fn tags(&self) -> Result<Vec<String>, AppError> {
+            unimplemented!()
+        }
+
+        fn config(&self) -> Result<Arc<RwLock<Config>>, AppError> {
+            Ok(Arc::new(RwLock::new(Config::default())))
+        }
+
+        fn update_config(&self, _: Config) -> Result<(), AppError> {
+            unimplemented!()
+        }
+    }
+
+    /// Test that creating a bookmark indexes it for semantic search.
+    ///
+    /// This is the core acceptance test for D.1: "New bookmark appears in
+    /// semantic search results."
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_create_bookmark_indexes_for_semantic_search() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+
+        // Initialize service (model load happens here)
+        semantic_service.initialize().expect("Failed to initialize");
+        assert_eq!(semantic_service.indexed_count(), 0, "Should start empty");
+
+        let backend = Box::new(CreateMockBackend::new());
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        // Create a bookmark
+        let create = BookmarkCreate {
+            url: "https://example.com/ml-guide".to_string(),
+            title: Some("Machine Learning Tutorial".to_string()),
+            description: Some("Introduction to neural networks and deep learning".to_string()),
+            tags: None,
+            image_id: None,
+            icon_id: None,
+        };
+        let opts = AddOpts::default();
+
+        let bookmark = service.create_bookmark(create, opts).expect("Create failed");
+        assert_eq!(bookmark.id, 1);
+
+        // Verify: bookmark was indexed
+        assert_eq!(
+            semantic_service.indexed_count(),
+            1,
+            "Bookmark should be indexed after create"
+        );
+
+        // Verify: can be found via semantic search
+        let results = semantic_service
+            .search("artificial intelligence neural networks", None, Some(0.3), 10)
+            .expect("Search failed");
+
+        assert!(
+            results.contains(&1),
+            "Created bookmark should appear in semantic search. Got: {:?}",
+            results
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that creating multiple bookmarks indexes all of them.
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_multiple_creates_all_indexed() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        let backend = Box::new(CreateMockBackend::new());
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        let opts = AddOpts::default();
+
+        // Create several bookmarks
+        let creates = vec![
+            BookmarkCreate {
+                url: "https://example.com/rust".to_string(),
+                title: Some("Rust Programming".to_string()),
+                description: Some("Systems programming language".to_string()),
+                tags: None,
+                image_id: None,
+                icon_id: None,
+            },
+            BookmarkCreate {
+                url: "https://example.com/python".to_string(),
+                title: Some("Python Tutorial".to_string()),
+                description: Some("Data science and machine learning".to_string()),
+                tags: None,
+                image_id: None,
+                icon_id: None,
+            },
+            BookmarkCreate {
+                url: "https://example.com/cooking".to_string(),
+                title: Some("Best Recipes".to_string()),
+                description: Some("Chocolate cake and desserts".to_string()),
+                tags: None,
+                image_id: None,
+                icon_id: None,
+            },
+        ];
+
+        for create in creates {
+            service
+                .create_bookmark(create, opts.clone())
+                .expect("Create failed");
+        }
+
+        // Verify: all 3 indexed
+        assert_eq!(
+            semantic_service.indexed_count(),
+            3,
+            "All bookmarks should be indexed"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that empty content (no title, no description) is skipped.
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_create_empty_content_skips_embedding() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        let backend = Box::new(CreateMockBackend::new());
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        let opts = AddOpts::default();
+
+        // Create bookmark with no title or description
+        let create = BookmarkCreate {
+            url: "https://example.com/empty".to_string(),
+            title: None,
+            description: None,
+            tags: None,
+            image_id: None,
+            icon_id: None,
+        };
+
+        let bookmark = service.create_bookmark(create, opts).expect("Create failed");
+        assert_eq!(bookmark.id, 1);
+
+        // Verify: bookmark was NOT indexed (no content to embed)
+        assert_eq!(
+            semantic_service.indexed_count(),
+            0,
+            "Empty content should not be indexed"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that create works without semantic service (no panic).
+    #[test]
+    fn test_create_without_semantic_service() {
+        let backend = Box::new(CreateMockBackend::new());
+        let service = AppService::new(backend);
+
+        let create = BookmarkCreate {
+            url: "https://example.com/test".to_string(),
+            title: Some("Test Bookmark".to_string()),
+            description: Some("Test description".to_string()),
+            tags: None,
+            image_id: None,
+            icon_id: None,
+        };
+        let opts = AddOpts::default();
+
+        // Should succeed without panic
+        let result = service.create_bookmark(create, opts);
+        assert!(result.is_ok(), "Create should succeed without semantic service");
+    }
+
+    /// Test that create works when semantic search is disabled.
+    #[test]
+    fn test_create_with_semantic_disabled() {
+        let test_dir = test_dir();
+
+        let config = SemanticSearchConfig {
+            enabled: false,
+            ..enabled_semantic_config()
+        };
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+
+        let backend = Box::new(CreateMockBackend::new());
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        let create = BookmarkCreate {
+            url: "https://example.com/test".to_string(),
+            title: Some("Test Bookmark".to_string()),
+            description: Some("Test description".to_string()),
+            tags: None,
+            image_id: None,
+            icon_id: None,
+        };
+        let opts = AddOpts::default();
+
+        // Should succeed, but no indexing happens
+        let result = service.create_bookmark(create, opts);
+        assert!(result.is_ok(), "Create should succeed when disabled");
+
+        // Index should remain empty
+        assert_eq!(
+            semantic_service.indexed_count(),
+            0,
+            "Should not index when disabled"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that index is persisted after create.
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_create_persists_to_storage() {
+        let test_dir = test_dir();
+        let vectors_path = test_dir.join("vectors.bin");
+
+        // Create bookmark with first service instance
+        {
+            let config = enabled_semantic_config();
+            let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+            semantic_service.initialize().expect("Failed to initialize");
+
+            let backend = Box::new(CreateMockBackend::new());
+            let service = AppService::with_semantic(backend, semantic_service);
+
+            let create = BookmarkCreate {
+                url: "https://example.com/persist".to_string(),
+                title: Some("Persisted Bookmark".to_string()),
+                description: Some("Should survive reload".to_string()),
+                tags: None,
+                image_id: None,
+                icon_id: None,
+            };
+            let opts = AddOpts::default();
+
+            service.create_bookmark(create, opts).expect("Create failed");
+        }
+
+        // Verify vectors.bin exists
+        assert!(vectors_path.exists(), "vectors.bin should be created");
+
+        // Create new service and verify data persists
+        {
+            let config = enabled_semantic_config();
+            let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+            semantic_service.initialize().expect("Failed to initialize");
+
+            assert_eq!(
+                semantic_service.indexed_count(),
+                1,
+                "Index should persist across service restarts"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+}

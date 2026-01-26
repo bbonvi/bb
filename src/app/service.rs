@@ -2,7 +2,7 @@ use crate::{
     app::backend::{AddOpts, AppBackend, RefreshMetadataOpts},
     bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery},
     config::Config,
-    semantic::SemanticSearchService,
+    semantic::{content_hash, preprocess_content, SemanticSearchService},
 };
 use anyhow::{Context, Result};
 use std::sync::{Arc, RwLock};
@@ -136,7 +136,60 @@ impl AppService {
             .create(create, opts)
             .context("Failed to create bookmark")?;
 
+        // Index for semantic search (best-effort, don't fail create on embedding error)
+        self.index_bookmark_for_semantic(&bookmark);
+
         Ok(bookmark)
+    }
+
+    /// Index a bookmark for semantic search.
+    ///
+    /// Computes embedding and adds to vector index. Logs warnings on failure
+    /// but does not propagate errors to avoid failing bookmark operations.
+    fn index_bookmark_for_semantic(&self, bookmark: &Bookmark) {
+        let service = match &self.semantic_service {
+            Some(s) if s.is_enabled() => s,
+            _ => return, // No service or disabled
+        };
+
+        // Preprocess content - skip if empty
+        let content = match preprocess_content(&bookmark.title, &bookmark.description) {
+            Some(c) => c,
+            None => {
+                log::debug!(
+                    "Skipping embedding for bookmark {} - no content",
+                    bookmark.id
+                );
+                return;
+            }
+        };
+
+        let hash = content_hash(&bookmark.title, &bookmark.description);
+        let bookmark_id = bookmark.id;
+
+        // Generate embedding and add to index
+        let result = service.with_index_mut(|index, model| {
+            match model.embed(&content) {
+                Ok(embedding) => {
+                    if let Err(e) = index.insert(bookmark_id, hash, embedding) {
+                        log::warn!("Failed to insert embedding for bookmark {}: {}", bookmark_id, e);
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to generate embedding for bookmark {}: {}", bookmark_id, e);
+                }
+            }
+        });
+
+        if let Err(e) = result {
+            log::warn!("Failed to access semantic index for bookmark {}: {}", bookmark_id, e);
+            return;
+        }
+
+        // Persist to storage
+        if let Err(e) = service.save_index() {
+            log::warn!("Failed to save semantic index after adding bookmark {}: {}", bookmark_id, e);
+        }
     }
 
     /// Update an existing bookmark
