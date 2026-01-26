@@ -201,7 +201,9 @@ src/semantic/
 ├── embeddings.rs   # fastembed model wrapper
 ├── index.rs        # In-memory vector index
 ├── storage.rs      # Binary persistence (vectors.bin)
-└── preprocess.rs   # Text normalization
+├── preprocess.rs   # Content preprocessing (title, desc, tags, URL)
+├── lexical.rs      # Keyword matching for hybrid search
+└── hybrid.rs       # RRF fusion algorithm
 ```
 
 ### Component Overview
@@ -217,27 +219,61 @@ src/semantic/
 │Embedding │ Vector   │ Storage      │ Preprocess   │
 │ Model    │ Index    │ (I/O)        │ (Text prep)  │
 └──────────┴──────────┴──────────────┴──────────────┘
+
+Hybrid Search (in AppService):
+┌──────────────────────────────────────────────────────────┐
+│                   apply_semantic_ranking()               │
+│   Combines semantic + lexical rankings via RRF fusion   │
+└──┬────────────────────────────────────┬─────────────────┘
+   │                                    │
+   ▼                                    ▼
+┌──────────────────────┐    ┌──────────────────────────┐
+│ Semantic Search      │    │ Lexical Scoring          │
+│ (cosine similarity)  │    │ (keyword matching)       │
+└──────────────────────┘    └──────────────────────────┘
+           │                            │
+           └────────────┬───────────────┘
+                        ▼
+              ┌──────────────────────┐
+              │ RRF Fusion           │
+              │ (rank combination)   │
+              └──────────────────────┘
 ```
 
 ### Data Flow
 
 **Indexing (on bookmark create/update):**
 ```
-title + description
-    → preprocess_content() (trim, truncate to 512 chars)
-    → content_hash() (for change detection)
+title, description, tags, url
+    → preprocess_content()
+        Format: "{title} | {description} | tags: {tags} | site: {domain}"
+        - Domain extracted from URL (github.com → "github")
+        - Empty sections omitted
+        - Truncate to 512 chars
+    → content_hash(title, desc, tags, url) (for change detection)
     → EmbeddingModel.embed() (fastembed, 384-dim vector)
     → VectorIndex.insert(id, hash, embedding)
     → VectorStorage.save() (persist to vectors.bin)
 ```
 
-**Search:**
+**Search (hybrid ranking):**
 ```
-query text
-    → EmbeddingModel.embed() (same model)
-    → VectorIndex.search(embedding, candidates, threshold)
-    → cosine similarity ranking
-    → filtered, sorted bookmark IDs
+query text + filtered bookmarks
+    ┌─────────────────────────────────────┐
+    │ Semantic path:                      │
+    │   → EmbeddingModel.embed(query)     │
+    │   → VectorIndex.search()            │
+    │   → cosine similarity ranking       │
+    │   → apply threshold filter          │
+    └─────────────────────────────────────┘
+    ┌─────────────────────────────────────┐
+    │ Lexical path:                       │
+    │   → tokenize query (filter stops)   │
+    │   → match against title/desc/tags   │
+    │   → score: title=2x, desc=1x, tag=3x│
+    └─────────────────────────────────────┘
+    → RRF fusion: score(d) = 1/(k + rank_sem) + 1/(k + rank_lex)
+    → merged, sorted bookmark IDs
 ```
 
 ### Key Components
@@ -261,6 +297,30 @@ query text
 - Lazy initialization (model loaded on first use)
 - Index reconciliation on first search (syncs with bookmark state)
 - Best-effort indexing (failures logged, don't block operations)
+
+**LexicalScorer** (`lexical.rs`):
+- Keyword matching for hybrid search
+- Tokenizes query, filters stop words
+- Scoring weights: title=2x, description=1x, tags=3x
+- Tag matching supports hierarchical tags (`programming/rust` matches `programming`)
+
+**HybridSearch** (`hybrid.rs`):
+- Reciprocal Rank Fusion (RRF) algorithm
+- Combines semantic and lexical rankings
+- Formula: `score(d) = 1/(k + rank_semantic) + 1/(k + rank_lexical)`
+- k=60 constant (standard from literature)
+- Items appearing in both rankings get boosted
+
+### Hybrid Search Integration
+
+Hybrid search is always enabled when semantic search is active. The integration in `AppService::apply_semantic_ranking()`:
+
+1. **Semantic ranking** — cosine similarity from embeddings (threshold applied)
+2. **Lexical ranking** — keyword matching against title/description/tags
+3. **RRF fusion** — merge both rankings, boost items appearing in both
+4. **Lenient mode** — lexical matches CAN rescue items below semantic threshold
+
+The lenient mode is important: pure tag matches may not have high semantic similarity to the query, but are still relevant. Without lenient mode, searching for "rust" would miss items tagged "rust" but without the word in title/description.
 
 ### Index Reconciliation
 
