@@ -93,6 +93,8 @@ fn main() -> anyhow::Result<()> {
             keyword,
             id,
             exact,
+            semantic,
+            threshold,
             count,
             action,
         } => {
@@ -105,6 +107,8 @@ fn main() -> anyhow::Result<()> {
                 keyword,
                 id,
                 exact,
+                semantic,
+                threshold,
                 count,
                 action,
             };

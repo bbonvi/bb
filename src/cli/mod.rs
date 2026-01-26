@@ -64,6 +64,14 @@ pub enum Command {
         #[clap(short, long, default_value = "false")]
         exact: bool,
 
+        /// Semantic search query (find bookmarks by meaning)
+        #[clap(short = 's', long = "sem")]
+        semantic: Option<String>,
+
+        /// Similarity threshold for semantic search (0.0-1.0)
+        #[clap(long)]
+        threshold: Option<f32>,
+
         /// Print the count
         #[clap(short = 'c', long, default_value = "false")]
         count: bool,

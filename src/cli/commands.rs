@@ -3,7 +3,10 @@ use crate::{
     bookmarks::{BookmarkCreate, BookmarkUpdate, SearchQuery},
     metadata::MetaOptions,
     parse_tags,
-    cli::{errors::CliResult, validation::*},
+    cli::{errors::CliResult, validation::{
+        validate_search_query, validate_semantic_params, validate_bookmark_create,
+        validate_tags, validate_url, validate_rule_input,
+    }},
 };
 
 /// Command for searching bookmarks
@@ -24,6 +27,8 @@ pub struct SearchCommandParams {
     pub keyword: Option<String>,
     pub id: Option<u64>,
     pub exact: bool,
+    pub semantic: Option<String>,
+    pub threshold: Option<f32>,
     pub count: bool,
     pub action: Option<ActionCommand>,
 }
@@ -33,6 +38,9 @@ impl SearchCommand {
         // Validate search query input
         validate_search_query(&params.url, &params.title, &params.description, &params.tags)?;
 
+        // Validate semantic search parameters
+        validate_semantic_params(&params.semantic, &params.threshold)?;
+
         let query = SearchQuery {
             id: params.id,
             title: params.title,
@@ -41,6 +49,8 @@ impl SearchCommand {
             tags: params.tags.map(parse_tags),
             keyword: params.keyword,
             exact: params.exact,
+            semantic: params.semantic,
+            threshold: params.threshold,
             limit: None,
             ..Default::default()
         };

@@ -17,6 +17,8 @@ pub struct SearchParams {
     pub keyword: Option<String>,
     pub id: Option<u64>,
     pub exact: bool,
+    pub semantic: Option<String>,
+    pub threshold: Option<f32>,
     pub count: bool,
     pub action: Option<ActionArgs>,
 }
@@ -56,6 +58,8 @@ pub fn handle_search(params: SearchParams, app_service: AppService) -> Result<()
         keyword: params.keyword,
         id: params.id,
         exact: params.exact,
+        semantic: params.semantic,
+        threshold: params.threshold,
         count: params.count,
         action: action_command,
     })?;
