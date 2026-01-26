@@ -2,6 +2,7 @@ use crate::{
     app::backend::{AddOpts, AppBackend, RefreshMetadataOpts},
     bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery},
     config::Config,
+    semantic::SemanticSearchService,
 };
 use anyhow::{Context, Result};
 use std::sync::{Arc, RwLock};
@@ -9,22 +10,72 @@ use std::sync::{Arc, RwLock};
 /// Application service layer that provides business logic and orchestrates operations
 pub struct AppService {
     backend: Box<dyn AppBackend>,
+    /// Semantic search service (None for remote backend mode)
+    semantic_service: Option<Arc<SemanticSearchService>>,
 }
 
 impl AppService {
     /// Create a new application service with the given backend
     pub fn new(backend: Box<dyn AppBackend>) -> Self {
-        Self { backend }
+        Self {
+            backend,
+            semantic_service: None,
+        }
+    }
+
+    /// Create a new application service with semantic search support
+    pub fn with_semantic(
+        backend: Box<dyn AppBackend>,
+        semantic_service: Arc<SemanticSearchService>,
+    ) -> Self {
+        Self {
+            backend,
+            semantic_service: Some(semantic_service),
+        }
+    }
+
+    /// Get a reference to the semantic search service (if available)
+    pub fn semantic_service(&self) -> Option<&Arc<SemanticSearchService>> {
+        self.semantic_service.as_ref()
     }
 
     // MARK: - Bookmark Operations
 
     /// Search bookmarks with optional count-only mode
+    ///
+    /// When `query.semantic` is provided and semantic search is enabled:
+    /// 1. First applies all filters (id, title, url, tags, keyword, etc.)
+    /// 2. Then ranks filtered results by semantic similarity
+    /// 3. Returns results ordered by relevance (highest similarity first)
     pub fn search_bookmarks(&self, query: SearchQuery, count_only: bool) -> Result<Vec<Bookmark>> {
-        let bookmarks = self
+        // Extract semantic params before passing query to backend
+        let semantic_query = query.semantic.clone();
+        let semantic_threshold = query.threshold;
+        let query_limit = query.limit;
+
+        // Apply all filters via backend search
+        let mut bookmarks = self
             .backend
             .search(query)
             .context("Failed to search bookmarks")?;
+
+        // If semantic search requested and service available, rank results
+        if let Some(ref semantic_text) = semantic_query {
+            if let Some(ref service) = self.semantic_service {
+                if service.is_enabled() {
+                    bookmarks = self.apply_semantic_ranking(
+                        bookmarks,
+                        semantic_text,
+                        semantic_threshold,
+                        query_limit,
+                        service,
+                    )?;
+                }
+                // If disabled, results pass through unranked (C.3 will add error handling)
+            }
+            // If no service (remote mode), results pass through
+            // Remote backend handles semantic search on its end
+        }
 
         if count_only {
             println!("{} bookmarks found", bookmarks.len());
@@ -32,6 +83,41 @@ impl AppService {
         }
 
         Ok(bookmarks)
+    }
+
+    /// Apply semantic ranking to filtered bookmarks
+    fn apply_semantic_ranking(
+        &self,
+        bookmarks: Vec<Bookmark>,
+        query: &str,
+        threshold: Option<f32>,
+        limit: Option<usize>,
+        service: &SemanticSearchService,
+    ) -> Result<Vec<Bookmark>> {
+        if bookmarks.is_empty() {
+            return Ok(bookmarks);
+        }
+
+        // Get IDs for candidate filtering
+        let candidate_ids: Vec<u64> = bookmarks.iter().map(|b| b.id).collect();
+
+        // Search within candidates
+        let limit = limit.unwrap_or(bookmarks.len());
+        let ranked_ids = service
+            .search(query, Some(&candidate_ids), threshold, limit)
+            .context("Semantic search failed")?;
+
+        // Reorder bookmarks by semantic ranking
+        // Note: IDs not in ranked_ids (below threshold) are excluded
+        let id_to_bookmark: std::collections::HashMap<u64, Bookmark> =
+            bookmarks.into_iter().map(|b| (b.id, b)).collect();
+
+        let ranked_bookmarks: Vec<Bookmark> = ranked_ids
+            .into_iter()
+            .filter_map(|id| id_to_bookmark.get(&id).cloned())
+            .collect();
+
+        Ok(ranked_bookmarks)
     }
 
     /// Create a new bookmark with validation and business rules

@@ -1,10 +1,12 @@
 use crate::{
     app::{backend::AppBackend, local::AppLocal, remote::AppRemote, service::AppService},
     config::Config,
+    semantic::SemanticSearchService,
     storage,
 };
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use homedir::my_home;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 /// Application factory for creating and configuring application components
@@ -12,9 +14,43 @@ pub struct AppFactory;
 
 impl AppFactory {
     /// Create an application service with the appropriate backend
+    ///
+    /// For local backends, also creates a SemanticSearchService if enabled.
+    /// For remote backends (BB_ADDR set), semantic search is handled by the daemon.
     pub fn create_app_service() -> Result<AppService> {
-        let backend = Self::create_backend()?;
-        Ok(AppService::new(backend))
+        if std::env::var("BB_ADDR").is_ok() {
+            // Remote mode: semantic search handled by daemon
+            let backend = Self::create_backend()?;
+            Ok(AppService::new(backend))
+        } else {
+            // Local mode: create semantic service if config available
+            let paths = Self::get_paths()?;
+            let config = Self::create_config(&paths.base_path)?;
+
+            let backend = Self::create_local_backend(&paths, config.clone())?;
+
+            // Create semantic search service
+            let semantic_config = config.read().unwrap().semantic_search.clone();
+            let semantic_service = Arc::new(SemanticSearchService::new(
+                semantic_config,
+                PathBuf::from(&paths.base_path),
+            ));
+
+            Ok(AppService::with_semantic(backend, semantic_service))
+        }
+    }
+
+    /// Create local backend with shared config
+    fn create_local_backend(
+        paths: &AppPaths,
+        config: Arc<RwLock<Config>>,
+    ) -> Result<Box<dyn AppBackend>> {
+        let storage_mgr = storage::BackendLocal::new(&paths.uploads_path);
+        Ok(Box::new(AppLocal::new(
+            config,
+            &paths.bookmarks_path,
+            storage_mgr,
+        )))
     }
 
     /// Create a local application instance
@@ -63,21 +99,18 @@ impl AppFactory {
         Ok(base_path)
     }
 
-    /// Create the appropriate backend based on configuration
+    /// Create remote backend from BB_ADDR environment variable
     fn create_backend() -> Result<Box<dyn AppBackend>> {
-        if let Ok(backend_addr) = std::env::var("BB_ADDR") {
-            log::info!("Using remote backend: {}", backend_addr);
-            let basic_auth = Self::parse_basic_auth()?;
-            let bearer_token = Self::parse_bearer_token();
-            Ok(Box::new(AppRemote::new(&backend_addr, basic_auth, bearer_token)))
-        } else {
-            log::info!("Using local backend");
-            let paths = Self::get_paths()?;
-            let config = Self::create_config(&paths.base_path)?;
-            let storage_mgr = storage::BackendLocal::new(&paths.uploads_path);
-            
-            Ok(Box::new(AppLocal::new(config.clone(), &paths.bookmarks_path, storage_mgr)))
-        }
+        let backend_addr =
+            std::env::var("BB_ADDR").context("BB_ADDR not set for remote backend")?;
+        log::info!("Using remote backend: {}", backend_addr);
+        let basic_auth = Self::parse_basic_auth()?;
+        let bearer_token = Self::parse_bearer_token();
+        Ok(Box::new(AppRemote::new(
+            &backend_addr,
+            basic_auth,
+            bearer_token,
+        )))
     }
 
     /// Parse basic authentication from environment
