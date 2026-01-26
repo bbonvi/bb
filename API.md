@@ -19,6 +19,79 @@ When `BB_AUTH_TOKEN` is unset or empty, authentication is disabled and all reque
 
 ---
 
+## HTTP API
+
+### `POST /api/bookmarks/search`
+
+Search for bookmarks with optional semantic ranking.
+
+**Request Body:**
+```json
+{
+  "id": 123,
+  "url": "example.com",
+  "title": "search term",
+  "description": "search term",
+  "tags": "tag1,tag2",
+  "keyword": "general search",
+  "exact": false,
+  "semantic": "find by meaning",
+  "threshold": 0.35,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+All fields are optional. When `semantic` is provided:
+- Results are ranked by semantic similarity to the query
+- `threshold` filters results below the similarity score (0.0-1.0, default: 0.35)
+- Semantic ranking applies after other filters (url, title, tags, etc.)
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "url": "https://example.com",
+    "title": "Example",
+    "description": "An example bookmark",
+    "tags": ["example", "test"],
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+]
+```
+
+**Error Responses:**
+
+| Status | Error Code | Description |
+|--------|------------|-------------|
+| 400 | `INVALID_THRESHOLD` | Threshold outside valid range (0.0-1.0) |
+| 422 | `SEMANTIC_DISABLED` | Semantic search requested but disabled in config |
+| 503 | `MODEL_UNAVAILABLE` | Embedding model failed to load |
+
+### `GET /api/semantic/status`
+
+Check semantic search feature status.
+
+**Response:**
+```json
+{
+  "enabled": true,
+  "model": "all-MiniLM-L6-v2",
+  "indexed_count": 150,
+  "total_bookmarks": 200
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `enabled` | Whether semantic search is enabled in config |
+| `model` | Configured embedding model name |
+| `indexed_count` | Number of bookmarks with embeddings |
+| `total_bookmarks` | Total bookmark count |
+
+---
+
 **Command Overview:**
 
 * [`bb`↴](#bb)
@@ -73,10 +146,13 @@ Search bookmark
 * `-t`, `--title <TITLE>` — Bookmark title
 * `-d`, `--description <DESCRIPTION>` — Bookmark description
 * `-g`, `--tags <TAGS>` — Bookmark tags
+* `-k`, `--keyword <KEYWORD>` — Keyword search across title, description, url, and tags (use #tag for tag search)
 * `-i`, `--id <ID>` — id
 * `-e`, `--exact` — Exact search. False by default
 
   Default value: `false`
+* `-s`, `--sem <SEMANTIC>` — Semantic search query (find bookmarks by meaning)
+* `--threshold <THRESHOLD>` — Similarity threshold for semantic search (0.0-1.0)
 * `-c`, `--count` — Print the count
 
   Default value: `false`
