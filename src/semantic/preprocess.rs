@@ -18,6 +18,21 @@ const MAX_CONTENT_LENGTH: usize = 512;
 /// Ellipsis suffix when content is truncated
 const TRUNCATION_SUFFIX: &str = "...";
 
+/// Common HTML entities to decode
+const HTML_ENTITIES: &[(&str, &str)] = &[
+    ("&amp;", "&"),
+    ("&lt;", "<"),
+    ("&gt;", ">"),
+    ("&quot;", "\""),
+    ("&apos;", "'"),
+    ("&#39;", "'"),
+    ("&nbsp;", " "),
+    ("&#160;", " "),
+    ("&ndash;", "-"),
+    ("&mdash;", "-"),
+    ("&hellip;", "..."),
+];
+
 /// Preprocess bookmark content for embedding generation.
 ///
 /// Combines title, description, tags, and URL keywords into a single string
@@ -37,8 +52,8 @@ const TRUNCATION_SUFFIX: &str = "...";
 /// - URL keywords from domain + path segments
 /// - Sections omitted when empty
 pub fn preprocess_content(title: &str, description: &str, tags: &[String], url: &str) -> Option<String> {
-    let title = title.trim();
-    let description = description.trim();
+    let title = sanitize_text(title);
+    let description = sanitize_text(description);
 
     // Tags and URL alone don't constitute searchable content
     if title.is_empty() && description.is_empty() {
@@ -49,13 +64,13 @@ pub fn preprocess_content(title: &str, description: &str, tags: &[String], url: 
 
     // Add title twice for emphasis (title is the strongest signal)
     if !title.is_empty() {
-        parts.push(title.to_string());
-        parts.push(title.to_string());
+        parts.push(title.clone());
+        parts.push(title);
     }
 
     // Add description if present
     if !description.is_empty() {
-        parts.push(description.to_string());
+        parts.push(description);
     }
 
     // Add tags as plain words (no "tags:" prefix noise)
@@ -168,6 +183,37 @@ fn is_meaningful_word(word: &str) -> bool {
     }
 
     true
+}
+
+/// Sanitize text for embedding: decode HTML entities, remove formatting noise, normalize whitespace.
+fn sanitize_text(text: &str) -> String {
+    let mut result = text.to_string();
+
+    // Decode HTML entities
+    for (entity, replacement) in HTML_ENTITIES {
+        result = result.replace(entity, replacement);
+    }
+
+    // Remove formatting/noise characters (markdown, code fences, etc.)
+    // Keep meaningful punctuation: . , : ; ? ! - ' "
+    let result: String = result
+        .chars()
+        .map(|c| match c {
+            // Remove: backticks, asterisks, hash, pipes, brackets for links
+            '`' | '*' | '#' | '|' | '[' | ']' => ' ',
+            // Remove angle brackets (HTML tags)
+            '<' | '>' => ' ',
+            // Remove curly braces (templates, code)
+            '{' | '}' => ' ',
+            // Remove tilde (strikethrough), backslash (escapes)
+            '~' | '\\' => ' ',
+            // Keep everything else
+            _ => c,
+        })
+        .collect();
+
+    // Normalize whitespace: collapse multiple spaces/newlines to single space
+    result.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Truncate content to MAX_CONTENT_LENGTH, adding ellipsis if truncated.
@@ -351,6 +397,44 @@ mod tests {
         assert!(keywords.contains("guide"));
         // "html" filtered as noise
         assert!(!keywords.contains("html"));
+    }
+
+    // Sanitization tests
+    #[test]
+    fn test_sanitize_removes_backticks() {
+        let result = sanitize_text("Use `println!` for output");
+        assert_eq!(result, "Use println! for output");
+    }
+
+    #[test]
+    fn test_sanitize_removes_markdown() {
+        let result = sanitize_text("**bold** and *italic* and # header");
+        assert_eq!(result, "bold and italic and header");
+    }
+
+    #[test]
+    fn test_sanitize_removes_brackets_pipes() {
+        let result = sanitize_text("[link](url) | table | cell");
+        assert_eq!(result, "link (url) table cell");
+    }
+
+    #[test]
+    fn test_sanitize_decodes_html_entities() {
+        // Note: &lt; becomes < which then gets removed as noise
+        let result = sanitize_text("Tom &amp; Jerry &lt;3 &nbsp; spaces");
+        assert_eq!(result, "Tom & Jerry 3 spaces");
+    }
+
+    #[test]
+    fn test_sanitize_normalizes_whitespace() {
+        let result = sanitize_text("multiple   spaces\n\nnewlines\ttabs");
+        assert_eq!(result, "multiple spaces newlines tabs");
+    }
+
+    #[test]
+    fn test_sanitize_preserves_meaningful_punctuation() {
+        let result = sanitize_text("Hello, world! How are you? It's fine: yes.");
+        assert_eq!(result, "Hello, world! How are you? It's fine: yes.");
     }
 
     #[test]
