@@ -25,6 +25,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
     const [inputDescription, _setInputDescription] = useState("");
     const [inputKeyword, _setInputKeyword] = useState("");
     const [inputSemantic, _setInputSemantic] = useState("");
+    const [isSearching, setIsSearching] = useState(false);
 
     const formRefs = useRef({
         inputTags: inputTags,
@@ -102,14 +103,19 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         return false;
     }
 
-    const refreshBmarks = () => getBmarks({
-        tags: inputTags,
-        title: inputTitle,
-        description: inputDescription,
-        url: inputUrl,
-        keyword: inputKeyword,
-        semantic: inputSemantic,
-    }).then(updateBmarksIfNeeded);
+    const refreshBmarks = () => {
+        setIsSearching(true);
+        return getBmarks({
+            tags: inputTags,
+            title: inputTitle,
+            description: inputDescription,
+            url: inputUrl,
+            keyword: inputKeyword,
+            semantic: inputSemantic,
+        })
+            .then(updateBmarksIfNeeded)
+            .finally(() => setIsSearching(false));
+    };
 
     function excludeHiddenTags(bmarks: Bmark[]) {
         const currentWorkspace = settings.workspaceState.workspaces[settings.workspaceState.currentWorkspace];
@@ -139,6 +145,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
         inputKeyword,
         inputSemantic,
         bmarksFiltered,
+        isSearching,
 
         // Setters
         setInputTags,

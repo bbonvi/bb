@@ -338,6 +338,7 @@ function App({ onLogout }: AppProps) {
                     onKeyword={searchHook.setInputKeyword}
                     semantic={searchHook.inputSemantic}
                     onSemantic={searchHook.setInputSemantic}
+                    isSearching={searchHook.isSearching}
                     total={total}
                     count={gridHook.bmarksShuffled.length}
                     columns={gridHook.columns}
