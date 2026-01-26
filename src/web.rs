@@ -140,21 +140,42 @@ pub enum AppError {
     #[error("Base64: {0:?}")]
     Base64(#[from] base64::DecodeError),
 
+    #[error("{message}")]
+    SemanticDisabled { message: String },
+
+    #[error("{message}")]
+    InvalidThreshold { message: String },
+
+    #[error("{message}")]
+    ModelUnavailable { message: String },
+
     #[error("unexpected error: {0:?}")]
     Other(#[from] anyhow::Error),
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        let (status, error_message) = match self {
-            AppError::Reqwest(_) => (StatusCode::BAD_GATEWAY, self.to_string()),
-            AppError::IO(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
-            AppError::Base64(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            AppError::Other(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+        let (status, code, message) = match &self {
+            AppError::Reqwest(_) => (StatusCode::BAD_GATEWAY, "GATEWAY_ERROR", self.to_string()),
+            AppError::IO(_) => (StatusCode::INTERNAL_SERVER_ERROR, "IO_ERROR", self.to_string()),
+            AppError::Base64(_) => (StatusCode::BAD_REQUEST, "BASE64_ERROR", self.to_string()),
+            AppError::SemanticDisabled { message } => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "SEMANTIC_DISABLED", message.clone())
+            }
+            AppError::InvalidThreshold { message } => {
+                (StatusCode::BAD_REQUEST, "INVALID_THRESHOLD", message.clone())
+            }
+            AppError::ModelUnavailable { message } => {
+                (StatusCode::SERVICE_UNAVAILABLE, "MODEL_UNAVAILABLE", message.clone())
+            }
+            AppError::Other(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", self.to_string())
+            }
         };
 
         let body = Json(serde_json::json!({
-            "error": error_message
+            "error": code,
+            "message": message
         }));
 
         (status, body).into_response()
@@ -190,6 +211,19 @@ async fn search(
     Json(payload): Json<ListBookmarksRequest>,
 ) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
     log::info!("Search bookmarks request: {:?}", payload);
+
+    // Validate threshold before processing
+    if let Some(threshold) = payload.threshold {
+        if !(0.0..=1.0).contains(&threshold) {
+            return Err(AppError::InvalidThreshold {
+                message: format!(
+                    "Threshold must be between 0.0 and 1.0, got {}",
+                    threshold
+                ),
+            });
+        }
+    }
+
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 
@@ -209,7 +243,23 @@ async fn search(
 
     let bookmarks = app_service
         .search_bookmarks(query, false)
-        .context("Failed to search bookmarks")?;
+        .map_err(|e| {
+            // Map semantic-disabled errors to proper HTTP response
+            let err_msg = e.to_string();
+            if err_msg.contains("Semantic search is disabled") {
+                AppError::SemanticDisabled {
+                    message: "Semantic search is disabled in configuration".to_string(),
+                }
+            } else if err_msg.contains("model") && err_msg.contains("unavailable")
+                || err_msg.contains("Failed to initialize")
+            {
+                AppError::ModelUnavailable {
+                    message: "Semantic search model is unavailable".to_string(),
+                }
+            } else {
+                AppError::Other(e)
+            }
+        })?;
 
     Ok(axum::Json(bookmarks))
 }
@@ -559,4 +609,59 @@ async fn update_config(
 async fn task_queue() -> Result<axum::Json<QueueDump>, AppError> {
     let queue_dump = task_runner::read_queue_dump();
     Ok(axum::Json(queue_dump))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::response::IntoResponse;
+
+    #[test]
+    fn test_semantic_disabled_error_returns_422() {
+        let err = AppError::SemanticDisabled {
+            message: "Semantic search is disabled".to_string(),
+        };
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn test_invalid_threshold_error_returns_400() {
+        let err = AppError::InvalidThreshold {
+            message: "Threshold must be between 0.0 and 1.0".to_string(),
+        };
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_model_unavailable_error_returns_503() {
+        let err = AppError::ModelUnavailable {
+            message: "Model not available".to_string(),
+        };
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn test_threshold_validation_below_zero() {
+        // Invalid threshold below 0
+        let threshold = -0.1f32;
+        assert!(!(0.0..=1.0).contains(&threshold));
+    }
+
+    #[test]
+    fn test_threshold_validation_above_one() {
+        // Invalid threshold above 1
+        let threshold = 1.1f32;
+        assert!(!(0.0..=1.0).contains(&threshold));
+    }
+
+    #[test]
+    fn test_threshold_validation_valid_range() {
+        // Valid thresholds
+        for threshold in [0.0f32, 0.5, 1.0, 0.35] {
+            assert!((0.0..=1.0).contains(&threshold));
+        }
+    }
 }
