@@ -239,7 +239,7 @@ function App({ onLogout }: AppProps) {
         return () => {
             clearInterval(timerId)
         }
-    }, [searchHook.inputTags, searchHook.inputTitle, searchHook.inputUrl, searchHook.inputDescription, searchHook.inputKeyword, showAll, settingsUpdated]);
+    }, [searchHook.inputTags, searchHook.inputTitle, searchHook.inputUrl, searchHook.inputDescription, searchHook.inputKeyword, searchHook.inputSemantic, showAll, settingsUpdated]);
 
 
     useEffect(() => {
@@ -336,6 +336,8 @@ function App({ onLogout }: AppProps) {
                     onDescription={searchHook.setInputDescription}
                     keyword={searchHook.inputKeyword}
                     onKeyword={searchHook.setInputKeyword}
+                    semantic={searchHook.inputSemantic}
+                    onSemantic={searchHook.setInputSemantic}
                     total={total}
                     count={gridHook.bmarksShuffled.length}
                     columns={gridHook.columns}

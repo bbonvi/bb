@@ -11,6 +11,7 @@ interface HeaderProps {
     url: string;
     description: string;
     keyword: string;
+    semantic: string;
 
     count: number;
     total: number;
@@ -25,6 +26,7 @@ interface HeaderProps {
     onUrl: (val: string) => void;
     onDescription: (val: string) => void;
     onKeyword: (val: string) => void;
+    onSemantic: (val: string) => void;
 
     onRef: (ref: HTMLDivElement | null) => void;
 
@@ -46,6 +48,8 @@ interface HeaderProps {
 function Header(props: HeaderProps) {
     const [loaded, setLoaded] = useState(false);
     const [saveQueries, _setSaveQuries] = useState(localStorage["saveQueries"] === "true");
+    const [localSemantic, setLocalSemantic] = useState(props.semantic);
+    const semanticTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     let [currWorkspace, setCurrWorkspace] = useState(props.settings.workspaceState.currentWorkspace);
 
@@ -131,6 +135,30 @@ function Header(props: HeaderProps) {
         props.onDescription(val);
     }
 
+    const onSemanticInput = (val: string) => {
+        setLocalSemantic(val);
+        if (semanticTimerRef.current) {
+            clearTimeout(semanticTimerRef.current);
+        }
+        semanticTimerRef.current = setTimeout(() => {
+            props.onSemantic(val);
+        }, 500);
+    };
+
+    // Sync local semantic with prop when prop changes externally
+    useEffect(() => {
+        setLocalSemantic(props.semantic);
+    }, [props.semantic]);
+
+    // Cleanup debounce timer on unmount
+    useEffect(() => {
+        return () => {
+            if (semanticTimerRef.current) {
+                clearTimeout(semanticTimerRef.current);
+            }
+        };
+    }, []);
+
     useEffect(() => {
         const defaultTags = new URLSearchParams(window.location.search).get("tags") ?? "";
         const defaultTitle = new URLSearchParams(window.location.search).get("title") ?? "";
@@ -179,6 +207,16 @@ function Header(props: HeaderProps) {
         ref={ref => props.onRef(ref)}
         className="header top-0 left-0 right-0 fixed z-40 bg-gray-900 motion-safe:bg-gray-900/80 motion-safe:backdrop-blur-2xl p-5 shadow-lg flex flex-wrap gap-2"
     >
+        <AutosizeInput
+            onInput={e => onSemanticInput(e.currentTarget.value)}
+            type="text"
+            extraWidth={10}
+            placeholderIsMinWidth
+            value={localSemantic}
+            placeholder="Semantic search..."
+            className="!flex"
+            inputClassName={inputTextClassNames + "auto-size"}
+        />
         <AutosizeInput
             onInput={e => props.onKeyword(e.currentTarget.value)}
             type="text"
