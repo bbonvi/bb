@@ -124,7 +124,23 @@ async fn health_check() -> impl IntoResponse {
 }
 
 pub fn start_daemon(app: crate::app::local::AppLocal, base_path: &str) {
-    let app_service = AppService::new(Box::new(app));
+    let config = app.config();
+    let semantic_config = config.read().unwrap().semantic_search.clone();
+
+    let app_service = if semantic_config.enabled {
+        log::info!("Semantic search enabled, initializing service");
+        let semantic_service = std::sync::Arc::new(
+            crate::semantic::SemanticSearchService::new(
+                semantic_config,
+                std::path::PathBuf::from(base_path),
+            )
+        );
+        AppService::with_semantic(Box::new(app), semantic_service)
+    } else {
+        log::info!("Semantic search disabled");
+        AppService::new(Box::new(app))
+    };
+
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(start_app(app_service, base_path));
