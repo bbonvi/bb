@@ -46,10 +46,10 @@ fn test_embedding_storage_search_flow() {
     let mut index = VectorIndex::new(model.dimensions());
 
     for (id, (title, description)) in bookmarks.iter().enumerate() {
-        let content = preprocess_content(title, description).unwrap();
+        let content = preprocess_content(title, description, &[], "").unwrap();
         let embedding = model.embed(&content).expect("Failed to generate embedding");
 
-        let hash = content_hash(title, description);
+        let hash = content_hash(title, description, &[], "");
         index.insert(id as u64, hash, embedding).expect("Failed to insert");
     }
 
@@ -145,18 +145,18 @@ fn test_semantic_similarity() {
 #[test]
 fn test_preprocessing_edge_cases() {
     // Unicode handling
-    let content = preprocess_content("日本語タイトル", "Unicode description 中文");
+    let content = preprocess_content("日本語タイトル", "Unicode description 中文", &[], "");
     assert!(content.is_some());
 
     // Very long content
     let long_title = "A".repeat(1000);
-    let content = preprocess_content(&long_title, "Short");
+    let content = preprocess_content(&long_title, "Short", &[], "");
     let content = content.unwrap();
     assert!(content.len() <= 512);
     assert!(content.ends_with("..."));
 
     // Whitespace only
-    assert!(preprocess_content("   ", "\t\n").is_none());
+    assert!(preprocess_content("   ", "\t\n", &[], "").is_none());
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -320,9 +320,9 @@ mod backend_integration {
         semantic_service
             .with_index_mut(|index, model| {
                 for bm in &bookmarks {
-                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description, &bm.tags, &bm.url) {
                         let embedding = model.embed(&content).expect("Failed to embed");
-                        let hash = content_hash(&bm.title, &bm.description);
+                        let hash = content_hash(&bm.title, &bm.description, &bm.tags, &bm.url);
                         index.insert(bm.id, hash, embedding).expect("Failed to insert");
                     }
                 }
@@ -395,9 +395,9 @@ mod backend_integration {
         semantic_service
             .with_index_mut(|index, model| {
                 for bm in &bookmarks {
-                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description, &bm.tags, &bm.url) {
                         let embedding = model.embed(&content).expect("Failed to embed");
-                        let hash = content_hash(&bm.title, &bm.description);
+                        let hash = content_hash(&bm.title, &bm.description, &bm.tags, &bm.url);
                         index.insert(bm.id, hash, embedding).expect("Failed to insert");
                     }
                 }
@@ -444,9 +444,9 @@ mod backend_integration {
         semantic_service
             .with_index_mut(|index, model| {
                 for bm in &bookmarks {
-                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description, &bm.tags, &bm.url) {
                         let embedding = model.embed(&content).expect("Failed to embed");
-                        let hash = content_hash(&bm.title, &bm.description);
+                        let hash = content_hash(&bm.title, &bm.description, &bm.tags, &bm.url);
                         index.insert(bm.id, hash, embedding).expect("Failed to insert");
                     }
                 }
@@ -502,9 +502,9 @@ mod backend_integration {
         semantic_service
             .with_index_mut(|index, model| {
                 for bm in &bookmarks {
-                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description, &bm.tags, &bm.url) {
                         let embedding = model.embed(&content).expect("Failed to embed");
-                        let hash = content_hash(&bm.title, &bm.description);
+                        let hash = content_hash(&bm.title, &bm.description, &bm.tags, &bm.url);
                         index.insert(bm.id, hash, embedding).expect("Failed to insert");
                     }
                 }
@@ -552,9 +552,9 @@ mod backend_integration {
         semantic_service
             .with_index_mut(|index, model| {
                 for bm in &bookmarks {
-                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description, &bm.tags, &bm.url) {
                         let embedding = model.embed(&content).expect("Failed to embed");
-                        let hash = content_hash(&bm.title, &bm.description);
+                        let hash = content_hash(&bm.title, &bm.description, &bm.tags, &bm.url);
                         index.insert(bm.id, hash, embedding).expect("Failed to insert");
                     }
                 }
@@ -620,9 +620,9 @@ mod backend_integration {
         semantic_service
             .with_index_mut(|index, model| {
                 for bm in &all_bookmarks {
-                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description, &bm.tags, &bm.url) {
                         let embedding = model.embed(&content).expect("Failed to embed");
-                        let hash = content_hash(&bm.title, &bm.description);
+                        let hash = content_hash(&bm.title, &bm.description, &bm.tags, &bm.url);
                         index.insert(bm.id, hash, embedding).expect("Failed to insert");
                     }
                 }
@@ -697,9 +697,9 @@ mod backend_integration {
         semantic_service
             .with_index_mut(|index, model| {
                 for bm in &all_bookmarks {
-                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description, &bm.tags, &bm.url) {
                         let embedding = model.embed(&content).expect("Failed to embed");
-                        let hash = content_hash(&bm.title, &bm.description);
+                        let hash = content_hash(&bm.title, &bm.description, &bm.tags, &bm.url);
                         index.insert(bm.id, hash, embedding).expect("Failed to insert");
                     }
                 }
@@ -764,9 +764,9 @@ mod backend_integration {
         semantic_service
             .with_index_mut(|index, model| {
                 for bm in &all_bookmarks {
-                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description, &bm.tags, &bm.url) {
                         let embedding = model.embed(&content).expect("Failed to embed");
-                        let hash = content_hash(&bm.title, &bm.description);
+                        let hash = content_hash(&bm.title, &bm.description, &bm.tags, &bm.url);
                         index.insert(bm.id, hash, embedding).expect("Failed to insert");
                     }
                 }
@@ -1328,7 +1328,7 @@ mod index_maintenance {
         let id = bookmark.id;
 
         // Get original hash
-        let original_hash = content_hash(&bookmark.title, &bookmark.description);
+        let original_hash = content_hash(&bookmark.title, &bookmark.description, &bookmark.tags, &bookmark.url);
 
         // Verify: finds cooking content
         let cooking_results = semantic_service
@@ -1348,7 +1348,7 @@ mod index_maintenance {
         let updated = service.update_bookmark(id, update).expect("Update failed");
 
         // Verify: hash changed
-        let new_hash = content_hash(&updated.title, &updated.description);
+        let new_hash = content_hash(&updated.title, &updated.description, &updated.tags, &updated.url);
         assert_ne!(original_hash, new_hash, "Content hash should change after update");
 
         // Verify: now finds ML content
@@ -1394,7 +1394,7 @@ mod index_maintenance {
         let id = bookmark.id;
 
         // Get hash before update
-        let hash_before = content_hash(&bookmark.title, &bookmark.description);
+        let hash_before = content_hash(&bookmark.title, &bookmark.description, &bookmark.tags, &bookmark.url);
 
         // Update only URL and tags (not title/description)
         let update = BookmarkUpdate {
@@ -1405,7 +1405,7 @@ mod index_maintenance {
         let updated = service.update_bookmark(id, update).expect("Update failed");
 
         // Hash should be unchanged (title/description unchanged)
-        let hash_after = content_hash(&updated.title, &updated.description);
+        let hash_after = content_hash(&updated.title, &updated.description, &updated.tags, &updated.url);
         assert_eq!(hash_before, hash_after, "Hash should not change for non-content updates");
 
         let _ = std::fs::remove_dir_all(&test_dir);
@@ -1653,7 +1653,7 @@ mod index_maintenance {
         let service = AppService::with_semantic(backend, semantic_service.clone());
 
         // Verify the hash in the index doesn't match
-        let expected_hash = content_hash(&bookmark.title, &bookmark.description);
+        let expected_hash = content_hash(&bookmark.title, &bookmark.description, &bookmark.tags, &bookmark.url);
         let pre_reconcile_hash = semantic_service
             .with_index_mut(|index, _| index.get(1).unwrap().content_hash)
             .unwrap();
