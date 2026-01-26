@@ -20,7 +20,7 @@ mod storage;
 pub use embeddings::EmbeddingModel;
 pub use index::{SearchResult, VectorIndex};
 pub use preprocess::{content_hash, preprocess_content};
-pub use service::{SemanticSearchError, SemanticSearchService};
+pub use service::{ReconcileResult, SemanticSearchError, SemanticSearchService};
 pub use storage::{VectorStorage, VectorStorageError};
 
 /// Default embedding model name

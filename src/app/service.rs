@@ -63,6 +63,9 @@ impl AppService {
         if let Some(ref semantic_text) = semantic_query {
             if let Some(ref service) = self.semantic_service {
                 if service.is_enabled() {
+                    // Ensure index is reconciled before semantic search
+                    self.ensure_index_reconciled(service);
+
                     bookmarks = self.apply_semantic_ranking(
                         bookmarks,
                         semantic_text,
@@ -280,6 +283,55 @@ impl AppService {
                 bookmark_id,
                 e
             );
+        }
+    }
+
+    /// Ensure the semantic index is reconciled with current bookmark state.
+    ///
+    /// Fetches all bookmarks and reconciles the index on first call per session.
+    /// Subsequent calls are no-ops. Failures are logged but do not block search.
+    fn ensure_index_reconciled(&self, service: &SemanticSearchService) {
+        // Skip if already reconciled this session
+        if service.is_reconciled() {
+            return;
+        }
+
+        // Fetch all bookmarks for reconciliation
+        let all_bookmarks = match self.backend.search(SearchQuery::default()) {
+            Ok(bookmarks) => bookmarks,
+            Err(e) => {
+                log::warn!("Failed to fetch bookmarks for reconciliation: {}", e);
+                return;
+            }
+        };
+
+        // Prepare bookmark data: (id, content_hash, preprocessed_content)
+        // Only include bookmarks with embeddable content
+        let bookmark_data: Vec<(u64, u64, String)> = all_bookmarks
+            .iter()
+            .filter_map(|b| {
+                preprocess_content(&b.title, &b.description).map(|content| {
+                    let hash = content_hash(&b.title, &b.description);
+                    (b.id, hash, content)
+                })
+            })
+            .collect();
+
+        // Perform reconciliation
+        match service.reconcile(&bookmark_data) {
+            Ok(result) => {
+                if result.has_changes() {
+                    log::info!(
+                        "Index reconciliation: {} orphans removed, {} stale re-embedded, {} missing embedded",
+                        result.orphans_removed,
+                        result.stale_reembedded,
+                        result.missing_embedded
+                    );
+                }
+            }
+            Err(e) => {
+                log::warn!("Index reconciliation failed: {}", e);
+            }
         }
     }
 

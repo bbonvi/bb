@@ -818,7 +818,7 @@ mod index_maintenance {
     use crate::app::service::AppService;
     use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery};
     use crate::config::{Config, SemanticSearchConfig};
-    use crate::semantic::SemanticSearchService;
+    use crate::semantic::{content_hash, SemanticSearchService};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, RwLock};
@@ -1565,6 +1565,278 @@ mod index_maintenance {
             semantic_service.indexed_count(),
             1,
             "Missing entry should be indexed on update"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    // =========================================================================
+    // D.4 Index Reconciliation Tests
+    //
+    // These tests verify that index reconciliation properly syncs the vector
+    // index with the current bookmark state on first semantic search.
+    // =========================================================================
+
+    /// Test that reconciliation removes orphan entries (embeddings for deleted bookmarks).
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_reconcile_removes_orphans() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        // Pre-populate index with an embedding for a "deleted" bookmark
+        semantic_service
+            .with_index_mut(|index, model| {
+                let emb = model.embed("Orphan content to be removed").unwrap();
+                index.insert(999, 12345, emb).unwrap();
+            })
+            .unwrap();
+        semantic_service.save_index().unwrap();
+
+        assert_eq!(semantic_service.indexed_count(), 1, "Should have orphan entry");
+
+        // Backend has NO bookmarks (orphan was "deleted")
+        let backend = Box::new(UpdateableMockBackend::new());
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        // Trigger reconciliation via semantic search
+        let query = SearchQuery {
+            semantic: Some("test query".to_string()),
+            ..Default::default()
+        };
+        let _ = service.search_bookmarks(query, false);
+
+        // Orphan should be removed
+        assert_eq!(
+            semantic_service.indexed_count(),
+            0,
+            "Orphan entry should be removed after reconciliation"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that reconciliation re-embeds stale entries (content hash mismatch).
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_reconcile_reembeds_stale() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        // Pre-populate index with old content (wrong hash)
+        semantic_service
+            .with_index_mut(|index, model| {
+                let emb = model.embed("Old content").unwrap();
+                // Use a fake hash that won't match the actual bookmark content
+                index.insert(1, 99999, emb).unwrap();
+            })
+            .unwrap();
+
+        // Bookmark has DIFFERENT content (simulates manual CSV edit)
+        let bookmark = Bookmark {
+            id: 1,
+            url: "https://example.com/stale".to_string(),
+            title: "Updated Title".to_string(),
+            description: "New description after edit".to_string(),
+            tags: vec![],
+            image_id: None,
+            icon_id: None,
+        };
+
+        let backend = Box::new(UpdateableMockBackend::with_bookmarks(vec![bookmark.clone()]));
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        // Verify the hash in the index doesn't match
+        let expected_hash = content_hash(&bookmark.title, &bookmark.description);
+        let pre_reconcile_hash = semantic_service
+            .with_index_mut(|index, _| index.get(1).unwrap().content_hash)
+            .unwrap();
+        assert_ne!(
+            pre_reconcile_hash, expected_hash,
+            "Pre-condition: hash should not match"
+        );
+
+        // Trigger reconciliation via semantic search
+        let query = SearchQuery {
+            semantic: Some("test query".to_string()),
+            ..Default::default()
+        };
+        let _ = service.search_bookmarks(query, false);
+
+        // Hash should now match (re-embedded)
+        let post_reconcile_hash = semantic_service
+            .with_index_mut(|index, _| index.get(1).unwrap().content_hash)
+            .unwrap();
+        assert_eq!(
+            post_reconcile_hash, expected_hash,
+            "Stale entry should be re-embedded with correct hash"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that reconciliation embeds missing entries (bookmark exists but not indexed).
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_reconcile_embeds_missing() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        assert_eq!(semantic_service.indexed_count(), 0, "Should start empty");
+
+        // Bookmarks exist but are not indexed (simulates enabling semantic on existing DB)
+        let bookmarks = vec![
+            Bookmark {
+                id: 1,
+                url: "https://example.com/a".to_string(),
+                title: "Machine Learning Tutorial".to_string(),
+                description: "Introduction to ML".to_string(),
+                tags: vec![],
+                image_id: None,
+                icon_id: None,
+            },
+            Bookmark {
+                id: 2,
+                url: "https://example.com/b".to_string(),
+                title: "Cooking Recipes".to_string(),
+                description: "Delicious food ideas".to_string(),
+                tags: vec![],
+                image_id: None,
+                icon_id: None,
+            },
+        ];
+
+        let backend = Box::new(UpdateableMockBackend::with_bookmarks(bookmarks));
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        // Trigger reconciliation via semantic search
+        let query = SearchQuery {
+            semantic: Some("machine learning".to_string()),
+            ..Default::default()
+        };
+        let _ = service.search_bookmarks(query, false);
+
+        // Both bookmarks should now be indexed
+        assert_eq!(
+            semantic_service.indexed_count(),
+            2,
+            "Missing entries should be embedded after reconciliation"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that reconciliation is idempotent (second call is a no-op).
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_reconcile_idempotent() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        let bookmark = Bookmark {
+            id: 1,
+            url: "https://example.com/test".to_string(),
+            title: "Test Bookmark".to_string(),
+            description: "Test description".to_string(),
+            tags: vec![],
+            image_id: None,
+            icon_id: None,
+        };
+
+        let backend = Box::new(UpdateableMockBackend::with_bookmarks(vec![bookmark]));
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        assert!(!semantic_service.is_reconciled(), "Should not be reconciled yet");
+
+        // First search triggers reconciliation
+        let query = SearchQuery {
+            semantic: Some("test".to_string()),
+            ..Default::default()
+        };
+        let _ = service.search_bookmarks(query.clone(), false);
+
+        assert!(semantic_service.is_reconciled(), "Should be reconciled after first search");
+        assert_eq!(semantic_service.indexed_count(), 1);
+
+        // Second search should NOT trigger reconciliation again
+        // (We can't easily verify no work was done, but we verify state is unchanged)
+        let _ = service.search_bookmarks(query, false);
+
+        assert!(semantic_service.is_reconciled(), "Should remain reconciled");
+        assert_eq!(semantic_service.indexed_count(), 1, "Count should be unchanged");
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test reconciliation without model (unit test that can run fast).
+    /// Verifies the service API contract without requiring model download.
+    #[test]
+    fn test_reconcile_disabled_returns_error() {
+        let test_dir = test_dir();
+
+        let config = SemanticSearchConfig {
+            enabled: false,
+            ..enabled_semantic_config()
+        };
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+
+        let result = semantic_service.reconcile(&[]);
+        assert!(
+            matches!(result, Err(crate::semantic::SemanticSearchError::Disabled)),
+            "Reconcile should fail when disabled"
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that empty bookmarks with no content are skipped during reconciliation.
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_reconcile_skips_empty_content() {
+        let test_dir = test_dir();
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        // Bookmark with no title or description (can't be embedded)
+        let bookmark = Bookmark {
+            id: 1,
+            url: "https://example.com/empty".to_string(),
+            title: "".to_string(),
+            description: "".to_string(),
+            tags: vec!["tag".to_string()],
+            image_id: None,
+            icon_id: None,
+        };
+
+        let backend = Box::new(UpdateableMockBackend::with_bookmarks(vec![bookmark]));
+        let service = AppService::with_semantic(backend, semantic_service.clone());
+
+        // Trigger reconciliation
+        let query = SearchQuery {
+            semantic: Some("test".to_string()),
+            ..Default::default()
+        };
+        let _ = service.search_bookmarks(query, false);
+
+        // Empty content bookmark should not be indexed
+        assert_eq!(
+            semantic_service.indexed_count(),
+            0,
+            "Empty content bookmarks should not be indexed"
         );
 
         let _ = std::fs::remove_dir_all(&test_dir);

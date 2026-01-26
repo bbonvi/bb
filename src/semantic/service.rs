@@ -5,7 +5,9 @@
 //! - Coordinates embedding generation and similarity search
 //! - Thread-safe with interior mutability for lazy initialization
 
+use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -37,6 +39,28 @@ pub enum SemanticSearchError {
     Internal(String),
 }
 
+/// Result of index reconciliation operation.
+#[derive(Debug, Default)]
+pub struct ReconcileResult {
+    /// Number of orphan entries removed (ID not in bookmarks)
+    pub orphans_removed: usize,
+    /// Number of stale entries re-embedded (hash mismatch)
+    pub stale_reembedded: usize,
+    /// Number of missing entries embedded (bookmark exists but no embedding)
+    pub missing_embedded: usize,
+    /// Number of entries that failed to re-embed
+    pub embed_failures: usize,
+    /// Whether the index was rewritten to storage
+    pub index_rewritten: bool,
+}
+
+impl ReconcileResult {
+    /// Check if any changes were made.
+    pub fn has_changes(&self) -> bool {
+        self.orphans_removed > 0 || self.stale_reembedded > 0 || self.missing_embedded > 0
+    }
+}
+
 /// Lazy-loaded semantic search components.
 struct SemanticState {
     model: EmbeddingModel,
@@ -54,6 +78,8 @@ pub struct SemanticSearchService {
     /// Lazily-initialized state. Uses Mutex<Option<_>> instead of OnceLock
     /// because get_or_try_init is unstable.
     state: Mutex<Option<SemanticState>>,
+    /// Whether reconciliation has been performed this session.
+    reconciled: AtomicBool,
 }
 
 impl SemanticSearchService {
@@ -70,6 +96,7 @@ impl SemanticSearchService {
             config,
             base_path,
             state: Mutex::new(None),
+            reconciled: AtomicBool::new(false),
         }
     }
 
@@ -241,6 +268,154 @@ impl SemanticSearchService {
         state.storage.save(&state.index, &model_id)?;
 
         Ok(())
+    }
+
+    /// Check if reconciliation has been performed this session.
+    pub fn is_reconciled(&self) -> bool {
+        self.reconciled.load(Ordering::Acquire)
+    }
+
+    /// Reconcile the index with current bookmark state.
+    ///
+    /// Compares the index entries against the provided bookmark data and:
+    /// - Removes orphan entries (embeddings for deleted bookmarks)
+    /// - Re-embeds stale entries (content hash mismatch)
+    /// - Embeds missing entries (bookmark exists but no embedding)
+    /// - Rewrites the index if any changes were made
+    ///
+    /// # Arguments
+    /// * `bookmarks` - Slice of (bookmark_id, content_hash, preprocessed_content) tuples.
+    ///   Only bookmarks with embeddable content should be included.
+    ///
+    /// # Returns
+    /// Summary of reconciliation actions taken.
+    ///
+    /// # Note
+    /// This is idempotent - calling multiple times is safe but only the first
+    /// call will perform work. Use `needs_reconciliation()` to check.
+    pub fn reconcile(
+        &self,
+        bookmarks: &[(u64, u64, String)],
+    ) -> Result<ReconcileResult, SemanticSearchError> {
+        if !self.config.enabled {
+            return Err(SemanticSearchError::Disabled);
+        }
+
+        // Check if already reconciled this session
+        if self.reconciled.swap(true, Ordering::AcqRel) {
+            log::debug!("Index already reconciled this session, skipping");
+            return Ok(ReconcileResult::default());
+        }
+
+        self.ensure_initialized()?;
+
+        let mut result = ReconcileResult::default();
+
+        // Build set of valid bookmark IDs for orphan detection
+        let valid_ids: HashSet<u64> = bookmarks.iter().map(|(id, _, _)| *id).collect();
+
+        let mut guard = self
+            .state
+            .lock()
+            .map_err(|e| SemanticSearchError::Internal(format!("Lock poisoned: {}", e)))?;
+
+        let state = guard
+            .as_mut()
+            .ok_or(SemanticSearchError::NotInitialized)?;
+
+        // Phase 1: Remove orphans (IDs in index but not in bookmarks)
+        let orphan_ids: Vec<u64> = state
+            .index
+            .ids()
+            .filter(|id| !valid_ids.contains(id))
+            .collect();
+
+        for id in orphan_ids {
+            state.index.remove(id);
+            result.orphans_removed += 1;
+        }
+
+        if result.orphans_removed > 0 {
+            log::info!("Removed {} orphan embeddings", result.orphans_removed);
+        }
+
+        // Phase 2: Detect stale and missing entries, then embed
+        for (bookmark_id, content_hash, content) in bookmarks {
+            let needs_embed = match state.index.get(*bookmark_id) {
+                Some(entry) => entry.content_hash != *content_hash,
+                None => true,
+            };
+
+            if !needs_embed {
+                continue;
+            }
+
+            let is_stale = state.index.contains(*bookmark_id);
+
+            match state.model.embed(content) {
+                Ok(embedding) => {
+                    if let Err(e) = state.index.insert(*bookmark_id, *content_hash, embedding) {
+                        log::warn!(
+                            "Failed to insert embedding for bookmark {}: {}",
+                            bookmark_id,
+                            e
+                        );
+                        result.embed_failures += 1;
+                        continue;
+                    }
+
+                    if is_stale {
+                        result.stale_reembedded += 1;
+                    } else {
+                        result.missing_embedded += 1;
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to generate embedding for bookmark {}: {}",
+                        bookmark_id,
+                        e
+                    );
+                    result.embed_failures += 1;
+                }
+            }
+        }
+
+        if result.stale_reembedded > 0 {
+            log::info!(
+                "Re-embedded {} stale entries (content changed)",
+                result.stale_reembedded
+            );
+        }
+
+        if result.missing_embedded > 0 {
+            log::info!(
+                "Embedded {} missing entries (new or first-time index)",
+                result.missing_embedded
+            );
+        }
+
+        // Phase 3: Persist if any changes were made
+        if result.has_changes() {
+            let model_id = state.model.model_id_hash();
+            match state.storage.save(&state.index, &model_id) {
+                Ok(()) => {
+                    result.index_rewritten = true;
+                    log::info!(
+                        "Index reconciled: {} entries total",
+                        state.index.len()
+                    );
+                }
+                Err(e) => {
+                    log::error!("Failed to save reconciled index: {}", e);
+                    return Err(e.into());
+                }
+            }
+        } else {
+            log::debug!("Index is consistent, no reconciliation needed");
+        }
+
+        Ok(result)
     }
 
     /// Ensure the service is initialized, initializing if needed.
