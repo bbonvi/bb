@@ -12,9 +12,9 @@
 //! - `service`: High-level semantic search service
 
 pub mod embeddings;
-mod hybrid;
+pub mod hybrid;
 mod index;
-mod lexical;
+pub mod lexical;
 mod preprocess;
 mod service;
 mod storage;

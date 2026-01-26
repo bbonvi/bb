@@ -5,6 +5,7 @@ use crate::{
     semantic::{content_hash, preprocess_content, SemanticSearchService},
 };
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// Application service layer that provides business logic and orchestrates operations
@@ -90,7 +91,16 @@ impl AppService {
         Ok(bookmarks)
     }
 
-    /// Apply semantic ranking to filtered bookmarks
+    /// Apply hybrid ranking (semantic + lexical with RRF fusion) to filtered bookmarks.
+    ///
+    /// Hybrid search combines:
+    /// 1. Semantic search: embedding similarity with threshold filtering
+    /// 2. Lexical search: keyword matching against title/description/tags
+    /// 3. RRF fusion: combines rankings, boosting items that appear in both
+    ///
+    /// The threshold is applied to semantic scores BEFORE fusion, preserving
+    /// its meaning as "minimum semantic similarity". Lexical matches can
+    /// rescue items that would otherwise be excluded due to low semantic scores.
     fn apply_semantic_ranking(
         &self,
         bookmarks: Vec<Bookmark>,
@@ -99,27 +109,41 @@ impl AppService {
         limit: Option<usize>,
         service: &SemanticSearchService,
     ) -> Result<Vec<Bookmark>> {
+        use crate::semantic::hybrid::rrf_fusion;
+        use crate::semantic::lexical::score_lexical;
+
         if bookmarks.is_empty() {
             return Ok(bookmarks);
         }
 
         // Get IDs for candidate filtering
         let candidate_ids: Vec<u64> = bookmarks.iter().map(|b| b.id).collect();
-
-        // Search within candidates
         let limit = limit.unwrap_or(bookmarks.len());
-        let ranked_ids = service
-            .search(query, Some(&candidate_ids), threshold, limit)
+
+        // 1. Semantic search with threshold (get ALL matches, not limited)
+        let semantic_ids = service
+            .search(query, Some(&candidate_ids), threshold, bookmarks.len())
             .context("Semantic search failed")?;
 
-        // Reorder bookmarks by semantic ranking
-        // Note: IDs not in ranked_ids (below threshold) are excluded
-        let id_to_bookmark: std::collections::HashMap<u64, Bookmark> =
+        // 2. Lexical search (no threshold, just keyword matching)
+        let bookmark_data: Vec<(u64, &str, &str, &[String])> = bookmarks
+            .iter()
+            .map(|b| (b.id, b.title.as_str(), b.description.as_str(), b.tags.as_slice()))
+            .collect();
+        let lexical_results = score_lexical(query, &bookmark_data);
+        let lexical_ids: Vec<u64> = lexical_results.iter().map(|r| r.id).collect();
+
+        // 3. RRF fusion
+        let hybrid_results = rrf_fusion(&semantic_ids, &lexical_ids);
+
+        // Build lookup map and reorder bookmarks
+        let id_to_bookmark: HashMap<u64, Bookmark> =
             bookmarks.into_iter().map(|b| (b.id, b)).collect();
 
-        let ranked_bookmarks: Vec<Bookmark> = ranked_ids
+        let ranked_bookmarks: Vec<Bookmark> = hybrid_results
             .into_iter()
-            .filter_map(|id| id_to_bookmark.get(&id).cloned())
+            .take(limit)
+            .filter_map(|result| id_to_bookmark.get(&result.id).cloned())
             .collect();
 
         Ok(ranked_bookmarks)
