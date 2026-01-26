@@ -156,7 +156,12 @@ impl AppService {
         };
 
         // Preprocess content - skip if empty
-        let content = match preprocess_content(&bookmark.title, &bookmark.description) {
+        let content = match preprocess_content(
+            &bookmark.title,
+            &bookmark.description,
+            &bookmark.tags,
+            &bookmark.url,
+        ) {
             Some(c) => c,
             None => {
                 log::debug!(
@@ -167,7 +172,12 @@ impl AppService {
             }
         };
 
-        let hash = content_hash(&bookmark.title, &bookmark.description);
+        let hash = content_hash(
+            &bookmark.title,
+            &bookmark.description,
+            &bookmark.tags,
+            &bookmark.url,
+        );
         let bookmark_id = bookmark.id;
 
         // Generate embedding and add to index
@@ -207,7 +217,12 @@ impl AppService {
         };
 
         // Compute current content hash
-        let new_hash = content_hash(&bookmark.title, &bookmark.description);
+        let new_hash = content_hash(
+            &bookmark.title,
+            &bookmark.description,
+            &bookmark.tags,
+            &bookmark.url,
+        );
         let bookmark_id = bookmark.id;
 
         // Check if hash changed (requires index access)
@@ -229,7 +244,12 @@ impl AppService {
         }
 
         // Preprocess content - skip if empty
-        let content = match preprocess_content(&bookmark.title, &bookmark.description) {
+        let content = match preprocess_content(
+            &bookmark.title,
+            &bookmark.description,
+            &bookmark.tags,
+            &bookmark.url,
+        ) {
             Some(c) => c,
             None => {
                 // Content is now empty - remove from index
@@ -310,8 +330,8 @@ impl AppService {
         let bookmark_data: Vec<(u64, u64, String)> = all_bookmarks
             .iter()
             .filter_map(|b| {
-                preprocess_content(&b.title, &b.description).map(|content| {
-                    let hash = content_hash(&b.title, &b.description);
+                preprocess_content(&b.title, &b.description, &b.tags, &b.url).map(|content| {
+                    let hash = content_hash(&b.title, &b.description, &b.tags, &b.url);
                     (b.id, hash, content)
                 })
             })
@@ -345,8 +365,12 @@ impl AppService {
             self.check_url_conflict(id, new_url)?;
         }
 
-        // Check if content (title/description) is being updated for semantic revalidation
-        let content_changed = update.title.is_some() || update.description.is_some();
+        // Check if embedded content fields are being updated for semantic revalidation
+        // Embedded content includes: title, description, tags, and URL domain
+        let content_changed = update.title.is_some()
+            || update.description.is_some()
+            || update.tags.is_some()
+            || update.url.is_some();
 
         // Perform the update
         let bookmark = self

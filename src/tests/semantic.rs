@@ -1364,10 +1364,10 @@ mod index_maintenance {
         let _ = std::fs::remove_dir_all(&test_dir);
     }
 
-    /// Test that updating only non-content fields does NOT trigger re-embed.
+    /// Test that updating tags/URL DOES trigger re-embed (they're part of embedded content).
     #[test]
     #[ignore = "requires model download (~23MB)"]
-    fn test_update_non_content_no_reembed() {
+    fn test_update_tags_url_triggers_reembed() {
         use crate::semantic::content_hash;
 
         let test_dir = test_dir();
@@ -1396,7 +1396,7 @@ mod index_maintenance {
         // Get hash before update
         let hash_before = content_hash(&bookmark.title, &bookmark.description, &bookmark.tags, &bookmark.url);
 
-        // Update only URL and tags (not title/description)
+        // Update URL and tags (these are now part of embedded content)
         let update = BookmarkUpdate {
             url: Some("https://example.com/new-url".to_string()),
             tags: Some(vec!["new-tag".to_string()]),
@@ -1404,9 +1404,9 @@ mod index_maintenance {
         };
         let updated = service.update_bookmark(id, update).expect("Update failed");
 
-        // Hash should be unchanged (title/description unchanged)
+        // Hash SHOULD change because tags and URL are part of embedded content
         let hash_after = content_hash(&updated.title, &updated.description, &updated.tags, &updated.url);
-        assert_eq!(hash_before, hash_after, "Hash should not change for non-content updates");
+        assert_ne!(hash_before, hash_after, "Hash should change when tags/URL are updated");
 
         let _ = std::fs::remove_dir_all(&test_dir);
     }
