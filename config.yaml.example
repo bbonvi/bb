@@ -21,6 +21,11 @@ semantic_search:
   # Model (~23MB) is downloaded on first use
   download_timeout_secs: 300
 
+  # Semantic weight for hybrid search [0.0-1.0] (default: 0.6)
+  # Controls balance between semantic (embedding) and lexical (keyword) ranking
+  # 0.5 = equal weight, 0.6 = favor semantic, 1.0 = pure semantic
+  semantic_weight: 0.6
+
 rules:
 - url: mail.proton.me
   action: !UpdateBookmark
