@@ -1040,7 +1040,7 @@ mod tests {
 
             let config = SemanticSearchConfig {
                 enabled: true,
-                model: "bge-base-en-v1.5".to_string(),
+                model: "all-MiniLM-L6-v2".to_string(),
                 default_threshold: 0.35,
                 embedding_parallelism: "auto".to_string(),
                 download_timeout_secs: 300,
@@ -1068,7 +1068,7 @@ mod tests {
             let json: SemanticStatusResponse = serde_json::from_slice(&body).unwrap();
 
             assert!(json.enabled);
-            assert_eq!(json.model, "bge-base-en-v1.5");
+            assert_eq!(json.model, "all-MiniLM-L6-v2");
             assert_eq!(json.total_bookmarks, 2);
             // indexed_count is 0 because we didn't actually index anything
             assert_eq!(json.indexed_count, 0);

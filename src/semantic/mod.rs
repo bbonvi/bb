@@ -23,8 +23,8 @@ pub use preprocess::{content_hash, preprocess_content};
 pub use service::{ReconcileResult, SemanticSearchError, SemanticSearchService};
 pub use storage::{VectorStorage, VectorStorageError};
 
-/// Default embedding model name (bge-base offers +13% accuracy vs MiniLM)
-pub const DEFAULT_MODEL: &str = "bge-base-en-v1.5";
+/// Default embedding model name
+pub const DEFAULT_MODEL: &str = "all-MiniLM-L6-v2";
 
 /// Default similarity threshold for semantic search
 pub const DEFAULT_THRESHOLD: f32 = 0.35;
