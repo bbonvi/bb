@@ -10,6 +10,7 @@ mod config;
 mod editor;
 mod eid;
 mod images;
+mod lock;
 mod metadata;
 mod rules;
 mod scrape;
