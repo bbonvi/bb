@@ -241,3 +241,19 @@ export function fetchTaskQueue(): Promise<TaskQueue> {
         .then(resp => resp.data)
         .catch(formatError)
 }
+
+export interface SemanticStatus {
+    enabled: boolean;
+    model: string;
+    indexed_count: number;
+    total_bookmarks: number;
+}
+
+export function fetchSemanticStatus(): Promise<SemanticStatus> {
+    return axios.get(
+        "/api/semantic/status",
+        { headers: configHeaders }
+    )
+        .then(resp => resp.data)
+        .catch(formatError)
+}

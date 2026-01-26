@@ -12,6 +12,7 @@ interface HeaderProps {
     description: string;
     keyword: string;
     semantic: string;
+    semanticEnabled: boolean | null;
     isSearching: boolean;
 
     count: number;
@@ -208,21 +209,23 @@ function Header(props: HeaderProps) {
         ref={ref => props.onRef(ref)}
         className="header top-0 left-0 right-0 fixed z-40 bg-gray-900 motion-safe:bg-gray-900/80 motion-safe:backdrop-blur-2xl p-5 shadow-lg flex flex-wrap gap-2"
     >
-        <div className="flex items-center gap-1">
-            <AutosizeInput
-                onInput={e => onSemanticInput(e.currentTarget.value)}
-                type="text"
-                extraWidth={10}
-                placeholderIsMinWidth
-                value={localSemantic}
-                placeholder="Semantic search..."
-                className="!flex"
-                inputClassName={inputTextClassNames + "auto-size"}
-            />
-            {props.isSearching && (
-                <div className="w-4 h-4 border-2 border-gray-500 border-t-gray-200 rounded-full animate-spin" />
-            )}
-        </div>
+        {props.semanticEnabled && (
+            <div className="flex items-center gap-1">
+                <AutosizeInput
+                    onInput={e => onSemanticInput(e.currentTarget.value)}
+                    type="text"
+                    extraWidth={10}
+                    placeholderIsMinWidth
+                    value={localSemantic}
+                    placeholder="Semantic search..."
+                    className="!flex"
+                    inputClassName={inputTextClassNames + "auto-size"}
+                />
+                {props.isSearching && (
+                    <div className="w-4 h-4 border-2 border-gray-500 border-t-gray-200 rounded-full animate-spin" />
+                )}
+            </div>
+        )}
         <AutosizeInput
             onInput={e => props.onKeyword(e.currentTarget.value)}
             type="text"

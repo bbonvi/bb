@@ -86,6 +86,7 @@ function App({ onLogout }: AppProps) {
     const [total, setTotal] = useState<number>(-1);
     const [tags, setTags] = useState<string[]>([]);
     const [config, setConfig] = useState<Config>();
+    const [semanticEnabled, setSemanticEnabled] = useState<boolean | null>(null);
 
     const [settings, _saveSettings] = useLocalStorage<SettingsState>("settings", {
         workspaceState: { workspaces: [defaultWorkspace()], currentWorkspace: 0 },
@@ -209,6 +210,13 @@ function App({ onLogout }: AppProps) {
 
     useEffect(() => {
         refreshAll();
+    }, []);
+
+    // Fetch semantic status once on load (config-based, doesn't change dynamically)
+    useEffect(() => {
+        api.fetchSemanticStatus()
+            .then(status => setSemanticEnabled(status.enabled))
+            .catch(() => setSemanticEnabled(false));
     }, []);
 
     // Set initial focus when bookmarks are first loaded
@@ -338,6 +346,7 @@ function App({ onLogout }: AppProps) {
                     onKeyword={searchHook.setInputKeyword}
                     semantic={searchHook.inputSemantic}
                     onSemantic={searchHook.setInputSemantic}
+                    semanticEnabled={semanticEnabled}
                     isSearching={searchHook.isSearching}
                     total={total}
                     count={gridHook.bmarksShuffled.length}
