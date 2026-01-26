@@ -170,6 +170,14 @@ pub struct ListBookmarksRequest {
     pub tags: Option<String>,
     pub keyword: Option<String>,
 
+    /// Semantic search query text
+    #[serde(default)]
+    pub semantic: Option<String>,
+
+    /// Similarity threshold for semantic search [0.0, 1.0]
+    #[serde(default)]
+    pub threshold: Option<f32>,
+
     #[serde(default)]
     pub exact: bool,
 
@@ -192,9 +200,10 @@ async fn search(
         description: payload.description,
         tags: payload.tags.map(crate::parse_tags),
         keyword: payload.keyword,
+        semantic: payload.semantic,
+        threshold: payload.threshold,
         exact: payload.exact,
         limit: payload.limit,
-        ..Default::default()
     };
     log::info!("Search bookmarks with query: {:?}", query);
 
