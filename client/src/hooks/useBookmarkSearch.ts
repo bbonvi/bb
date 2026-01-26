@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import * as api from '../api';
 import * as bmarksSlice from '../store/bmarksSlice';
 import { RootState } from '../store';
@@ -114,6 +115,20 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
             semantic: inputSemantic,
         })
             .then(updateBmarksIfNeeded)
+            .catch((err: Error) => {
+                const msg = err.message;
+                // Detect semantic-specific errors from backend error codes
+                if (msg.includes('SEMANTIC_DISABLED')) {
+                    toast.error('Semantic search is disabled', { duration: 5000 });
+                } else if (msg.includes('INVALID_THRESHOLD')) {
+                    toast.error('Invalid similarity threshold', { duration: 5000 });
+                } else if (msg.includes('MODEL_UNAVAILABLE')) {
+                    toast.error('Semantic model unavailable', { duration: 5000 });
+                } else {
+                    // Re-throw non-semantic errors
+                    throw err;
+                }
+            })
             .finally(() => setIsSearching(false));
     };
 
