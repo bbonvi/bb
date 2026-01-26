@@ -1,4 +1,26 @@
 task_queue_max_threads: 4
+
+# Semantic search configuration
+# Enables finding bookmarks by meaning rather than exact text matches
+semantic_search:
+  # Enable or disable semantic search (default: false)
+  enabled: false
+
+  # Embedding model name (default: "all-MiniLM-L6-v2")
+  # Supported: all-MiniLM-L6-v2, bge-small-en-v1.5, bge-base-en-v1.5, bge-large-en-v1.5
+  model: "all-MiniLM-L6-v2"
+
+  # Default similarity threshold [0.0-1.0] (default: 0.35)
+  # Higher values require closer semantic matches
+  default_threshold: 0.35
+
+  # Parallelism for embedding generation: "auto" or a positive integer (default: "auto")
+  embedding_parallelism: "auto"
+
+  # Timeout for model download in seconds (default: 300)
+  # Model (~23MB) is downloaded on first use
+  download_timeout_secs: 300
+
 rules:
 - url: mail.proton.me
   action: !UpdateBookmark
