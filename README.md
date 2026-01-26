@@ -25,6 +25,56 @@
 
 - **Standalone CLI Tool or Daemon**: Run bb as a standalone CLI tool or deploy it as a daemon on a remote server. Use the bb-cli as a lightweight client to connect to the server over HTTP.
 
+- **Semantic Search**: Find bookmarks by meaning rather than exact keywords. Query "machine learning resources" to find bookmarks about AI, neural networks, and deep learning—even if those exact words don't appear in the title or description.
+
+## Semantic Search
+
+bb includes local semantic search powered by [fastembed](https://github.com/Anush008/fastembed-rs) and ONNX models. Embeddings are generated locally—no external API calls.
+
+### Quick Start
+
+1. Enable in config (`~/.local/share/bb/config.yaml`):
+   ```yaml
+   semantic_search:
+     enabled: true
+   ```
+
+2. Search by meaning:
+   ```bash
+   # CLI
+   bb search --sem "machine learning tutorials"
+
+   # With similarity threshold (0.0-1.0, default 0.35)
+   bb search --sem "web development" --threshold 0.5
+   ```
+
+### How It Works
+
+1. When you create or update a bookmark, bb generates an embedding from the title and description
+2. Embeddings are stored in `vectors.bin` alongside your bookmarks
+3. Semantic search ranks bookmarks by cosine similarity to your query
+4. Results are filtered by your other search criteria (tags, title, etc.) first, then ranked semantically
+
+### Configuration
+
+```yaml
+semantic_search:
+  enabled: true                    # Enable/disable semantic search
+  model: "all-MiniLM-L6-v2"       # Embedding model (default, ~23MB)
+  default_threshold: 0.35          # Minimum similarity score (0.0-1.0)
+  embedding_parallelism: 4         # Concurrent embeddings (0 = auto)
+  download_timeout_secs: 300       # Model download timeout
+```
+
+**Available models**: `all-MiniLM-L6-v2` (default), `bge-small-en-v1.5`, `bge-base-en-v1.5`, `bge-large-en-v1.5` (and quantized variants).
+
+### Notes
+
+- First search downloads the model (~23MB for default)
+- Models cached at `~/.local/share/bb/models/`
+- Combine with other filters: `bb search --sem "tutorials" --tags dev`
+- Web UI shows semantic input when feature is enabled
+
 ## Installation
 
 *There are no precompiled binaries for now.*
