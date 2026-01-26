@@ -130,9 +130,17 @@ impl LockGuard {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn temp_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("bb-lock-test-{}", std::process::id()));
+        let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!(
+            "bb-lock-test-{}-{}",
+            std::process::id(),
+            counter
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -173,13 +181,13 @@ mod tests {
     }
 
     #[test]
-    fn test_lock_guard_skips_for_remote() {
-        let dir = temp_dir();
-
-        std::env::set_var("BB_ADDR", "http://localhost:8080");
-        let guard = LockGuard::acquire_if_local(&dir);
-        assert!(matches!(guard, Ok(LockGuard::Skipped)));
+    fn test_lock_guard_acquires_for_local() {
+        // Ensure BB_ADDR is not set for this test
         std::env::remove_var("BB_ADDR");
+
+        let dir = temp_dir();
+        let guard = LockGuard::acquire_if_local(&dir);
+        assert!(matches!(guard, Ok(LockGuard::Held(_))), "Should acquire lock when local");
 
         // Cleanup
         let _ = std::fs::remove_dir_all(&dir);
