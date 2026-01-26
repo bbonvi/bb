@@ -85,6 +85,8 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
             return [];
         }
 
+        const isSemanticSearch = !!props.semantic;
+
         return api.fetchBmarks({
             tags: tagsFetch.join(","),
             title: props.title,
@@ -92,7 +94,7 @@ export function useBookmarkSearch({ settings, settingsUpdated, showAll }: UseBoo
             description: props.description,
             keyword: props.keyword,
             semantic: props.semantic || undefined,
-        }).then(b => b.reverse());
+        }).then(b => isSemanticSearch ? b : b.reverse());
     };
 
     function updateBmarksIfNeeded(bmarks: Bmark[]) {
