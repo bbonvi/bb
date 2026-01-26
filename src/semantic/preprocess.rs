@@ -3,11 +3,14 @@
 //! Prepares bookmark content for embedding:
 //! 1. Trim whitespace
 //! 2. Skip if both title and description are empty
-//! 3. Concatenate title, description, tags, and URL domain
+//! 3. Concatenate title (repeated for emphasis), description, tags, and URL keywords
 //! 4. Truncate to max length with ellipsis
 //!
-//! Output format: `"{title} | {description} | tags: {tags} | site: {domain}"`
-//! Sections are omitted when empty (no "tags:" if no tags, no "site:" if URL invalid)
+//! Output format: `"{title}. {title}. {description}. {tags}. {url_keywords}"`
+//! - Title repeated to emphasize primary signal
+//! - Tags as plain words (no "tags:" prefix)
+//! - URL keywords extracted from domain and path segments
+//! - Sections omitted when empty
 
 /// Maximum content length for embedding input (characters, not tokens)
 const MAX_CONTENT_LENGTH: usize = 512;
@@ -17,20 +20,22 @@ const TRUNCATION_SUFFIX: &str = "...";
 
 /// Preprocess bookmark content for embedding generation.
 ///
-/// Combines title, description, tags, and URL domain into a single string
+/// Combines title, description, tags, and URL keywords into a single string
 /// optimized for semantic search. Returns `None` if both title and description
 /// are empty after trimming (tags/URL alone don't constitute searchable content).
 ///
 /// # Arguments
 /// * `title` - Bookmark title
 /// * `description` - Bookmark description
-/// * `tags` - Bookmark tags (will be joined with ", ")
-/// * `url` - Bookmark URL (domain will be extracted)
+/// * `tags` - Bookmark tags
+/// * `url` - Bookmark URL (keywords extracted from domain and path)
 ///
 /// # Format
-/// `"{title} | {description} | tags: {tags} | site: {domain}"`
-/// - Sections are omitted when empty
-/// - Domain extraction: `https://docs.github.com/page` → `github`
+/// `"{title}. {title}. {description}. {tags}. {url_keywords}"`
+/// - Title repeated to emphasize primary signal
+/// - Tags as space-separated words (cleaner for embeddings)
+/// - URL keywords from domain + path segments
+/// - Sections omitted when empty
 pub fn preprocess_content(title: &str, description: &str, tags: &[String], url: &str) -> Option<String> {
     let title = title.trim();
     let description = description.trim();
@@ -40,71 +45,129 @@ pub fn preprocess_content(title: &str, description: &str, tags: &[String], url: 
         return None;
     }
 
-    let mut parts: Vec<&str> = Vec::with_capacity(4);
+    let mut parts: Vec<String> = Vec::with_capacity(5);
 
-    // Add title if present
+    // Add title twice for emphasis (title is the strongest signal)
     if !title.is_empty() {
-        parts.push(title);
+        parts.push(title.to_string());
+        parts.push(title.to_string());
     }
 
     // Add description if present
     if !description.is_empty() {
-        parts.push(description);
+        parts.push(description.to_string());
     }
 
-    let mut content = parts.join(" | ");
-
-    // Add tags section if tags present
+    // Add tags as plain words (no "tags:" prefix noise)
     if !tags.is_empty() {
-        let tags_str = tags.join(", ");
-        content.push_str(" | tags: ");
-        content.push_str(&tags_str);
+        parts.push(tags.join(" "));
     }
 
-    // Add site domain if URL is valid
-    if let Some(domain) = extract_domain(url) {
-        content.push_str(" | site: ");
-        content.push_str(&domain);
+    // Add URL keywords (domain + path segments)
+    let url_keywords = extract_url_keywords(url);
+    if !url_keywords.is_empty() {
+        parts.push(url_keywords);
     }
 
+    let content = parts.join(". ");
     Some(truncate_content(&content))
 }
 
-/// Extract the main domain name from a URL.
+/// Words to filter out from URL extraction (noise).
+const URL_STOP_WORDS: &[&str] = &[
+    // TLDs and common URL parts
+    "com", "org", "net", "io", "dev", "co", "uk", "de", "fr", "jp", "cn",
+    "www", "http", "https", "html", "htm", "php", "asp", "jsp", "cgi",
+    // Common URL path noise
+    "en", "us", "index", "home", "page", "pages", "post", "posts",
+    "article", "articles", "blog", "docs", "doc", "documentation",
+    "wiki", "help", "faq", "about", "contact", "login", "signin",
+    "signup", "register", "search", "tag", "tags", "category",
+    "categories", "archive", "archives", "feed", "rss", "api", "v1", "v2", "v3",
+    // Tracking/technical params
+    "utm", "ref", "src", "id", "amp",
+];
+
+/// Extract keywords from URL (domain + path segments).
 ///
-/// Returns the second-level domain (e.g., "github" from "docs.github.com").
-/// Returns `None` for invalid URLs or URLs without a proper host.
-fn extract_domain(url: &str) -> Option<String> {
-    // Parse URL
-    let parsed = url::Url::parse(url).ok()?;
+/// Extracts meaningful words from:
+/// - Subdomain (e.g., "docs" from "docs.github.com")
+/// - Domain name (e.g., "github" from "github.com")
+/// - Path segments (e.g., "tokio", "async" from "/tokio-rs/tokio-async")
+///
+/// Filters out TLDs, common noise words, numbers, and short words (<3 chars).
+/// Returns deduplicated, space-separated keywords.
+fn extract_url_keywords(url: &str) -> String {
+    let parsed = match url::Url::parse(url) {
+        Ok(p) => p,
+        Err(_) => return String::new(),
+    };
 
-    // Get host (returns None for non-http(s) URLs without host)
-    let host = parsed.host_str()?;
+    let mut keywords: Vec<String> = Vec::new();
 
-    // Split by dots and extract second-level domain
-    let parts: Vec<&str> = host.split('.').collect();
-
-    // Handle different cases:
-    // - "github.com" -> ["github", "com"] -> "github"
-    // - "docs.github.com" -> ["docs", "github", "com"] -> "github"
-    // - "localhost" -> ["localhost"] -> "localhost"
-    // - "192.168.1.1" -> skip (IP address)
-
-    // Skip IP addresses (all parts are numeric)
-    if parts.iter().all(|p| p.parse::<u8>().is_ok()) {
-        return None;
-    }
-
-    match parts.len() {
-        0 => None,
-        1 => Some(parts[0].to_string()), // localhost
-        _ => {
-            // Get second-to-last part (second-level domain)
-            // For "docs.github.com", this is "github"
-            let sld = parts[parts.len() - 2];
-            Some(sld.to_string())
+    // Extract from host (subdomain + domain)
+    // Split by '.' first, then by '-' to handle domains like "rust-lang.github.io"
+    if let Some(host) = parsed.host_str() {
+        for part in host.split('.') {
+            for word in part.split('-') {
+                if is_meaningful_word(word) {
+                    keywords.push(word.to_lowercase());
+                }
+            }
         }
     }
+
+    // Extract from path segments
+    let path = parsed.path();
+    for segment in path.split('/') {
+        // Strip common file extensions before processing
+        let segment = segment
+            .trim_end_matches(".html")
+            .trim_end_matches(".htm")
+            .trim_end_matches(".php")
+            .trim_end_matches(".asp")
+            .trim_end_matches(".jsp");
+
+        // Keep the full segment if it's meaningful (e.g., "rust-by-example")
+        if is_meaningful_word(segment) {
+            keywords.push(segment.to_lowercase());
+        }
+
+        // Also split by common separators and keep individual words
+        for word in segment.split(|c| c == '-' || c == '_' || c == '.') {
+            if is_meaningful_word(word) {
+                keywords.push(word.to_lowercase());
+            }
+        }
+    }
+
+    // Deduplicate while preserving order
+    let mut seen = std::collections::HashSet::new();
+    keywords.retain(|w| seen.insert(w.clone()));
+
+    keywords.join(" ")
+}
+
+/// Check if a word is meaningful for embedding.
+/// Filters out noise: short words, numbers, stop words.
+fn is_meaningful_word(word: &str) -> bool {
+    // Too short
+    if word.len() < 3 {
+        return false;
+    }
+
+    // Pure numbers (but allow alphanumeric like "rust2024")
+    if word.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+
+    // Stop words
+    let lower = word.to_lowercase();
+    if URL_STOP_WORDS.contains(&lower.as_str()) {
+        return false;
+    }
+
+    true
 }
 
 /// Truncate content to MAX_CONTENT_LENGTH, adding ellipsis if truncated.
@@ -150,7 +213,8 @@ mod tests {
     #[test]
     fn test_title_only() {
         let result = preprocess_content("Hello World", "", &[], "");
-        assert_eq!(result, Some("Hello World".to_string()));
+        // Title repeated for emphasis
+        assert_eq!(result, Some("Hello World. Hello World".to_string()));
     }
 
     #[test]
@@ -162,13 +226,14 @@ mod tests {
     #[test]
     fn test_both_title_and_description() {
         let result = preprocess_content("Title", "Description", &[], "");
-        assert_eq!(result, Some("Title | Description".to_string()));
+        // Title repeated, then description
+        assert_eq!(result, Some("Title. Title. Description".to_string()));
     }
 
     #[test]
     fn test_trims_whitespace() {
         let result = preprocess_content("  Title  ", "  Description  ", &[], "");
-        assert_eq!(result, Some("Title | Description".to_string()));
+        assert_eq!(result, Some("Title. Title. Description".to_string()));
     }
 
     #[test]
@@ -186,49 +251,52 @@ mod tests {
     fn test_no_truncation_for_short_content() {
         let short = "Short title";
         let result = preprocess_content(short, "", &[], "");
-        assert_eq!(result, Some(short.to_string()));
+        // Title repeated
+        assert_eq!(result, Some("Short title. Short title".to_string()));
     }
 
-    // Tests for new tags and URL functionality
+    // Tests for tags and URL functionality
     #[test]
     fn test_with_tags() {
         let tags = vec!["rust".to_string(), "cli".to_string()];
         let result = preprocess_content("Title", "Description", &tags, "");
-        assert_eq!(result, Some("Title | Description | tags: rust, cli".to_string()));
+        // Tags as plain words, no "tags:" prefix
+        assert_eq!(result, Some("Title. Title. Description. rust cli".to_string()));
     }
 
     #[test]
     fn test_with_empty_tags() {
         let result = preprocess_content("Title", "Description", &[], "");
-        // Empty tags should not add "tags:" section
-        assert_eq!(result, Some("Title | Description".to_string()));
+        assert_eq!(result, Some("Title. Title. Description".to_string()));
     }
 
     #[test]
-    fn test_with_url_domain() {
+    fn test_with_url_keywords() {
         let result = preprocess_content("Title", "Description", &[], "https://github.com/user/repo");
-        assert_eq!(result, Some("Title | Description | site: github".to_string()));
+        // Extracts "github", "user", "repo" from URL
+        assert_eq!(result, Some("Title. Title. Description. github user repo".to_string()));
     }
 
     #[test]
-    fn test_with_url_subdomain() {
-        // Should extract main domain, not subdomain
-        let result = preprocess_content("Title", "Description", &[], "https://docs.github.com/page");
-        assert_eq!(result, Some("Title | Description | site: github".to_string()));
+    fn test_with_url_subdomain_and_path() {
+        // Extracts subdomain + domain + path segments
+        let result = preprocess_content("Title", "Description", &[], "https://docs.github.com/en/actions");
+        // "docs" from subdomain, "github" from domain, "actions" from path ("en" filtered as noise)
+        assert_eq!(result, Some("Title. Title. Description. github actions".to_string()));
     }
 
     #[test]
     fn test_with_invalid_url() {
-        // Invalid URLs should not add "site:" section
         let result = preprocess_content("Title", "Description", &[], "not-a-url");
-        assert_eq!(result, Some("Title | Description".to_string()));
+        assert_eq!(result, Some("Title. Title. Description".to_string()));
     }
 
     #[test]
     fn test_with_tags_and_url() {
         let tags = vec!["rust".to_string()];
-        let result = preprocess_content("Title", "Description", &tags, "https://crates.io/crate");
-        assert_eq!(result, Some("Title | Description | tags: rust | site: crates".to_string()));
+        let result = preprocess_content("Title", "Description", &tags, "https://crates.io/crates/tokio");
+        // Tags + URL keywords
+        assert_eq!(result, Some("Title. Title. Description. rust. crates tokio".to_string()));
     }
 
     #[test]
@@ -237,6 +305,52 @@ mod tests {
         let result = preprocess_content("", "", &tags, "");
         // Tags alone should not produce content (need title or description)
         assert!(result.is_none());
+    }
+
+    // URL keyword extraction tests
+    #[test]
+    fn test_url_keywords_filters_noise() {
+        // Numbers, short words, TLDs filtered
+        let keywords = extract_url_keywords("https://www.example.com/v1/api/123/rust-guide");
+        // Contains compound "rust-guide" plus individual "rust" and "guide"
+        assert!(keywords.contains("example"));
+        assert!(keywords.contains("rust-guide"));
+        assert!(keywords.contains("rust"));
+        assert!(keywords.contains("guide"));
+        // Noise filtered
+        assert!(!keywords.contains("www"));
+        assert!(!keywords.contains("com"));
+        assert!(!keywords.contains("123"));
+        assert!(!keywords.contains("api"));
+    }
+
+    #[test]
+    fn test_url_keywords_deduplicates() {
+        let keywords = extract_url_keywords("https://rust-lang.github.io/rust-by-example/rust");
+        // Should contain: rust, lang, github, rust-by-example, example
+        // "rust" appears multiple times but individual occurrences deduplicated
+        assert!(keywords.contains("rust"));
+        assert!(keywords.contains("rust-by-example")); // compound kept!
+        assert!(keywords.contains("example"));
+    }
+
+    #[test]
+    fn test_url_keywords_keeps_compounds_and_splits() {
+        let keywords = extract_url_keywords("https://example.com/machine-learning_tutorial");
+        // Keeps compound AND individual words
+        assert!(keywords.contains("machine-learning_tutorial")); // full segment
+        assert!(keywords.contains("machine"));
+        assert!(keywords.contains("learning"));
+        assert!(keywords.contains("tutorial"));
+    }
+
+    #[test]
+    fn test_url_keywords_splits_segments() {
+        let keywords = extract_url_keywords("https://example.com/rust-guide.html");
+        assert!(keywords.contains("rust"));
+        assert!(keywords.contains("guide"));
+        // "html" filtered as noise
+        assert!(!keywords.contains("html"));
     }
 
     #[test]

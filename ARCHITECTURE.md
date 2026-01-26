@@ -246,10 +246,15 @@ Hybrid Search (in AppService):
 ```
 title, description, tags, url
     → preprocess_content()
-        Format: "{title} | {description} | tags: {tags} | site: {domain}"
-        - Domain extracted from URL (github.com → "github")
-        - Empty sections omitted
-        - Truncate to 512 chars
+        Format: "{title}. {title}. {description}. {tags}. {url_keywords}"
+        - Title repeated for emphasis (strongest signal)
+        - Tags as space-separated words (cleaner for embeddings)
+        - URL keywords: domain + path segments, compounds preserved
+          e.g., "github.com/rust-lang/rust-by-example"
+             → "github rust lang rust-by-example example"
+        - File extensions stripped (.html, .php, etc.)
+        - Noise filtered (TLDs, short words, numbers)
+        - Empty sections omitted, truncate to 512 chars
     → content_hash(title, desc, tags, url) (for change detection)
     → EmbeddingModel.embed() (fastembed, 384-dim vector)
     → VectorIndex.insert(id, hash, embedding)
