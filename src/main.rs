@@ -14,6 +14,7 @@ mod lock;
 mod metadata;
 mod rules;
 mod scrape;
+mod semantic;
 mod storage;
 #[cfg(test)]
 mod tests;
