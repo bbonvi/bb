@@ -76,6 +76,7 @@ async fn start_app(app_service: AppService, base_path: &str) {
         .route("/api/config", get(get_config))
         .route("/api/config", post(update_config))
         .route("/api/task_queue", get(task_queue))
+        .route("/api/semantic/status", get(semantic_status))
         .layer(auth_layer);
 
     // Health endpoint - no auth required (for container health checks)
@@ -551,6 +552,19 @@ async fn refresh_metadata(
     Ok(axum::Json(()))
 }
 
+/// Response for GET /api/semantic/status
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SemanticStatusResponse {
+    /// Whether semantic search is enabled in configuration
+    pub enabled: bool,
+    /// Model name used for embeddings
+    pub model: String,
+    /// Number of bookmarks with embeddings in the index
+    pub indexed_count: usize,
+    /// Total number of bookmarks in the database
+    pub total_bookmarks: usize,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TotalResponse {
     pub total: usize,
@@ -611,6 +625,36 @@ async fn task_queue() -> Result<axum::Json<QueueDump>, AppError> {
     Ok(axum::Json(queue_dump))
 }
 
+async fn semantic_status(
+    State(state): State<Arc<RwLock<SharedState>>>,
+) -> Result<axum::Json<SemanticStatusResponse>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
+
+    // Get config for semantic_search settings
+    let config = app_service.get_config().context("Failed to get config")?;
+    let config_guard = config.read().unwrap();
+    let sem_config = &config_guard.semantic_search;
+
+    // Get indexed count from semantic service if available
+    let indexed_count = app_service
+        .semantic_service()
+        .map(|s| s.indexed_count())
+        .unwrap_or(0);
+
+    // Get total bookmarks count
+    let total_bookmarks = app_service
+        .get_total_count()
+        .context("Failed to get total bookmark count")?;
+
+    Ok(axum::Json(SemanticStatusResponse {
+        enabled: sem_config.enabled,
+        model: sem_config.model.clone(),
+        indexed_count,
+        total_bookmarks,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -663,5 +707,52 @@ mod tests {
         for threshold in [0.0f32, 0.5, 1.0, 0.35] {
             assert!((0.0..=1.0).contains(&threshold));
         }
+    }
+
+    #[test]
+    fn test_semantic_status_response_serializes_correctly() {
+        let response = SemanticStatusResponse {
+            enabled: true,
+            model: "all-MiniLM-L6-v2".to_string(),
+            indexed_count: 42,
+            total_bookmarks: 100,
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"enabled\":true"));
+        assert!(json.contains("\"model\":\"all-MiniLM-L6-v2\""));
+        assert!(json.contains("\"indexed_count\":42"));
+        assert!(json.contains("\"total_bookmarks\":100"));
+    }
+
+    #[test]
+    fn test_semantic_status_response_deserializes_correctly() {
+        let json = r#"{
+            "enabled": false,
+            "model": "bge-small-en-v1.5",
+            "indexed_count": 0,
+            "total_bookmarks": 50
+        }"#;
+
+        let response: SemanticStatusResponse = serde_json::from_str(json).unwrap();
+        assert!(!response.enabled);
+        assert_eq!(response.model, "bge-small-en-v1.5");
+        assert_eq!(response.indexed_count, 0);
+        assert_eq!(response.total_bookmarks, 50);
+    }
+
+    #[test]
+    fn test_semantic_status_response_disabled_state() {
+        let response = SemanticStatusResponse {
+            enabled: false,
+            model: "all-MiniLM-L6-v2".to_string(),
+            indexed_count: 0,
+            total_bookmarks: 25,
+        };
+
+        // When disabled, indexed_count is typically 0 but total_bookmarks reflects actual data
+        assert!(!response.enabled);
+        assert_eq!(response.indexed_count, 0);
+        assert!(response.total_bookmarks > 0);
     }
 }
