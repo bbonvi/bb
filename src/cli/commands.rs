@@ -504,3 +504,152 @@ impl ActionCommand {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // SearchCommand construction tests (E.4)
+    //
+    // Verify that semantic/threshold flags are correctly wired through
+    // SearchCommand to SearchQuery.
+    // =========================================================================
+
+    #[test]
+    fn test_search_command_wires_semantic_to_query() {
+        let params = SearchCommandParams {
+            url: None,
+            title: None,
+            description: None,
+            tags: None,
+            keyword: None,
+            id: None,
+            exact: false,
+            semantic: Some("machine learning AI".to_string()),
+            threshold: None,
+            count: false,
+            action: None,
+        };
+
+        let cmd = SearchCommand::new(params).expect("Should create command");
+
+        assert_eq!(
+            cmd.query.semantic,
+            Some("machine learning AI".to_string()),
+            "Semantic query should be preserved in SearchQuery"
+        );
+    }
+
+    #[test]
+    fn test_search_command_wires_threshold_to_query() {
+        let params = SearchCommandParams {
+            url: None,
+            title: None,
+            description: None,
+            tags: None,
+            keyword: None,
+            id: None,
+            exact: false,
+            semantic: Some("test query".to_string()),
+            threshold: Some(0.7),
+            count: false,
+            action: None,
+        };
+
+        let cmd = SearchCommand::new(params).expect("Should create command");
+
+        assert_eq!(
+            cmd.query.threshold,
+            Some(0.7),
+            "Threshold should be preserved in SearchQuery"
+        );
+    }
+
+    #[test]
+    fn test_search_command_combined_filters_with_semantic() {
+        let params = SearchCommandParams {
+            url: None,
+            title: Some("Rust".to_string()),
+            description: None,
+            tags: Some("programming".to_string()),
+            keyword: None,
+            id: None,
+            exact: false,
+            semantic: Some("systems programming".to_string()),
+            threshold: Some(0.5),
+            count: false,
+            action: None,
+        };
+
+        let cmd = SearchCommand::new(params).expect("Should create command");
+
+        // All fields should be wired through
+        assert_eq!(cmd.query.title, Some("Rust".to_string()));
+        assert_eq!(cmd.query.tags, Some(vec!["programming".to_string()]));
+        assert_eq!(cmd.query.semantic, Some("systems programming".to_string()));
+        assert_eq!(cmd.query.threshold, Some(0.5));
+    }
+
+    #[test]
+    fn test_search_command_rejects_invalid_threshold() {
+        let params = SearchCommandParams {
+            url: None,
+            title: None,
+            description: None,
+            tags: None,
+            keyword: None,
+            id: None,
+            exact: false,
+            semantic: Some("query".to_string()),
+            threshold: Some(1.5), // Invalid: > 1.0
+            count: false,
+            action: None,
+        };
+
+        let result = SearchCommand::new(params);
+        assert!(result.is_err(), "Should reject threshold > 1.0");
+    }
+
+    #[test]
+    fn test_search_command_rejects_negative_threshold() {
+        let params = SearchCommandParams {
+            url: None,
+            title: None,
+            description: None,
+            tags: None,
+            keyword: None,
+            id: None,
+            exact: false,
+            semantic: Some("query".to_string()),
+            threshold: Some(-0.5), // Invalid: < 0.0
+            count: false,
+            action: None,
+        };
+
+        let result = SearchCommand::new(params);
+        assert!(result.is_err(), "Should reject threshold < 0.0");
+    }
+
+    #[test]
+    fn test_search_command_no_semantic_fields() {
+        let params = SearchCommandParams {
+            url: None,
+            title: Some("test".to_string()),
+            description: None,
+            tags: None,
+            keyword: None,
+            id: None,
+            exact: false,
+            semantic: None,
+            threshold: None,
+            count: false,
+            action: None,
+        };
+
+        let cmd = SearchCommand::new(params).expect("Should create command");
+
+        assert!(cmd.query.semantic.is_none(), "No semantic should be set");
+        assert!(cmd.query.threshold.is_none(), "No threshold should be set");
+    }
+}
