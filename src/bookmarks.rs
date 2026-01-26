@@ -83,6 +83,14 @@ pub struct SearchQuery {
     pub tags: Option<Vec<String>>,
     pub keyword: Option<String>,
 
+    /// Semantic search query text (not lowercased—preserves embedding intent)
+    #[serde(default)]
+    pub semantic: Option<String>,
+
+    /// Similarity threshold for semantic search [0.0, 1.0]
+    #[serde(default)]
+    pub threshold: Option<f32>,
+
     #[serde(default)]
     pub exact: bool,
 

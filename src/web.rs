@@ -194,6 +194,7 @@ async fn search(
         keyword: payload.keyword,
         exact: payload.exact,
         limit: payload.limit,
+        ..Default::default()
     };
     log::info!("Search bookmarks with query: {:?}", query);
 

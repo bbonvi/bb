@@ -42,6 +42,7 @@ impl SearchCommand {
             keyword: params.keyword,
             exact: params.exact,
             limit: None,
+            ..Default::default()
         };
 
         Ok(Self {
