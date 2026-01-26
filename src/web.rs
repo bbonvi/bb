@@ -755,4 +755,405 @@ mod tests {
         assert_eq!(response.indexed_count, 0);
         assert!(response.total_bookmarks > 0);
     }
+
+    // =========================================================================
+    // HTTP Integration Tests (F.4)
+    //
+    // These tests verify semantic search via actual HTTP endpoints using
+    // tower::ServiceExt::oneshot() to make requests against a test router.
+    // =========================================================================
+
+    mod http_integration {
+        use super::*;
+        use crate::app::backend::{AddOpts, AppBackend, RefreshMetadataOpts};
+        use crate::app::errors::AppError as BackendError;
+        use crate::app::service::AppService;
+        use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery};
+        use crate::config::{Config, SemanticSearchConfig};
+        use crate::semantic::SemanticSearchService;
+        use axum::{body::Body, routing::{get, post}, Router};
+        use http_body_util::BodyExt;
+        use std::path::PathBuf;
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::sync::{Arc, RwLock};
+        use tower::ServiceExt;
+
+        static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+        fn test_dir() -> PathBuf {
+            let counter = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+            let path = std::env::temp_dir().join(format!(
+                "bb-http-integration-{}-{}",
+                std::process::id(),
+                counter
+            ));
+            std::fs::create_dir_all(&path).unwrap();
+            path
+        }
+
+        /// Mock storage manager for tests
+        struct MockStorageManager;
+
+        impl StorageManager for MockStorageManager {
+            fn write(&self, _: &str, _: &[u8]) {}
+            fn read(&self, _: &str) -> Vec<u8> { vec![] }
+            fn exists(&self, _: &str) -> bool { false }
+        }
+
+        /// Mock backend that supports search and returns configurable results
+        struct MockBackend {
+            bookmarks: Vec<Bookmark>,
+            config: Config,
+        }
+
+        impl MockBackend {
+            fn new(bookmarks: Vec<Bookmark>, semantic_enabled: bool) -> Self {
+                let mut config = Config::default();
+                config.semantic_search.enabled = semantic_enabled;
+                Self { bookmarks, config }
+            }
+
+            fn with_config(bookmarks: Vec<Bookmark>, semantic_config: SemanticSearchConfig) -> Self {
+                let mut config = Config::default();
+                config.semantic_search = semantic_config;
+                Self { bookmarks, config }
+            }
+        }
+
+        impl AppBackend for MockBackend {
+            fn create(&self, _: BookmarkCreate, _: AddOpts) -> Result<Bookmark, BackendError> {
+                unimplemented!()
+            }
+
+            fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<(), BackendError> {
+                unimplemented!()
+            }
+
+            fn update(&self, _: u64, _: BookmarkUpdate) -> Result<Bookmark, BackendError> {
+                unimplemented!()
+            }
+
+            fn delete(&self, _: u64) -> Result<(), BackendError> {
+                unimplemented!()
+            }
+
+            fn search_delete(&self, _: SearchQuery) -> Result<usize, BackendError> {
+                unimplemented!()
+            }
+
+            fn search_update(&self, _: SearchQuery, _: BookmarkUpdate) -> Result<usize, BackendError> {
+                unimplemented!()
+            }
+
+            fn total(&self) -> Result<usize, BackendError> {
+                Ok(self.bookmarks.len())
+            }
+
+            fn tags(&self) -> Result<Vec<String>, BackendError> {
+                unimplemented!()
+            }
+
+            fn search(&self, _: SearchQuery) -> Result<Vec<Bookmark>, BackendError> {
+                Ok(self.bookmarks.clone())
+            }
+
+            fn config(&self) -> Result<Arc<RwLock<Config>>, BackendError> {
+                Ok(Arc::new(RwLock::new(self.config.clone())))
+            }
+
+            fn update_config(&self, _: Config) -> Result<(), BackendError> {
+                unimplemented!()
+            }
+        }
+
+        /// Build a test router with the given app service
+        fn test_api_router(app_service: AppService) -> Router {
+            let shared_state = Arc::new(RwLock::new(SharedState {
+                app_service: Arc::new(RwLock::new(app_service)),
+                storage_mgr: Arc::new(MockStorageManager),
+            }));
+
+            Router::new()
+                .route("/api/bookmarks/search", post(search))
+                .route("/api/semantic/status", get(semantic_status))
+                .with_state(shared_state)
+        }
+
+        fn create_bookmark(id: u64, title: &str, description: &str) -> Bookmark {
+            Bookmark {
+                id,
+                title: title.to_string(),
+                url: format!("https://example.com/{}", id),
+                description: description.to_string(),
+                tags: vec![],
+                image_id: None,
+                icon_id: None,
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Threshold Validation Tests
+        // ---------------------------------------------------------------------
+
+        #[tokio::test]
+        async fn test_search_invalid_threshold_below_zero_returns_400() {
+            let backend = Box::new(MockBackend::new(vec![], true));
+            let service = AppService::new(backend);
+            let app = test_api_router(service);
+
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/bookmarks/search")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"semantic": "test", "threshold": -0.5}"#))
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(json["error"], "INVALID_THRESHOLD");
+        }
+
+        #[tokio::test]
+        async fn test_search_invalid_threshold_above_one_returns_400() {
+            let backend = Box::new(MockBackend::new(vec![], true));
+            let service = AppService::new(backend);
+            let app = test_api_router(service);
+
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/bookmarks/search")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"semantic": "test", "threshold": 1.5}"#))
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(json["error"], "INVALID_THRESHOLD");
+        }
+
+        #[tokio::test]
+        async fn test_search_valid_threshold_boundary_zero() {
+            let bookmarks = vec![create_bookmark(1, "Test", "Description")];
+            let backend = Box::new(MockBackend::new(bookmarks, true));
+            let service = AppService::new(backend);
+            let app = test_api_router(service);
+
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/bookmarks/search")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"threshold": 0.0}"#))
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            // Should succeed (no semantic query, just threshold - passes through)
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+
+        #[tokio::test]
+        async fn test_search_valid_threshold_boundary_one() {
+            let bookmarks = vec![create_bookmark(1, "Test", "Description")];
+            let backend = Box::new(MockBackend::new(bookmarks, true));
+            let service = AppService::new(backend);
+            let app = test_api_router(service);
+
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/bookmarks/search")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"threshold": 1.0}"#))
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+
+        // ---------------------------------------------------------------------
+        // Semantic Disabled State Tests
+        // ---------------------------------------------------------------------
+
+        #[tokio::test]
+        async fn test_search_semantic_disabled_returns_422() {
+            let test_dir = test_dir();
+
+            // Create disabled semantic service
+            let config = SemanticSearchConfig {
+                enabled: false,
+                model: "all-MiniLM-L6-v2".to_string(),
+                default_threshold: 0.35,
+                embedding_parallelism: "auto".to_string(),
+                download_timeout_secs: 300,
+            };
+            let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+
+            let backend = Box::new(MockBackend::new(vec![], false));
+            let service = AppService::with_semantic(backend, semantic_service);
+            let app = test_api_router(service);
+
+            // Request with semantic param when disabled
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/bookmarks/search")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"semantic": "machine learning"}"#))
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(json["error"], "SEMANTIC_DISABLED");
+
+            let _ = std::fs::remove_dir_all(&test_dir);
+        }
+
+        // ---------------------------------------------------------------------
+        // Semantic Status Endpoint Tests
+        // ---------------------------------------------------------------------
+
+        #[tokio::test]
+        async fn test_semantic_status_endpoint_enabled() {
+            let test_dir = test_dir();
+
+            let config = SemanticSearchConfig {
+                enabled: true,
+                model: "all-MiniLM-L6-v2".to_string(),
+                default_threshold: 0.35,
+                embedding_parallelism: "auto".to_string(),
+                download_timeout_secs: 300,
+            };
+            let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+
+            let bookmarks = vec![
+                create_bookmark(1, "Test 1", "Desc 1"),
+                create_bookmark(2, "Test 2", "Desc 2"),
+            ];
+            let backend = Box::new(MockBackend::new(bookmarks, true));
+            let service = AppService::with_semantic(backend, semantic_service);
+            let app = test_api_router(service);
+
+            let req = axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/semantic/status")
+                .body(Body::empty())
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: SemanticStatusResponse = serde_json::from_slice(&body).unwrap();
+
+            assert!(json.enabled);
+            assert_eq!(json.model, "all-MiniLM-L6-v2");
+            assert_eq!(json.total_bookmarks, 2);
+            // indexed_count is 0 because we didn't actually index anything
+            assert_eq!(json.indexed_count, 0);
+
+            let _ = std::fs::remove_dir_all(&test_dir);
+        }
+
+        #[tokio::test]
+        async fn test_semantic_status_endpoint_disabled() {
+            let test_dir = test_dir();
+
+            let sem_config = SemanticSearchConfig {
+                enabled: false,
+                model: "bge-small-en-v1.5".to_string(),
+                default_threshold: 0.35,
+                embedding_parallelism: "auto".to_string(),
+                download_timeout_secs: 300,
+            };
+            let semantic_service = Arc::new(SemanticSearchService::new(sem_config.clone(), test_dir.clone()));
+
+            let bookmarks = vec![create_bookmark(1, "Test", "Desc")];
+            // MockBackend config must match the semantic service config for status endpoint
+            let backend = Box::new(MockBackend::with_config(bookmarks, sem_config));
+            let service = AppService::with_semantic(backend, semantic_service);
+            let app = test_api_router(service);
+
+            let req = axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/semantic/status")
+                .body(Body::empty())
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: SemanticStatusResponse = serde_json::from_slice(&body).unwrap();
+
+            assert!(!json.enabled);
+            assert_eq!(json.model, "bge-small-en-v1.5");
+            assert_eq!(json.total_bookmarks, 1);
+            assert_eq!(json.indexed_count, 0);
+
+            let _ = std::fs::remove_dir_all(&test_dir);
+        }
+
+        // ---------------------------------------------------------------------
+        // Search Passthrough Tests (without semantic service)
+        // ---------------------------------------------------------------------
+
+        #[tokio::test]
+        async fn test_search_without_semantic_service_passes_through() {
+            let bookmarks = vec![
+                create_bookmark(1, "Machine Learning", "ML algorithms"),
+                create_bookmark(2, "Web Dev", "HTML and CSS"),
+            ];
+            let backend = Box::new(MockBackend::new(bookmarks, true));
+            let service = AppService::new(backend); // No semantic service
+            let app = test_api_router(service);
+
+            // Semantic param provided but no service - passes through to backend
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/bookmarks/search")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"semantic": "AI"}"#))
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: Vec<Bookmark> = serde_json::from_slice(&body).unwrap();
+            assert_eq!(json.len(), 2);
+        }
+
+        #[tokio::test]
+        async fn test_search_regular_filters_work() {
+            let bookmarks = vec![
+                create_bookmark(1, "Rust Guide", "Systems programming"),
+                create_bookmark(2, "Python Tutorial", "Data science"),
+            ];
+            let backend = Box::new(MockBackend::new(bookmarks, true));
+            let service = AppService::new(backend);
+            let app = test_api_router(service);
+
+            // Regular search without semantic
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/bookmarks/search")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"title": "Rust"}"#))
+                .unwrap();
+
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: Vec<Bookmark> = serde_json::from_slice(&body).unwrap();
+            // Mock backend returns all bookmarks (doesn't filter)
+            assert_eq!(json.len(), 2);
+        }
+    }
 }
