@@ -577,4 +577,230 @@ mod backend_integration {
 
         let _ = std::fs::remove_dir_all(&test_dir);
     }
+
+    // =========================================================================
+    // D.3 Orphan Filtering Tests
+    //
+    // These tests verify that deleted bookmarks (orphans in the vector index)
+    // do not appear in semantic search results.
+    // =========================================================================
+
+    /// Test that deleted bookmarks don't appear in semantic search results.
+    ///
+    /// Scenario: A bookmark is indexed, then deleted from the backend.
+    /// The vector index still contains the embedding (orphan), but semantic
+    /// search should NOT return it because it's filtered out by the
+    /// filter-then-rank flow.
+    ///
+    /// This is the core acceptance test for D.3: "Deleted bookmarks don't
+    /// appear in results."
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_deleted_bookmark_not_in_semantic_results() {
+        let test_dir = test_dir();
+
+        // Create 3 bookmarks - all will be indexed
+        let all_bookmarks = vec![
+            create_bookmark(1, "Machine Learning Tutorial", "Introduction to ML algorithms"),
+            create_bookmark(2, "Rust Programming", "Systems programming language"),
+            create_bookmark(3, "Deep Neural Networks", "Advanced AI and deep learning"),
+        ];
+
+        // But only 2 will be "in the database" (simulating bookmark #2 was deleted)
+        let remaining_bookmarks = vec![
+            create_bookmark(1, "Machine Learning Tutorial", "Introduction to ML algorithms"),
+            create_bookmark(3, "Deep Neural Networks", "Advanced AI and deep learning"),
+        ];
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        // Index ALL bookmarks (including the one that will be "deleted")
+        semantic_service
+            .with_index_mut(|index, model| {
+                for bm in &all_bookmarks {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                        let embedding = model.embed(&content).expect("Failed to embed");
+                        let hash = content_hash(&bm.title, &bm.description);
+                        index.insert(bm.id, hash, embedding).expect("Failed to insert");
+                    }
+                }
+            })
+            .expect("Failed to index");
+
+        // Verify index has all 3 entries (including orphan)
+        assert_eq!(semantic_service.indexed_count(), 3, "Index should have 3 entries");
+
+        // Backend returns only remaining bookmarks (simulates deletion)
+        let backend = Box::new(FilterableMockBackend::new(remaining_bookmarks));
+        let service = AppService::with_semantic(backend, semantic_service);
+
+        // Search with a query that would match the deleted bookmark
+        // "Rust programming" should NOT appear because it's not in backend results
+        let query = SearchQuery {
+            semantic: Some("systems programming rust".to_string()),
+            threshold: Some(0.0), // Low threshold to ensure we'd see it if present
+            ..Default::default()
+        };
+        let results = service.search_bookmarks(query, false).expect("Search failed");
+
+        // CRITICAL ASSERTION: Deleted bookmark (id=2) should NOT be in results
+        let ids: Vec<u64> = results.iter().map(|b| b.id).collect();
+        assert!(
+            !ids.contains(&2),
+            "Deleted bookmark (id=2) should NOT appear in results. Got: {:?}",
+            ids
+        );
+
+        // Only remaining bookmarks should be present
+        for result in &results {
+            assert!(
+                result.id == 1 || result.id == 3,
+                "Result should be from remaining bookmarks, got id={}",
+                result.id
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test orphan filtering with semantic-only search (no other filters).
+    ///
+    /// This is the edge case where candidate_ids comes from ALL backend
+    /// bookmarks, not a filtered subset. The orphan should still be excluded.
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_orphan_excluded_with_semantic_only_search() {
+        let test_dir = test_dir();
+
+        // 4 bookmarks total, but #4 will be "deleted"
+        let all_bookmarks = vec![
+            create_bookmark(1, "Python Programming", "Python language tutorial"),
+            create_bookmark(2, "JavaScript Guide", "JS for web development"),
+            create_bookmark(3, "Go Programming", "Golang systems programming"),
+            create_bookmark(4, "Ruby on Rails", "Ruby web framework tutorial"),
+        ];
+
+        // #4 is deleted
+        let remaining_bookmarks = vec![
+            create_bookmark(1, "Python Programming", "Python language tutorial"),
+            create_bookmark(2, "JavaScript Guide", "JS for web development"),
+            create_bookmark(3, "Go Programming", "Golang systems programming"),
+        ];
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        // Index all 4 (including future orphan)
+        semantic_service
+            .with_index_mut(|index, model| {
+                for bm in &all_bookmarks {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                        let embedding = model.embed(&content).expect("Failed to embed");
+                        let hash = content_hash(&bm.title, &bm.description);
+                        index.insert(bm.id, hash, embedding).expect("Failed to insert");
+                    }
+                }
+            })
+            .expect("Failed to index");
+
+        let backend = Box::new(FilterableMockBackend::new(remaining_bookmarks));
+        let service = AppService::with_semantic(backend, semantic_service);
+
+        // Semantic-only search with query matching the deleted bookmark
+        let query = SearchQuery {
+            semantic: Some("ruby rails web framework".to_string()),
+            threshold: Some(0.0),
+            ..Default::default()
+        };
+        let results = service.search_bookmarks(query, false).expect("Search failed");
+
+        // The deleted Ruby bookmark should NOT be in results
+        let ids: Vec<u64> = results.iter().map(|b| b.id).collect();
+        assert!(
+            !ids.contains(&4),
+            "Orphan bookmark (id=4, Ruby) should NOT appear. Got: {:?}",
+            ids
+        );
+
+        // Results should only contain IDs 1, 2, or 3
+        for result in &results {
+            assert!(
+                result.id <= 3,
+                "Only remaining bookmarks should appear, got id={}",
+                result.id
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    /// Test that multiple orphans are all filtered out.
+    #[test]
+    #[ignore = "requires model download (~23MB)"]
+    fn test_multiple_orphans_filtered() {
+        let test_dir = test_dir();
+
+        // 5 bookmarks, but only 2 remain
+        let all_bookmarks = vec![
+            create_bookmark(1, "Staying Bookmark", "This one stays"),
+            create_bookmark(2, "Deleted One", "Will be orphaned"),
+            create_bookmark(3, "Another Keeper", "This also stays"),
+            create_bookmark(4, "Deleted Two", "Also orphaned"),
+            create_bookmark(5, "Deleted Three", "Orphaned too"),
+        ];
+
+        let remaining_bookmarks = vec![
+            create_bookmark(1, "Staying Bookmark", "This one stays"),
+            create_bookmark(3, "Another Keeper", "This also stays"),
+        ];
+
+        let config = enabled_semantic_config();
+        let semantic_service = Arc::new(SemanticSearchService::new(config, test_dir.clone()));
+        semantic_service.initialize().expect("Failed to initialize");
+
+        semantic_service
+            .with_index_mut(|index, model| {
+                for bm in &all_bookmarks {
+                    if let Some(content) = preprocess_content(&bm.title, &bm.description) {
+                        let embedding = model.embed(&content).expect("Failed to embed");
+                        let hash = content_hash(&bm.title, &bm.description);
+                        index.insert(bm.id, hash, embedding).expect("Failed to insert");
+                    }
+                }
+            })
+            .expect("Failed to index");
+
+        // Index has 5, backend has 2
+        assert_eq!(semantic_service.indexed_count(), 5);
+
+        let backend = Box::new(FilterableMockBackend::new(remaining_bookmarks));
+        let service = AppService::with_semantic(backend, semantic_service);
+
+        let query = SearchQuery {
+            semantic: Some("bookmark".to_string()),
+            threshold: Some(0.0),
+            ..Default::default()
+        };
+        let results = service.search_bookmarks(query, false).expect("Search failed");
+
+        // All 3 orphans (2, 4, 5) should be excluded
+        let ids: Vec<u64> = results.iter().map(|b| b.id).collect();
+        assert!(
+            !ids.contains(&2) && !ids.contains(&4) && !ids.contains(&5),
+            "Orphans should be excluded. Got: {:?}",
+            ids
+        );
+
+        // Only valid IDs should appear
+        assert!(
+            ids.iter().all(|&id| id == 1 || id == 3),
+            "Only remaining bookmarks should appear. Got: {:?}",
+            ids
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
 }
