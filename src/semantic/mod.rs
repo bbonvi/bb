@@ -9,15 +9,18 @@
 //! - `index`: In-memory vector index with cosine similarity search
 //! - `storage`: Binary file I/O for vectors.bin persistence
 //! - `preprocess`: Text preprocessing for embedding input
+//! - `service`: High-level semantic search service
 
-mod embeddings;
+pub mod embeddings;
 mod index;
 mod preprocess;
+mod service;
 mod storage;
 
 pub use embeddings::EmbeddingModel;
-pub use index::VectorIndex;
+pub use index::{SearchResult, VectorIndex};
 pub use preprocess::{content_hash, preprocess_content};
+pub use service::{SemanticSearchError, SemanticSearchService};
 pub use storage::{VectorStorage, VectorStorageError};
 
 /// Default embedding model name
