@@ -119,6 +119,31 @@ pub fn validate_search_query(
     Ok(())
 }
 
+/// Validates semantic search parameters
+pub fn validate_semantic_params(
+    semantic: &Option<String>,
+    threshold: &Option<f32>,
+) -> CliResult<()> {
+    // Validate threshold is in valid range [0.0, 1.0]
+    if let Some(threshold) = threshold {
+        if !(*threshold >= 0.0 && *threshold <= 1.0) {
+            return Err(CliError::validation(
+                "threshold",
+                "Threshold must be between 0.0 and 1.0",
+            ));
+        }
+    }
+
+    // Threshold without semantic query is allowed (uses config default_threshold)
+    // but warn if it seems unintentional
+    if threshold.is_some() && semantic.is_none() {
+        // This is valid - threshold will be used with any future semantic search
+        // No error, just proceed
+    }
+
+    Ok(())
+}
+
 /// Validates rule input
 pub fn validate_rule_input(
     url: &Option<String>,
