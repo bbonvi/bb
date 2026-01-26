@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 const TASK_QUEUE_MAX_THREADS: u16 = 4;
 
-/// Default semantic search model
-const DEFAULT_SEMANTIC_MODEL: &str = "all-MiniLM-L6-v2";
+/// Default semantic search model (bge-base offers +13% accuracy vs MiniLM)
+const DEFAULT_SEMANTIC_MODEL: &str = "bge-base-en-v1.5";
 /// Default similarity threshold for semantic search
 const DEFAULT_SEMANTIC_THRESHOLD: f32 = 0.35;
 /// Default model download timeout in seconds
