@@ -2,6 +2,10 @@
 //!
 //! Provides simple keyword matching against bookmark content.
 //! Used alongside semantic search for RRF fusion.
+//!
+//! Length normalization: Description matches are weighted inversely to description
+//! length to prevent long descriptions from having unfair advantage due to more
+//! surface area for substring matches.
 
 /// Result of lexical scoring.
 #[derive(Debug, Clone)]
@@ -10,8 +14,8 @@ pub struct LexicalResult {
     pub id: u64,
     /// Number of query terms matched
     pub matched_terms: usize,
-    /// Total occurrences across all fields (for ranking)
-    pub total_hits: usize,
+    /// Weighted score across all fields (length-normalized)
+    pub total_hits: f32,
 }
 
 /// Score a set of bookmarks against a query using keyword matching.
@@ -54,7 +58,7 @@ pub fn score_lexical(
     results.sort_by(|a, b| {
         b.matched_terms
             .cmp(&a.matched_terms)
-            .then_with(|| b.total_hits.cmp(&a.total_hits))
+            .then_with(|| b.total_hits.partial_cmp(&a.total_hits).unwrap_or(std::cmp::Ordering::Equal))
     });
 
     results
@@ -76,42 +80,66 @@ fn tokenize(query: &str) -> Vec<String> {
         .collect()
 }
 
+/// Baseline description length for normalization (characters).
+/// Descriptions at or below this length get full weight.
+const DESC_LENGTH_BASELINE: f32 = 100.0;
+
+/// Compute description match weight based on length.
+///
+/// Longer descriptions have more surface area for substring matches,
+/// giving them an unfair advantage. This function applies logarithmic
+/// decay to normalize for length.
+///
+/// - 100 chars or less: 1.0 (full weight)
+/// - 270 chars: ~0.5
+/// - 730 chars: ~0.33
+fn description_length_weight(len: usize) -> f32 {
+    if len <= DESC_LENGTH_BASELINE as usize {
+        return 1.0;
+    }
+    // Logarithmic decay: 1 / (1 + ln(len / baseline))
+    1.0 / (1.0 + (len as f32 / DESC_LENGTH_BASELINE).ln())
+}
+
 /// Count term matches across all bookmark fields.
-/// Returns (unique_terms_matched, total_occurrences).
+/// Returns (unique_terms_matched, total_occurrences as f32 for weighted scoring).
 fn count_matches(
     query_terms: &[String],
     title: &str,
     description: &str,
     tags: &[String],
-) -> (usize, usize) {
+) -> (usize, f32) {
     let title_lower = title.to_lowercase();
     let description_lower = description.to_lowercase();
     let tags_lower: Vec<String> = tags.iter().map(|t| t.to_lowercase()).collect();
 
+    // Compute description weight once
+    let desc_weight = description_length_weight(description.len());
+
     let mut matched_terms = 0;
-    let mut total_hits = 0;
+    let mut total_hits: f32 = 0.0;
 
     for term in query_terms {
-        let mut term_hits = 0;
+        let mut term_hits: f32 = 0.0;
 
         // Title match (weighted higher implicitly via occurrence count)
         if title_lower.contains(term) {
-            term_hits += 2; // Title matches worth more
+            term_hits += 2.0; // Title matches worth more
         }
 
-        // Description match
+        // Description match (length-normalized)
         if description_lower.contains(term) {
-            term_hits += 1;
+            term_hits += desc_weight; // Was: term_hits += 1
         }
 
         // Tag match (exact match or prefix)
         for tag in &tags_lower {
             if tag == term || tag.starts_with(&format!("{}/", term)) {
-                term_hits += 3; // Tag matches are highly relevant
+                term_hits += 3.0; // Tag matches are highly relevant
             }
         }
 
-        if term_hits > 0 {
+        if term_hits > 0.0 {
             matched_terms += 1;
             total_hits += term_hits;
         }
@@ -207,8 +235,8 @@ mod tests {
         let results = score_lexical("rust", &bookmarks);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, 1);
-        // Tag match should give higher score
-        assert!(results[0].total_hits >= 3);
+        // Tag match should give higher score (tag=3.0 + desc=~1.0 for short desc)
+        assert!(results[0].total_hits >= 3.0);
     }
 
     #[test]
@@ -269,5 +297,64 @@ mod tests {
 
         let results = score_lexical("rust", &bookmarks);
         assert_eq!(results.len(), 1);
+    }
+
+    // Length normalization tests
+    #[test]
+    fn test_description_length_weight_short() {
+        // Short descriptions get full weight
+        assert_eq!(description_length_weight(50), 1.0);
+        assert_eq!(description_length_weight(100), 1.0);
+    }
+
+    #[test]
+    fn test_description_length_weight_decay() {
+        // Longer descriptions get reduced weight
+        let w200 = description_length_weight(200);
+        let w400 = description_length_weight(400);
+        let w800 = description_length_weight(800);
+
+        // Verify decay ordering
+        assert!(w200 < 1.0);
+        assert!(w400 < w200);
+        assert!(w800 < w400);
+
+        // Verify approximate values (logarithmic decay)
+        assert!((w200 - 0.59).abs() < 0.1); // ~0.59 at 200 chars
+        assert!((w400 - 0.42).abs() < 0.1); // ~0.42 at 400 chars
+    }
+
+    #[test]
+    fn test_long_description_penalized() {
+        // This is the key behavioral test: a short focused description
+        // should score higher than a long description with the same keyword
+        let tags: Vec<String> = vec![];
+
+        let short_desc = "Learn rust basics"; // ~17 chars
+        let long_desc = "This comprehensive guide covers many programming topics \
+            including JavaScript, Python, databases, web development, DevOps, \
+            cloud computing, and also briefly mentions rust somewhere in here \
+            along with many other technologies and frameworks"; // ~250 chars
+
+        let bookmarks = vec![
+            (1, "Short", short_desc, tags.as_slice()),
+            (2, "Long", long_desc, tags.as_slice()),
+        ];
+
+        let results = score_lexical("rust", &bookmarks);
+
+        // Both match "rust" in description only
+        assert_eq!(results.len(), 2);
+
+        // Short description should have higher total_hits due to length penalty on long
+        let short_result = results.iter().find(|r| r.id == 1).unwrap();
+        let long_result = results.iter().find(|r| r.id == 2).unwrap();
+
+        assert!(
+            short_result.total_hits > long_result.total_hits,
+            "Short desc ({}) should score higher than long desc ({})",
+            short_result.total_hits,
+            long_result.total_hits
+        );
     }
 }
