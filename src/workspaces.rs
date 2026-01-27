@@ -13,9 +13,9 @@ pub struct ViewPrefs {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct WorkspaceFilters {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub tag_whitelist: Vec<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub tag_blacklist: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url_pattern: Option<String>,

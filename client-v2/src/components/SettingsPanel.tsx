@@ -250,9 +250,12 @@ function WorkspaceEditor({
   }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered autocomplete suggestions (exclude already-added tags)
+  const whitelist = workspace.filters.tag_whitelist ?? []
+  const blacklist = workspace.filters.tag_blacklist ?? []
+
   const existingTags = useMemo(
-    () => new Set([...workspace.filters.tag_whitelist, ...workspace.filters.tag_blacklist]),
-    [workspace.filters.tag_whitelist, workspace.filters.tag_blacklist],
+    () => new Set([...whitelist, ...blacklist]),
+    [whitelist, blacklist],
   )
 
   const autocompleteTags = useMemo(
@@ -274,8 +277,8 @@ function WorkspaceEditor({
 
   function saveWorkspace(overrides: Partial<Workspace['filters']> = {}) {
     const filters = {
-      tag_whitelist: workspace.filters.tag_whitelist,
-      tag_blacklist: workspace.filters.tag_blacklist,
+      tag_whitelist: whitelist,
+      tag_blacklist: blacklist,
       url_pattern: urlPattern || null,
       title_pattern: titlePattern || null,
       description_pattern: descPattern || null,
@@ -287,24 +290,24 @@ function WorkspaceEditor({
 
   function addWhitelistTag(tag: string) {
     const trimmed = tag.trim()
-    if (!trimmed || workspace.filters.tag_whitelist.includes(trimmed)) return
+    if (!trimmed || whitelist.includes(trimmed)) return
     saveWorkspace({
-      tag_whitelist: [...workspace.filters.tag_whitelist, trimmed],
+      tag_whitelist: [...whitelist, trimmed],
     })
     setWhitelistInput('')
   }
 
   function removeWhitelistTag(tag: string) {
     saveWorkspace({
-      tag_whitelist: workspace.filters.tag_whitelist.filter((t) => t !== tag),
+      tag_whitelist: whitelist.filter((t) => t !== tag),
     })
   }
 
   function addBlacklistTag(tag: string) {
     const trimmed = tag.trim()
-    if (!trimmed || workspace.filters.tag_blacklist.includes(trimmed)) return
+    if (!trimmed || blacklist.includes(trimmed)) return
     saveWorkspace({
-      tag_blacklist: [...workspace.filters.tag_blacklist, trimmed],
+      tag_blacklist: [...blacklist, trimmed],
     })
     setBlacklistInput('')
   }
