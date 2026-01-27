@@ -58,7 +58,7 @@ function PlusIcon() {
 
 // ─── Main component ────────────────────────────────────────────────
 export function Toolbar() {
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(true)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const searchQuery = useStore((s) => s.searchQuery)
@@ -82,20 +82,20 @@ export function Toolbar() {
   const primaryDelay = semanticEnabled ? 500 : 300
   const primaryField = semanticEnabled ? 'semantic' : 'keyword'
   const primaryExternal = searchQuery[primaryField] ?? ''
-  const [debouncedPrimary, setLocalPrimary, localPrimary] =
+  const [debouncedPrimary, setLocalPrimary, localPrimary, flushPrimary] =
     useDebouncedValue(primaryExternal, primaryDelay)
 
   // Advanced filter fields
-  const [debouncedTags, setLocalTags, localTags] =
+  const [debouncedTags, setLocalTags, localTags, flushTags] =
     useDebouncedValue(searchQuery.tags ?? '', 300)
-  const [debouncedTitle, setLocalTitle, localTitle] =
+  const [debouncedTitle, setLocalTitle, localTitle, flushTitle] =
     useDebouncedValue(searchQuery.title ?? '', 300)
-  const [debouncedUrl, setLocalUrl, localUrl] =
+  const [debouncedUrl, setLocalUrl, localUrl, flushUrl] =
     useDebouncedValue(searchQuery.url ?? '', 300)
-  const [debouncedDescription, setLocalDescription, localDescription] =
+  const [debouncedDescription, setLocalDescription, localDescription, flushDescription] =
     useDebouncedValue(searchQuery.description ?? '', 300)
   // keyword field shown in filters when semantic is the primary
-  const [debouncedKeywordAlt, setLocalKeywordAlt, localKeywordAlt] =
+  const [debouncedKeywordAlt, setLocalKeywordAlt, localKeywordAlt, flushKeywordAlt] =
     useDebouncedValue(searchQuery.keyword ?? '', 300)
 
   // Apply debounced values to store
@@ -163,14 +163,15 @@ export function Toolbar() {
   const hasAnySearch = !!debouncedPrimary || hasAdvancedFilters
 
   const clearAll = useCallback(() => {
-    setLocalPrimary('')
-    setLocalTags('')
-    setLocalTitle('')
-    setLocalUrl('')
-    setLocalDescription('')
-    if (semanticEnabled) setLocalKeywordAlt('')
+    flushPrimary('')
+    flushTags('')
+    flushTitle('')
+    flushUrl('')
+    flushDescription('')
+    if (semanticEnabled) flushKeywordAlt('')
+    setSearchQuery({})
     searchInputRef.current?.focus()
-  }, [setLocalPrimary, setLocalTags, setLocalTitle, setLocalUrl, setLocalDescription, setLocalKeywordAlt, semanticEnabled])
+  }, [flushPrimary, flushTags, flushTitle, flushUrl, flushDescription, flushKeywordAlt, semanticEnabled, setSearchQuery])
 
   const matchedCount = bookmarks.length
 
@@ -199,8 +200,8 @@ export function Toolbar() {
             onClick={() => setFiltersOpen(!filtersOpen)}
             className={`absolute right-1.5 flex h-6 items-center gap-1 rounded-md px-1.5 text-xs transition-colors ${
               filtersOpen || hasAdvancedFilters
-                ? 'bg-accent-subtle text-accent'
-                : 'text-text-dim hover:text-text-muted'
+                ? 'bg-accent-dim text-text'
+                : 'text-text-muted hover:text-text'
             }`}
           >
             <FilterIcon className="shrink-0" />
@@ -225,7 +226,7 @@ export function Toolbar() {
         {hasAnySearch && (
           <button
             onClick={clearAll}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
             <XIcon />
           </button>
@@ -242,8 +243,8 @@ export function Toolbar() {
               onClick={() => setViewMode(mode)}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
                 viewMode === mode
-                  ? 'bg-surface-active text-text shadow-sm'
-                  : 'text-text-dim hover:text-text-muted'
+                  ? 'bg-accent-dim text-text'
+                  : 'text-text-muted hover:text-text'
               }`}
             >
               {mode === 'grid' ? 'Grid' : mode === 'cards' ? 'List' : 'Table'}
@@ -255,7 +256,7 @@ export function Toolbar() {
         <div className="flex items-center rounded-lg bg-surface shrink-0">
           <button
             onClick={() => setColumns(Math.max(1, columns - 1))}
-            className="flex h-7 w-7 items-center justify-center rounded-l-lg text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+            className="flex h-7 w-7 items-center justify-center rounded-l-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
             <MinusIcon />
           </button>
@@ -264,7 +265,7 @@ export function Toolbar() {
           </span>
           <button
             onClick={() => setColumns(Math.min(12, columns + 1))}
-            className="flex h-7 w-7 items-center justify-center rounded-r-lg text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+            className="flex h-7 w-7 items-center justify-center rounded-r-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
             <PlusIcon />
           </button>
@@ -346,10 +347,10 @@ function PillToggle({
   return (
     <button
       onClick={onClick}
-      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-all select-none ${
+      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-all select-none ${
         active
-          ? 'bg-accent-subtle text-accent'
-          : 'text-text-dim hover:text-text-muted'
+          ? 'bg-accent-dim text-text'
+          : 'text-text-muted hover:text-text hover:bg-surface-hover'
       }`}
     >
       {label}

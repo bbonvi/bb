@@ -1,15 +1,16 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 /**
- * Returns [debouncedValue, setLocalValue, localValue].
+ * Returns [debouncedValue, setLocalValue, localValue, flush].
  * localValue updates immediately (for controlled inputs).
  * debouncedValue updates after `delay` ms of inactivity.
+ * flush(v) bypasses debounce — sets both local and debounced instantly.
  * External value changes (from store) sync into localValue when not actively typing.
  */
 export function useDebouncedValue(
   externalValue: string,
   delay: number,
-): [string, (v: string) => void, string] {
+): [string, (v: string) => void, string, (v: string) => void] {
   const [local, setLocal] = useState(externalValue)
   const [debounced, setDebounced] = useState(externalValue)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -24,6 +25,13 @@ export function useDebouncedValue(
       dirtyRef.current = false
     }, delay)
   }
+
+  const flush = useCallback((v: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    dirtyRef.current = false
+    setLocal(v)
+    setDebounced(v)
+  }, [])
 
   // Sync from external when not actively typing
   useEffect(() => {
@@ -40,5 +48,5 @@ export function useDebouncedValue(
     }
   }, [])
 
-  return [debounced, setLocalValue, local]
+  return [debounced, setLocalValue, local, flush]
 }
