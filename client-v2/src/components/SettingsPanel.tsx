@@ -9,7 +9,7 @@ import {
   fetchWorkspaces,
   searchBookmarks,
 } from '@/lib/api'
-import type { Workspace, Bookmark } from '@/lib/api'
+import type { Workspace } from '@/lib/api'
 import { DeleteButton } from './bookmark-parts'
 
 // ─── Settings Panel (Modal) ──────────────────────────────────────
@@ -326,14 +326,28 @@ function WorkspaceEditor({
     if (concrete.length === 0) { setResult([]); return }
     setLoading(true)
     try {
-      const bookmarks: Bookmark[] = await searchBookmarks({ tags: concrete.join(',') })
-      const relatedSet = new Set<string>()
-      for (const bm of bookmarks) {
-        for (const t of bm.tags) {
-          if (!existingTags.has(t)) relatedSet.add(t)
+      // Fetch per-tag to avoid overly restrictive AND queries
+      const results = await Promise.all(
+        concrete.map((tag) => searchBookmarks({ tags: tag })),
+      )
+      // Count co-occurrence: tags appearing with more source tags rank higher
+      const freq = new Map<string, number>()
+      for (const bookmarks of results) {
+        const seen = new Set<string>()
+        for (const bm of bookmarks) {
+          for (const t of bm.tags) {
+            if (!existingTags.has(t) && !seen.has(t)) {
+              seen.add(t)
+              freq.set(t, (freq.get(t) ?? 0) + 1)
+            }
+          }
         }
       }
-      setResult(Array.from(relatedSet).sort((a, b) => a.localeCompare(b)))
+      // Sort by frequency desc, then alphabetically
+      const sorted = Array.from(freq.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([tag]) => tag)
+      setResult(sorted)
     } catch {
       // ignore
     } finally {
@@ -495,13 +509,13 @@ function TagListEditor({
               key={tag}
               className="flex items-center gap-1 rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-text-muted"
             >
-              {tag}
               <button
                 onClick={() => onRemove(tag)}
                 className="text-text-dim transition-colors hover:text-danger"
               >
                 <X className="h-2.5 w-2.5" />
               </button>
+              {tag}
             </span>
           ))}
         </div>
