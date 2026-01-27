@@ -4,21 +4,20 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  /* App-specific tokens */
-  --color-bg: #09090d;
-  --color-surface: #111118;
-  --color-surface-hover: #1a1a24;
-  --color-surface-active: #222230;
-  --color-text: #d4d4e0;
-  --color-text-muted: #6b6b80;
-  --color-text-dim: #44445a;
-  --color-accent: #3dd68c;
-  --color-accent-muted: #2a9d68;
-  --color-accent-dim: #1a5f40;
+  /* App tokens — warm dark palette */
+  --color-bg: #0c0c0e;
+  --color-surface: #141417;
+  --color-surface-hover: #1c1c21;
+  --color-surface-active: #252530;
+  --color-text: #e8e8ed;
+  --color-text-muted: #7c7c8a;
+  --color-text-dim: #4a4a56;
+  --color-accent: #6b8afd;
+  --color-accent-muted: #4a66c8;
+  --color-accent-dim: #2d3f7a;
+  --color-accent-subtle: rgba(107, 138, 253, 0.08);
   --color-danger: #ef4444;
   --color-danger-hover: #f87171;
-  --color-amber: #e5a820;
-  --color-amber-muted: #9a7118;
 }
 
 @theme inline {
@@ -54,7 +53,6 @@
   --color-chart-5: var(--chart-5);
 }
 
-/* Dark-only: shadcn semantic tokens set directly on :root */
 :root {
   --radius: 0.625rem;
   --background: oklch(0.145 0 0);
@@ -93,24 +91,11 @@
 
   body {
     @apply bg-bg text-text antialiased;
-    font-family: 'IBM Plex Sans', 'SF Pro Text', system-ui, sans-serif;
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
     margin: 0;
   }
 
   code, .font-mono {
-    font-family: 'IBM Plex Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+    font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
   }
-}
-
-/* Toolbar field styling */
-.toolbar-field {
-  @apply bg-surface/80 border border-white/[0.06] text-text text-sm rounded-md
-    placeholder:text-text-dim
-    focus:bg-surface-hover focus:border-accent-dim focus:outline-none focus:ring-1 focus:ring-accent-dim
-    transition-all duration-150;
-}
-
-.toolbar-field::placeholder {
-  letter-spacing: 0.02em;
-  text-transform: lowercase;
 }

@@ -1,52 +1,9 @@
-import { useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/lib/store'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import type { SearchQuery } from '@/lib/api'
 
-const VIEW_MODES = [
-  { value: 'grid' as const, label: 'Grid', icon: GridIcon },
-  { value: 'cards' as const, label: 'Cards', icon: CardsIcon },
-  { value: 'table' as const, label: 'Table', icon: TableIcon },
-]
-
-function GridIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="1" y="1" width="6" height="6" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
-      <rect x="9" y="1" width="6" height="6" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
-      <rect x="1" y="9" width="6" height="6" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
-      <rect x="9" y="9" width="6" height="6" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
-    </svg>
-  )
-}
-
-function CardsIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="1" y="1" width="14" height="4" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
-      <rect x="1" y="7" width="14" height="4" rx="1" className={active ? 'fill-accent/60' : 'fill-text-dim'} />
-      <rect x="1" y="13" width="14" height="2" rx="1" className={active ? 'fill-accent/30' : 'fill-text-dim/60'} />
-    </svg>
-  )
-}
-
-function TableIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      {[1, 5, 9, 13].map((y) => (
-        <rect key={y} x="1" y={y} width="14" height="2" rx="0.5" className={active ? 'fill-accent' : 'fill-text-muted'} />
-      ))}
-    </svg>
-  )
-}
-
+// ─── Responsive columns ────────────────────────────────────────────
 function useResponsiveColumns(): number {
   if (typeof window === 'undefined') return 3
   const w = window.innerWidth
@@ -57,11 +14,53 @@ function useResponsiveColumns(): number {
   return 5
 }
 
-function Separator() {
-  return <div className="mx-1 h-6 w-px bg-white/[0.06]" />
+// ─── Icons (inline SVG) ────────────────────────────────────────────
+function SearchIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <circle cx="7" cy="7" r="4.5" />
+      <path d="M10.5 10.5L14 14" />
+    </svg>
+  )
 }
 
+function FilterIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M2 4h12M4 8h8M6 12h4" />
+    </svg>
+  )
+}
+
+function XIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M3 3l8 8M11 3l-8 8" />
+    </svg>
+  )
+}
+
+function MinusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M3 7h8" />
+    </svg>
+  )
+}
+
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M7 3v8M3 7h8" />
+    </svg>
+  )
+}
+
+// ─── Main component ────────────────────────────────────────────────
 export function Toolbar() {
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   const searchQuery = useStore((s) => s.searchQuery)
   const setSearchQuery = useStore((s) => s.setSearchQuery)
   const bookmarks = useStore((s) => s.bookmarks)
@@ -79,10 +78,14 @@ export function Toolbar() {
   const saveQueries = useStore((s) => s.saveQueries)
   const setSaveQueries = useStore((s) => s.setSaveQueries)
 
-  const [debouncedSemantic, setLocalSemantic, localSemantic] =
-    useDebouncedValue(searchQuery.semantic ?? '', 500)
-  const [debouncedKeyword, setLocalKeyword, localKeyword] =
-    useDebouncedValue(searchQuery.keyword ?? '', 300)
+  // Primary search — semantic if enabled, keyword otherwise
+  const primaryDelay = semanticEnabled ? 500 : 300
+  const primaryField = semanticEnabled ? 'semantic' : 'keyword'
+  const primaryExternal = searchQuery[primaryField] ?? ''
+  const [debouncedPrimary, setLocalPrimary, localPrimary] =
+    useDebouncedValue(primaryExternal, primaryDelay)
+
+  // Advanced filter fields
   const [debouncedTags, setLocalTags, localTags] =
     useDebouncedValue(searchQuery.tags ?? '', 300)
   const [debouncedTitle, setLocalTitle, localTitle] =
@@ -91,30 +94,42 @@ export function Toolbar() {
     useDebouncedValue(searchQuery.url ?? '', 300)
   const [debouncedDescription, setLocalDescription, localDescription] =
     useDebouncedValue(searchQuery.description ?? '', 300)
+  // keyword field shown in filters when semantic is the primary
+  const [debouncedKeywordAlt, setLocalKeywordAlt, localKeywordAlt] =
+    useDebouncedValue(searchQuery.keyword ?? '', 300)
 
+  // Apply debounced values to store
   useEffect(() => {
     const query: SearchQuery = {}
-    if (debouncedSemantic) query.semantic = debouncedSemantic
-    if (debouncedKeyword) query.keyword = debouncedKeyword
+    if (debouncedPrimary) query[primaryField] = debouncedPrimary
+    if (semanticEnabled && debouncedKeywordAlt) query.keyword = debouncedKeywordAlt
     if (debouncedTags) query.tags = debouncedTags
     if (debouncedTitle) query.title = debouncedTitle
     if (debouncedUrl) query.url = debouncedUrl
     if (debouncedDescription) query.description = debouncedDescription
     setSearchQuery(query)
   }, [
-    debouncedSemantic,
-    debouncedKeyword,
+    debouncedPrimary,
+    debouncedKeywordAlt,
     debouncedTags,
     debouncedTitle,
     debouncedUrl,
     debouncedDescription,
+    primaryField,
+    semanticEnabled,
     setSearchQuery,
   ])
 
+  // URL param sync
   useEffect(() => {
     if (!saveQueries) return
     const url = new URL(window.location.href)
-    const fields = { tags: debouncedTags, title: debouncedTitle, url: debouncedUrl, description: debouncedDescription }
+    const fields: Record<string, string> = {
+      tags: debouncedTags,
+      title: debouncedTitle,
+      url: debouncedUrl,
+      description: debouncedDescription,
+    }
     for (const [key, val] of Object.entries(fields)) {
       if (val) url.searchParams.set(key, val)
       else url.searchParams.delete(key)
@@ -124,235 +139,220 @@ export function Toolbar() {
     window.history.replaceState({}, '', url)
   }, [saveQueries, debouncedTags, debouncedTitle, debouncedUrl, debouncedDescription, showAll])
 
+  // Restore from URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const tags = params.get('tags') ?? ''
-    const title = params.get('title') ?? ''
-    const url = params.get('url') ?? ''
-    const description = params.get('description') ?? ''
+    const t = params.get('tags') ?? ''
+    const ti = params.get('title') ?? ''
+    const u = params.get('url') ?? ''
+    const d = params.get('description') ?? ''
     const all = params.get('all')
-    if (tags) setLocalTags(tags)
-    if (title) setLocalTitle(title)
-    if (url) setLocalUrl(url)
-    if (description) setLocalDescription(description)
+    if (t) { setLocalTags(t); setFiltersOpen(true) }
+    if (ti) { setLocalTitle(ti); setFiltersOpen(true) }
+    if (u) { setLocalUrl(u); setFiltersOpen(true) }
+    if (d) { setLocalDescription(d); setFiltersOpen(true) }
     if (all === '1' || all === 'true') setShowAll(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Responsive columns on mount
   useEffect(() => {
     setColumns(useResponsiveColumns())
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const hasSearch =
-    !!debouncedSemantic ||
-    !!debouncedKeyword ||
-    !!debouncedTags ||
-    !!debouncedTitle ||
-    !!debouncedUrl ||
-    !!debouncedDescription
+  const hasAdvancedFilters = !!debouncedTags || !!debouncedTitle || !!debouncedUrl || !!debouncedDescription || (semanticEnabled && !!debouncedKeywordAlt)
+  const hasAnySearch = !!debouncedPrimary || hasAdvancedFilters
 
-  const matchedCount = bookmarks.length
-
-  const clearAllFields = useCallback(() => {
-    setLocalSemantic('')
-    setLocalKeyword('')
+  const clearAll = useCallback(() => {
+    setLocalPrimary('')
     setLocalTags('')
     setLocalTitle('')
     setLocalUrl('')
     setLocalDescription('')
-  }, [setLocalSemantic, setLocalKeyword, setLocalTags, setLocalTitle, setLocalUrl, setLocalDescription])
+    if (semanticEnabled) setLocalKeywordAlt('')
+    searchInputRef.current?.focus()
+  }, [setLocalPrimary, setLocalTags, setLocalTitle, setLocalUrl, setLocalDescription, setLocalKeywordAlt, semanticEnabled])
+
+  const matchedCount = bookmarks.length
+
+  // Auto-open filters if advanced filters have values
+  useEffect(() => {
+    if (hasAdvancedFilters && !filtersOpen) setFiltersOpen(true)
+  }, [hasAdvancedFilters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-bg/90 backdrop-blur-xl">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2.5">
-          {/* Brand */}
-          <span className="font-mono text-sm font-medium tracking-tight text-accent mr-1 select-none">
-            bb
+    <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur-md">
+      {/* ── Row 1: Main bar ── */}
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        {/* Search bar */}
+        <div className="relative flex min-w-0 flex-1 items-center max-w-2xl">
+          <SearchIcon className="pointer-events-none absolute left-3 text-text-dim" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={localPrimary}
+            onChange={(e) => setLocalPrimary(e.target.value)}
+            placeholder={semanticEnabled ? 'Search semantically…' : 'Search bookmarks…'}
+            className="h-9 w-full rounded-lg border border-white/[0.06] bg-surface pl-9 pr-10 text-sm text-text placeholder:text-text-dim outline-none transition-colors focus:border-accent-dim focus:bg-surface-hover"
+          />
+          {/* Filter toggle inside search bar */}
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className={`absolute right-1.5 flex h-6 items-center gap-1 rounded-md px-1.5 text-xs transition-colors ${
+              filtersOpen || hasAdvancedFilters
+                ? 'bg-accent-subtle text-accent'
+                : 'text-text-dim hover:text-text-muted'
+            }`}
+          >
+            <FilterIcon className="shrink-0" />
+            {hasAdvancedFilters && (
+              <span className="font-mono text-[10px]">
+                {[debouncedTags, debouncedTitle, debouncedUrl, debouncedDescription, semanticEnabled ? debouncedKeywordAlt : ''].filter(Boolean).length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Counter */}
+        <div className="flex items-baseline gap-0.5 font-mono text-xs tabular-nums select-none shrink-0">
+          <span className={hasAnySearch ? 'text-accent' : 'text-text-muted'}>
+            {matchedCount}
           </span>
+          <span className="text-text-dim">/</span>
+          <span className="text-text-dim">{totalCount}</span>
+        </div>
 
-          <Separator />
+        {/* Clear all */}
+        {hasAnySearch && (
+          <button
+            onClick={clearAll}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+          >
+            <XIcon />
+          </button>
+        )}
 
-          {/* Search fields */}
-          <div className="flex flex-wrap items-center gap-1.5">
+        {/* Divider */}
+        <div className="h-5 w-px bg-white/[0.06] shrink-0" />
+
+        {/* View mode */}
+        <div className="flex items-center rounded-lg bg-surface p-0.5 shrink-0">
+          {(['grid', 'cards', 'table'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                viewMode === mode
+                  ? 'bg-surface-active text-text shadow-sm'
+                  : 'text-text-dim hover:text-text-muted'
+              }`}
+            >
+              {mode === 'grid' ? 'Grid' : mode === 'cards' ? 'List' : 'Table'}
+            </button>
+          ))}
+        </div>
+
+        {/* Column stepper */}
+        <div className="flex items-center rounded-lg bg-surface shrink-0">
+          <button
+            onClick={() => setColumns(Math.max(1, columns - 1))}
+            className="flex h-7 w-7 items-center justify-center rounded-l-lg text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+          >
+            <MinusIcon />
+          </button>
+          <span className="flex h-7 min-w-[1.5rem] items-center justify-center border-x border-white/[0.04] font-mono text-xs tabular-nums text-text-muted">
+            {columns}
+          </span>
+          <button
+            onClick={() => setColumns(Math.min(12, columns + 1))}
+            className="flex h-7 w-7 items-center justify-center rounded-r-lg text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+          >
+            <PlusIcon />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Row 2: Expandable filters ── */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/[0.04] px-4 py-2.5">
+            {/* Advanced fields */}
             {semanticEnabled && (
-              <SearchField
-                value={localSemantic}
-                onChange={setLocalSemantic}
-                placeholder="semantic"
-                className="w-32"
-                accent
-              />
+              <FilterField label="keyword" value={localKeywordAlt} onChange={setLocalKeywordAlt} />
             )}
-            <SearchField
-              value={localKeyword}
-              onChange={setLocalKeyword}
-              placeholder="keyword"
-              className="w-24"
-            />
-            <SearchField
-              value={localTags}
-              onChange={setLocalTags}
-              placeholder="tags"
-              className="w-24"
-            />
-            <SearchField
-              value={localTitle}
-              onChange={setLocalTitle}
-              placeholder="title"
-              className="w-20"
-            />
-            <SearchField
-              value={localUrl}
-              onChange={setLocalUrl}
-              placeholder="url"
-              className="w-20"
-            />
-            <SearchField
-              value={localDescription}
-              onChange={setLocalDescription}
-              placeholder="desc"
-              className="w-20"
-            />
-            {hasSearch && (
-              <button
-                onClick={clearAllFields}
-                className="ml-0.5 flex h-7 w-7 items-center justify-center rounded text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
-            )}
-          </div>
+            <FilterField label="tags" value={localTags} onChange={setLocalTags} />
+            <FilterField label="title" value={localTitle} onChange={setLocalTitle} />
+            <FilterField label="url" value={localUrl} onChange={setLocalUrl} />
+            <FilterField label="description" value={localDescription} onChange={setLocalDescription} />
 
-          <Separator />
-
-          {/* Counter */}
-          <span className="font-mono text-xs tabular-nums tracking-wide">
-            <span className={hasSearch ? 'text-accent' : 'text-text-muted'}>
-              {matchedCount}
-            </span>
-            <span className="text-text-dim">/</span>
-            <span className="text-text-dim">{totalCount}</span>
-          </span>
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Toggles */}
-          <div className="flex items-center gap-2.5">
-            <Toggle checked={shuffle} onChange={setShuffle} label="shfl" />
-            <Toggle checked={showAll} onChange={setShowAll} label="all" />
-            <Toggle checked={saveQueries} onChange={setSaveQueries} label="pin" />
-          </div>
-
-          <Separator />
-
-          {/* Column controls */}
-          <div className="flex items-center gap-0">
-            <button
-              onClick={() => setColumns(Math.max(1, columns - 1))}
-              className="flex h-7 w-6 items-center justify-center rounded-l text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-            </button>
-            <span className="flex h-7 min-w-[1.25rem] items-center justify-center border-x border-white/[0.04] bg-surface/50 px-1 font-mono text-xs tabular-nums text-text-muted">
-              {columns}
-            </span>
-            <button
-              onClick={() => setColumns(Math.min(12, columns + 1))}
-              className="flex h-7 w-6 items-center justify-center rounded-r text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10"><path d="M5 2v6M2 5h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-            </button>
-          </div>
-
-          <Separator />
-
-          {/* View mode toggle */}
-          <div className="flex items-center gap-0 rounded-md border border-white/[0.06] bg-surface/40">
-            {VIEW_MODES.map((mode) => (
-              <Tooltip key={mode.value}>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setViewMode(mode.value)}
-                    className={`flex h-7 w-8 items-center justify-center transition-all ${
-                      viewMode === mode.value
-                        ? 'bg-surface-active'
-                        : 'hover:bg-surface-hover'
-                    } ${mode.value === 'grid' ? 'rounded-l-[5px]' : ''} ${
-                      mode.value === 'table' ? 'rounded-r-[5px]' : ''
-                    }`}
-                  >
-                    <mode.icon active={viewMode === mode.value} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  {mode.label}
-                </TooltipContent>
-              </Tooltip>
-            ))}
+            {/* Toggles */}
+            <div className="ml-auto flex items-center gap-3">
+              <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shuffle" />
+              <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="Show all" />
+              <PillToggle active={saveQueries} onClick={() => setSaveQueries(!saveQueries)} label="Pin" />
+            </div>
           </div>
         </div>
-      </header>
-    </TooltipProvider>
+      </div>
+
+      {/* Bottom edge */}
+      <div className="h-px bg-white/[0.06]" />
+    </header>
   )
 }
 
-function SearchField({
+// ─── Filter field ──────────────────────────────────────────────────
+function FilterField({
+  label,
   value,
   onChange,
-  placeholder,
-  className = '',
-  accent,
 }: {
+  label: string
   value: string
   onChange: (v: string) => void
-  placeholder: string
-  className?: string
-  accent?: boolean
 }) {
-  const hasValue = value.length > 0
   return (
-    <div className={`relative ${className}`}>
+    <label className="flex items-center gap-1.5">
+      <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim select-none">
+        {label}
+      </span>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`toolbar-field h-7 w-full px-2 font-mono text-xs ${
-          hasValue && accent
-            ? 'border-accent-dim/60 text-accent'
-            : hasValue
-              ? 'border-white/[0.12] text-text'
-              : ''
-        }`}
+        className={`h-7 w-28 rounded-md border bg-transparent px-2 text-sm outline-none transition-colors ${
+          value
+            ? 'border-accent/20 text-text'
+            : 'border-white/[0.06] text-text placeholder:text-text-dim'
+        } focus:border-accent-dim focus:bg-surface`}
       />
-    </div>
+    </label>
   )
 }
 
-function Toggle({
-  checked,
-  onChange,
+// ─── Pill toggle ───────────────────────────────────────────────────
+function PillToggle({
+  active,
+  onClick,
   label,
 }: {
-  checked: boolean
-  onChange: (v: boolean) => void
+  active: boolean
+  onClick: () => void
   label: string
 }) {
   return (
-    <label className="group flex cursor-pointer items-center gap-1.5 select-none">
-      <Checkbox
-        checked={checked}
-        onCheckedChange={(v) => onChange(!!v)}
-        className="h-3 w-3 rounded-[3px] border-text-dim data-[state=checked]:border-accent-muted data-[state=checked]:bg-accent-muted"
-      />
-      <span className={`font-mono text-[11px] tracking-wide transition-colors ${
-        checked ? 'text-text-muted' : 'text-text-dim'
-      } group-hover:text-text-muted`}>
-        {label}
-      </span>
-    </label>
+    <button
+      onClick={onClick}
+      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-all select-none ${
+        active
+          ? 'bg-accent-subtle text-accent'
+          : 'text-text-dim hover:text-text-muted'
+      }`}
+    >
+      {label}
+    </button>
   )
 }
