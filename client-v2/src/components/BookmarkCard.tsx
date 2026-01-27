@@ -54,7 +54,7 @@ function UrlDisplay({ url }: { url: string }) {
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className="block truncate font-mono text-[11px] text-text-dim hover:text-text-muted"
+      className="block truncate font-mono text-[11px] text-text-dim no-underline hover:text-text-muted"
     >
       {url}
     </a>
@@ -171,7 +171,7 @@ export function BookmarkCard({ bookmark, onClick }: BookmarkCardProps) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="line-clamp-2 text-sm font-medium leading-snug text-text underline-offset-2 hover:text-accent hover:underline"
+              className="line-clamp-2 text-sm font-medium leading-snug text-text no-underline hover:text-accent"
             >
               {bookmark.title || bookmark.url}
             </a>
