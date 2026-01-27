@@ -31,22 +31,6 @@ function XIcon({ className = '' }: { className?: string }) {
   )
 }
 
-function MinusIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <path d="M3 7h8" />
-    </svg>
-  )
-}
-
-function PlusIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <path d="M7 3v8M3 7h8" />
-    </svg>
-  )
-}
-
 // ─── Main component ────────────────────────────────────────────────
 export function Toolbar() {
   const isMobile = useIsMobile()
@@ -61,8 +45,6 @@ export function Toolbar() {
 
   const viewMode = useStore((s) => s.viewMode)
   const setViewMode = useStore((s) => s.setViewMode)
-  const columns = useStore((s) => s.columns)
-  const setColumns = useStore((s) => s.setColumns)
   const shuffle = useStore((s) => s.shuffle)
   const setShuffle = useStore((s) => s.setShuffle)
   const showAll = useStore((s) => s.showAll)
@@ -122,7 +104,6 @@ export function Toolbar() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Column auto-sync now handled by BookmarkGrid via useAutoColumns + ResizeObserver
 
   const hasAdvancedFilters = !!debouncedTags || !!debouncedTitle || !!debouncedUrl || !!debouncedDescription || (semanticEnabled && !!debouncedKeywordAlt)
   const hasAnySearch = !!debouncedPrimary || hasAdvancedFilters
@@ -265,26 +246,6 @@ export function Toolbar() {
           ))}
         </div>
 
-        {/* Column stepper — hidden on mobile and non-grid views */}
-        <div className={`items-center rounded-lg bg-surface shrink-0 ${viewMode === 'grid' ? 'hidden sm:flex' : 'hidden'}`}>
-          <button
-            tabIndex={-1}
-            onClick={() => setColumns(Math.max(1, columns - 1))}
-            className="flex h-7 w-7 items-center justify-center rounded-l-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <MinusIcon />
-          </button>
-          <span className="flex h-7 min-w-[1.5rem] items-center justify-center border-x border-white/[0.04] font-mono text-xs tabular-nums text-text-muted">
-            {columns}
-          </span>
-          <button
-            tabIndex={-1}
-            onClick={() => setColumns(Math.min(12, columns + 1))}
-            className="flex h-7 w-7 items-center justify-center rounded-r-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-          >
-            <PlusIcon />
-          </button>
-        </div>
       </div>
 
       {/* ── Mobile controls row ── */}

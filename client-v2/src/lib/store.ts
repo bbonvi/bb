@@ -32,12 +32,10 @@ export interface AppState {
   // UI
   viewMode: 'grid' | 'cards' | 'table'
   columns: number
-  columnsOverridden: boolean
   shuffle: boolean
   showAll: boolean
   setViewMode: (mode: 'grid' | 'cards' | 'table') => void
-  setColumns: (columns: number, manual?: boolean) => void
-  resetColumnsOverride: () => void
+  setColumns: (columns: number) => void
   setShuffle: (shuffle: boolean) => void
   setShowAll: (showAll: boolean) => void
   pinToUrl: () => void
@@ -160,26 +158,14 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // UI
   viewMode: (localStorage.getItem('bb_view_mode') as 'grid' | 'cards' | 'table') || 'grid',
-  columns: Number(localStorage.getItem('bb_columns')) || getResponsiveColumns(),
-  columnsOverridden: !!localStorage.getItem('bb_columns'),
+  columns: getResponsiveColumns(),
   shuffle: false,
   showAll: new URLSearchParams(window.location.search).get('all') === '1',
   setViewMode: (viewMode) => {
     localStorage.setItem('bb_view_mode', viewMode)
     set({ viewMode })
   },
-  setColumns: (columns, manual = true) => {
-    if (manual) {
-      localStorage.setItem('bb_columns', String(columns))
-      set({ columns, columnsOverridden: true })
-    } else {
-      set({ columns })
-    }
-  },
-  resetColumnsOverride: () => {
-    localStorage.removeItem('bb_columns')
-    set({ columnsOverridden: false })
-  },
+  setColumns: (columns) => set({ columns }),
   setShuffle: (shuffle) => set({ shuffle }),
   setShowAll: (showAll) => set({ showAll, bookmarksFresh: false }),
   pinToUrl: () => {

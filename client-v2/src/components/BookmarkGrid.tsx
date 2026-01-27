@@ -26,12 +26,9 @@ export function BookmarkGrid() {
 
   // Auto-compute columns from container width
   const autoCols = useAutoColumns(parentRef)
-  const columnsOverridden = useStore((s) => s.columnsOverridden)
-
-  // Sync auto columns → store (unless manually overridden)
   useEffect(() => {
-    if (!columnsOverridden) setColumns(autoCols, false)
-  }, [autoCols, columnsOverridden, setColumns])
+    setColumns(autoCols)
+  }, [autoCols, setColumns])
 
   const rows = useMemo(
     () => chunkArray(displayBookmarks, columns),
