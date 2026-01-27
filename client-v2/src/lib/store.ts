@@ -1,0 +1,197 @@
+import { create } from 'zustand'
+import type {
+  Bookmark,
+  SearchQuery,
+  TaskQueue,
+  Config,
+} from './api'
+
+export interface AppState {
+  // Auth
+  token: string | null
+  setToken: (token: string | null) => void
+
+  // Bookmarks
+  bookmarks: Bookmark[]
+  totalCount: number
+  tags: string[]
+  setBookmarks: (bookmarks: Bookmark[]) => void
+  setTotalCount: (count: number) => void
+  setTags: (tags: string[]) => void
+
+  // Config
+  config: Config | null
+  setConfig: (config: Config) => void
+
+  // Search
+  searchQuery: SearchQuery
+  setSearchQuery: (query: SearchQuery) => void
+  clearSearch: () => void
+
+  // UI
+  viewMode: 'grid' | 'cards' | 'table'
+  columns: number
+  shuffle: boolean
+  showAll: boolean
+  saveQueries: boolean
+  setViewMode: (mode: 'grid' | 'cards' | 'table') => void
+  setColumns: (columns: number) => void
+  setShuffle: (shuffle: boolean) => void
+  setShowAll: (showAll: boolean) => void
+  setSaveQueries: (saveQueries: boolean) => void
+
+  // Detail modal
+  detailModalId: number | null
+  setDetailModalId: (id: number | null) => void
+
+  // Settings
+  settingsOpen: boolean
+  setSettingsOpen: (open: boolean) => void
+
+  // Workspace
+  workspaces: Workspace[]
+  activeWorkspaceId: string | null
+  workspacesAvailable: boolean // feature detection: false if 404 from /api/workspaces
+  setWorkspaces: (workspaces: Workspace[]) => void
+  setActiveWorkspaceId: (id: string | null) => void
+  setWorkspacesAvailable: (available: boolean) => void
+
+  // Task queue
+  taskQueue: TaskQueue
+  setTaskQueue: (queue: TaskQueue) => void
+
+  // Semantic
+  semanticEnabled: boolean
+  setSemanticEnabled: (enabled: boolean) => void
+
+  // Optimistic updates (§9.1, §9.2)
+  dirtyIds: Set<number>
+  markDirty: (id: number) => void
+  clearDirty: (id: number) => void
+
+  // Stale poll suppression (§9.1)
+  pollSequence: number
+  nextPollSequence: () => number
+
+  // Shuffle seed (§8) — generated once per session
+  shuffleSeed: number
+
+  // Loading state
+  initialLoadComplete: boolean
+  setInitialLoadComplete: (done: boolean) => void
+}
+
+export interface Workspace {
+  id: string
+  name: string
+  filters: {
+    tag_whitelist: string[]
+    tag_blacklist: string[]
+    url_pattern: string | null
+    title_pattern: string | null
+    description_pattern: string | null
+    any_field_pattern: string | null
+  }
+  view_prefs: {
+    mode: 'grid' | 'cards' | 'table' | null
+    columns: number | null
+  }
+}
+
+const emptySearchQuery: SearchQuery = {}
+
+export const useStore = create<AppState>()((set, get) => ({
+  // Auth
+  token: localStorage.getItem('bb_token'),
+  setToken: (token) => {
+    if (token) {
+      localStorage.setItem('bb_token', token)
+    } else {
+      localStorage.removeItem('bb_token')
+    }
+    set({ token })
+  },
+
+  // Bookmarks
+  bookmarks: [],
+  totalCount: 0,
+  tags: [],
+  setBookmarks: (bookmarks) => set({ bookmarks }),
+  setTotalCount: (totalCount) => set({ totalCount }),
+  setTags: (tags) => set({ tags }),
+
+  // Config
+  config: null,
+  setConfig: (config) => set({ config }),
+
+  // Search
+  searchQuery: emptySearchQuery,
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
+  clearSearch: () => set({ searchQuery: emptySearchQuery }),
+
+  // UI
+  viewMode: 'grid',
+  columns: 3,
+  shuffle: false,
+  showAll: false,
+  saveQueries: false,
+  setViewMode: (viewMode) => set({ viewMode }),
+  setColumns: (columns) => set({ columns }),
+  setShuffle: (shuffle) => set({ shuffle }),
+  setShowAll: (showAll) => set({ showAll }),
+  setSaveQueries: (saveQueries) => set({ saveQueries }),
+
+  // Detail modal
+  detailModalId: null,
+  setDetailModalId: (detailModalId) => set({ detailModalId }),
+
+  // Settings
+  settingsOpen: false,
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+
+  // Workspace
+  workspaces: [],
+  activeWorkspaceId: null,
+  workspacesAvailable: false,
+  setWorkspaces: (workspaces) => set({ workspaces }),
+  setActiveWorkspaceId: (activeWorkspaceId) => set({ activeWorkspaceId }),
+  setWorkspacesAvailable: (workspacesAvailable) => set({ workspacesAvailable }),
+
+  // Task queue
+  taskQueue: { queue: [], now: 0 },
+  setTaskQueue: (taskQueue) => set({ taskQueue }),
+
+  // Semantic
+  semanticEnabled: false,
+  setSemanticEnabled: (semanticEnabled) => set({ semanticEnabled }),
+
+  // Optimistic updates
+  dirtyIds: new Set(),
+  markDirty: (id) =>
+    set((state) => {
+      const next = new Set(state.dirtyIds)
+      next.add(id)
+      return { dirtyIds: next }
+    }),
+  clearDirty: (id) =>
+    set((state) => {
+      const next = new Set(state.dirtyIds)
+      next.delete(id)
+      return { dirtyIds: next }
+    }),
+
+  // Stale poll suppression
+  pollSequence: 0,
+  nextPollSequence: () => {
+    const seq = get().pollSequence + 1
+    set({ pollSequence: seq })
+    return seq
+  },
+
+  // Shuffle seed
+  shuffleSeed: Math.floor(Math.random() * 2147483647),
+
+  // Loading
+  initialLoadComplete: false,
+  setInitialLoadComplete: (initialLoadComplete) => set({ initialLoadComplete }),
+}))
