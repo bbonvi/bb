@@ -4,6 +4,7 @@ import { BookmarkGrid } from '@/components/BookmarkGrid'
 import { BookmarkList } from '@/components/BookmarkList'
 import { BookmarkTable } from '@/components/BookmarkTable'
 import { BookmarkDetailModal } from '@/components/BookmarkDetailModal'
+import { CreateBookmarkModal } from '@/components/CreateBookmarkModal'
 import { usePolling } from '@/hooks/usePolling'
 import { useStore } from '@/lib/store'
 
@@ -29,6 +30,7 @@ function AppShell() {
         {viewMode === 'table' && <BookmarkTable />}
       </main>
       <BookmarkDetailModal />
+      <CreateBookmarkModal />
     </div>
   )
 }

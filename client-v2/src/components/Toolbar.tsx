@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Plus } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useIsMobile, useResponsiveColumns } from '@/hooks/useResponsive'
@@ -67,6 +68,7 @@ export function Toolbar() {
   const showAll = useStore((s) => s.showAll)
   const setShowAll = useStore((s) => s.setShowAll)
   const pinToUrl = useStore((s) => s.pinToUrl)
+  const setCreateModalOpen = useStore((s) => s.setCreateModalOpen)
 
   // Primary search — semantic if enabled, keyword otherwise
   const primaryDelay = semanticEnabled ? 500 : 300
@@ -200,6 +202,17 @@ export function Toolbar() {
             <XIcon />
           </button>
         )}
+
+        {/* New bookmark */}
+        <button
+          tabIndex={-1}
+          onClick={() => setCreateModalOpen(true)}
+          className="flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+          title="New bookmark (Ctrl+N)"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">New</span>
+        </button>
 
         {/* Divider — hidden on mobile */}
         <div className="hidden h-5 w-px bg-white/[0.06] sm:block shrink-0" />
