@@ -42,7 +42,9 @@ export interface AppState {
 
   // Detail modal
   detailModalId: number | null
+  detailModalEdit: boolean
   setDetailModalId: (id: number | null) => void
+  openDetailInEditMode: (id: number) => void
 
   // Create modal
   createModalOpen: boolean
@@ -185,7 +187,9 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // Detail modal
   detailModalId: null,
-  setDetailModalId: (detailModalId) => set({ detailModalId }),
+  detailModalEdit: false,
+  setDetailModalId: (detailModalId) => set({ detailModalId, detailModalEdit: false }),
+  openDetailInEditMode: (id) => set({ detailModalId: id, detailModalEdit: true }),
 
   // Create modal
   createModalOpen: false,

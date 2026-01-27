@@ -1,6 +1,6 @@
 import type { Bookmark } from '@/lib/api'
 import { useStore } from '@/lib/store'
-import { Thumbnail, Favicon, UrlDisplay, Tags, Description } from './bookmark-parts'
+import { Thumbnail, Favicon, UrlDisplay, Tags, Description, CardActions } from './bookmark-parts'
 
 interface BookmarkCardProps {
   bookmark: Bookmark
@@ -14,8 +14,9 @@ export function BookmarkCard({ bookmark, onClick }: BookmarkCardProps) {
   return (
     <article
       onClick={onClick}
-      className="group flex flex-col overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-[border-color] duration-150 hover:border-white/[0.15] cursor-default"
+      className="group relative flex flex-col overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-[border-color] duration-150 hover:border-white/[0.15] cursor-default"
     >
+      <CardActions bookmarkId={bookmark.id} />
       <Thumbnail bookmark={bookmark} className="h-36 w-full rounded-t-lg" />
       <div className="flex flex-col gap-1.5 p-3">
         <a

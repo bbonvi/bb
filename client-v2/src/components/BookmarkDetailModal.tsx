@@ -24,6 +24,7 @@ import {
 
 export function BookmarkDetailModal() {
   const detailModalId = useStore((s) => s.detailModalId)
+  const detailModalEdit = useStore((s) => s.detailModalEdit)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const bookmarks = useStore((s) => s.bookmarks)
   const config = useStore((s) => s.config)
@@ -84,7 +85,17 @@ export function BookmarkDetailModal() {
 
   // Reset state when modal opens/closes or bookmark changes
   useEffect(() => {
-    setEditing(false)
+    if (detailModalEdit && bookmark) {
+      setEditForm({
+        title: bookmark.title,
+        description: bookmark.description,
+        url: bookmark.url,
+        tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)).join(', '),
+      })
+      setEditing(true)
+    } else {
+      setEditing(false)
+    }
     setConfirmDelete(false)
     setError(null)
   }, [detailModalId])

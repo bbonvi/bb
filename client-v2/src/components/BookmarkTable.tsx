@@ -1,7 +1,7 @@
 import { useRef, useCallback, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
-import { Favicon, TagChip } from './bookmark-parts'
+import { Favicon, TagChip, CardActions } from './bookmark-parts'
 import { ViewEmptyState } from './BookmarkGrid'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import type { Bookmark } from '@/lib/api'
@@ -80,8 +80,9 @@ function TableRow({
   return (
     <div
       onClick={onClick}
-      className="flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover"
+      className="group relative flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover"
     >
+      <CardActions bookmarkId={bookmark.id} />
       {/* Title */}
       <div className="min-w-0 flex-[3]">
         <a

@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { Bookmark } from '@/lib/api'
-import { fileUrl } from '@/lib/api'
+import { fileUrl, deleteBookmark } from '@/lib/api'
 import { useStore } from '@/lib/store'
+import { Pencil, Trash2 } from 'lucide-react'
 
 // ─── Thumbnail with styled fallback ────────────────────────────────
 export function Thumbnail({
@@ -191,6 +192,100 @@ export function Description({
           {expanded ? 'Show less' : 'Show more'}
         </button>
       )}
+    </div>
+  )
+}
+
+// ─── Card action buttons (hover overlay) ──────────────────────────
+export function CardActions({ bookmarkId }: { bookmarkId: number }) {
+  const openDetailInEditMode = useStore((s) => s.openDetailInEditMode)
+  const setBookmarks = useStore((s) => s.setBookmarks)
+  const bookmarks = useStore((s) => s.bookmarks)
+  const detailModalId = useStore((s) => s.detailModalId)
+  const setDetailModalId = useStore((s) => s.setDetailModalId)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleEdit = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      openDetailInEditMode(bookmarkId)
+    },
+    [bookmarkId, openDetailInEditMode],
+  )
+
+  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    setConfirmDelete(true)
+  }, [])
+
+  const handleConfirmDelete = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setDeleting(true)
+      try {
+        await deleteBookmark(bookmarkId)
+        setBookmarks(bookmarks.filter((b) => b.id !== bookmarkId))
+        if (detailModalId === bookmarkId) setDetailModalId(null)
+      } catch {
+        // Silently fail — next poll will restore if needed
+      } finally {
+        setDeleting(false)
+        setConfirmDelete(false)
+      }
+    },
+    [bookmarkId, bookmarks, detailModalId, setBookmarks, setDetailModalId],
+  )
+
+  const handleCancelDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    setConfirmDelete(false)
+  }, [])
+
+  if (confirmDelete) {
+    return (
+      <div
+        className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-lg bg-bg/90 backdrop-blur-sm"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="text-sm text-danger">Delete?</span>
+        <button
+          tabIndex={-1}
+          onClick={handleConfirmDelete}
+          disabled={deleting}
+          className="rounded bg-danger px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-danger/80 disabled:opacity-50"
+        >
+          {deleting ? '...' : 'Yes'}
+        </button>
+        <button
+          tabIndex={-1}
+          onClick={handleCancelDelete}
+          className="rounded bg-surface-hover px-2 py-1 text-xs font-medium text-text-muted transition-colors hover:text-text"
+        >
+          No
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <button
+        tabIndex={-1}
+        onClick={handleEdit}
+        className="rounded bg-bg/80 p-1.5 text-text-muted backdrop-blur-sm transition-colors hover:bg-surface-hover hover:text-text"
+        title="Edit"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+      <button
+        tabIndex={-1}
+        onClick={handleDeleteClick}
+        className="rounded bg-bg/80 p-1.5 text-text-muted backdrop-blur-sm transition-colors hover:bg-danger/20 hover:text-danger"
+        title="Delete"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   )
 }

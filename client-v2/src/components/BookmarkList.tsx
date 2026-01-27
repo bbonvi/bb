@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
-import { Favicon, Thumbnail, UrlDisplay, Tags, Description } from './bookmark-parts'
+import { Favicon, Thumbnail, UrlDisplay, Tags, Description, CardActions } from './bookmark-parts'
 import { ViewEmptyState } from './BookmarkGrid'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import type { Bookmark } from '@/lib/api'
@@ -71,8 +71,9 @@ function ListCard({
   return (
     <article
       onClick={onClick}
-      className="group flex overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-[border-color] duration-150 hover:border-white/[0.15] cursor-default"
+      className="group relative flex overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-[border-color] duration-150 hover:border-white/[0.15] cursor-default"
     >
+      <CardActions bookmarkId={bookmark.id} />
       {/* Thumbnail on the left */}
       <div className="hidden shrink-0 sm:block">
         <Thumbnail
