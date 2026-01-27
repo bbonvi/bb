@@ -4,7 +4,7 @@ import { useStore } from '@/lib/store'
 import { BookmarkCard } from './BookmarkCard'
 import { EmptyState } from './bookmark-parts'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
-import { useAutoColumns } from '@/hooks/useResponsive'
+import { useAutoColumns, MAX_GRID_WIDTH } from '@/hooks/useResponsive'
 
 const ROW_GAP = 16
 const ESTIMATED_ROW_HEIGHT = 330
@@ -79,8 +79,8 @@ export function BookmarkGrid() {
   return (
     <div ref={parentRef} className="h-full overflow-auto p-4">
       <div
-        className="relative w-full"
-        style={{ height: virtualizer.getTotalSize() }}
+        className="relative mx-auto w-full"
+        style={{ height: virtualizer.getTotalSize(), maxWidth: MAX_GRID_WIDTH }}
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const row = rows[virtualRow.index]

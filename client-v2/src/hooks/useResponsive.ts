@@ -13,9 +13,10 @@ export function useIsMobile(): boolean {
   return mobile
 }
 
-const MIN_CARD_WIDTH = 300
-const GRID_GAP = 16
-const MAX_COLUMNS = 8
+export const MIN_CARD_WIDTH = 300
+export const GRID_GAP = 16
+export const MAX_COLUMNS = 8
+export const MAX_GRID_WIDTH = MAX_COLUMNS * MIN_CARD_WIDTH + (MAX_COLUMNS - 1) * GRID_GAP
 
 /** Compute column count from container width */
 export function columnsForWidth(width: number): number {
