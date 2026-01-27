@@ -141,6 +141,9 @@ export function BulkEditModal({
 
       const affected = await searchUpdateBookmarks(query, update)
       setResult(affected)
+      // Trigger immediate poll refresh by re-setting the same query (new reference)
+      const { searchQuery: sq } = useStore.getState()
+      useStore.getState().setSearchQuery({ ...sq })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Bulk update failed')
     } finally {
@@ -326,6 +329,8 @@ export function BulkDeleteModal({
       const query = toBulkQuery(searchQuery)
       const deleted = await searchDeleteBookmarks(query)
       setResult(deleted)
+      const { searchQuery: sq } = useStore.getState()
+      useStore.getState().setSearchQuery({ ...sq })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Bulk delete failed')
     } finally {
