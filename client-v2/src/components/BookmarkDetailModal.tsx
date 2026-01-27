@@ -10,13 +10,11 @@ import { useStore } from '@/lib/store'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { updateBookmark, deleteBookmark, refreshMetadata, normalizeTags } from '@/lib/api'
 import type { Bookmark } from '@/lib/api'
-import { Thumbnail, Favicon, Tags, UrlDisplay } from './bookmark-parts'
+import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton } from './bookmark-parts'
 import {
   ChevronLeft,
   ChevronRight,
   Pencil,
-  Trash2,
-  CircleHelp,
   RefreshCw,
   X,
   Check,
@@ -40,7 +38,6 @@ export function BookmarkDetailModal() {
   const [editForm, setEditForm] = useState({ title: '', description: '', url: '', tags: '' })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -64,7 +61,6 @@ export function BookmarkDetailModal() {
       const nextIdx = currentIndex + direction
       if (nextIdx >= 0 && nextIdx < displayBookmarks.length) {
         setEditing(false)
-        setConfirmDelete(false)
         setError(null)
         setDetailModalId(displayBookmarks[nextIdx].id)
       }
@@ -85,7 +81,6 @@ export function BookmarkDetailModal() {
     } else {
       setEditing(false)
     }
-    setConfirmDelete(false)
     setError(null)
   }, [detailModalId])
 
@@ -142,7 +137,6 @@ export function BookmarkDetailModal() {
       setError(e instanceof Error ? e.message : 'Failed to delete')
     } finally {
       setDeleting(false)
-      setConfirmDelete(false)
     }
   }, [bookmark, bookmarks, setBookmarks, setDetailModalId])
 
@@ -266,20 +260,7 @@ export function BookmarkDetailModal() {
             {!editing && (
               <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-3 sm:px-6">
                 <div className="flex items-center gap-2">
-                  <button
-                    tabIndex={-1}
-                    onClick={confirmDelete ? handleDelete : () => setConfirmDelete(true)}
-                    onMouseLeave={() => setConfirmDelete(false)}
-                    disabled={deleting}
-                    className={`rounded p-1.5 transition-colors disabled:opacity-50 ${
-                      confirmDelete
-                        ? 'bg-danger/10 text-danger'
-                        : 'text-text-muted hover:bg-danger/10 hover:text-danger'
-                    }`}
-                    title={confirmDelete ? 'Click again to confirm' : 'Delete'}
-                  >
-                    {confirmDelete ? <CircleHelp className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
-                  </button>
+                  <DeleteButton onDelete={handleDelete} iconClass="h-4 w-4" />
                 </div>
                 <div className="flex items-center gap-2">
                   <button

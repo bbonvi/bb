@@ -196,6 +196,59 @@ export function Description({
   )
 }
 
+// ─── Double-click delete button ────────────────────────────────────
+// First click: trash → question mark. Second click: executes delete.
+// Mouse leave resets to trash icon.
+export function DeleteButton({
+  onDelete,
+  iconClass = 'h-3.5 w-3.5',
+  className = '',
+  stopPropagation = false,
+}: {
+  onDelete: () => void | Promise<void>
+  iconClass?: string
+  className?: string
+  stopPropagation?: boolean
+}) {
+  const [armed, setArmed] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const handleClick = useCallback(
+    async (e: React.MouseEvent) => {
+      if (stopPropagation) e.stopPropagation()
+      if (!armed) {
+        setArmed(true)
+        return
+      }
+      setBusy(true)
+      try {
+        await onDelete()
+      } finally {
+        setBusy(false)
+        setArmed(false)
+      }
+    },
+    [armed, onDelete, stopPropagation],
+  )
+
+  return (
+    <button
+      tabIndex={-1}
+      onClick={handleClick}
+      onMouseLeave={() => setArmed(false)}
+      disabled={busy}
+      className={`rounded p-1.5 transition-colors disabled:opacity-50 ${
+        armed
+          ? 'bg-danger/20 text-danger'
+          : 'text-text-muted hover:bg-danger/20 hover:text-danger'
+      } ${className}`}
+      title={armed ? 'Click again to confirm' : 'Delete'}
+    >
+      {armed ? <CircleHelp className={iconClass} /> : <Trash2 className={iconClass} />}
+    </button>
+  )
+}
+
 // ─── Card action buttons (hover overlay) ──────────────────────────
 export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: number; variant?: 'card' | 'row' }) {
   const openDetailInEditMode = useStore((s) => s.openDetailInEditMode)
@@ -203,8 +256,6 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
   const bookmarks = useStore((s) => s.bookmarks)
   const detailModalId = useStore((s) => s.detailModalId)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
   const handleEdit = useCallback(
     (e: React.MouseEvent) => {
@@ -214,27 +265,11 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
     [bookmarkId, openDetailInEditMode],
   )
 
-  const handleDeleteClick = useCallback(
-    async (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (!confirmDelete) {
-        setConfirmDelete(true)
-        return
-      }
-      setDeleting(true)
-      try {
-        await deleteBookmark(bookmarkId)
-        setBookmarks(bookmarks.filter((b) => b.id !== bookmarkId))
-        if (detailModalId === bookmarkId) setDetailModalId(null)
-      } catch {
-        // Silently fail — next poll will restore if needed
-      } finally {
-        setDeleting(false)
-        setConfirmDelete(false)
-      }
-    },
-    [confirmDelete, bookmarkId, bookmarks, detailModalId, setBookmarks, setDetailModalId],
-  )
+  const handleDelete = useCallback(async () => {
+    await deleteBookmark(bookmarkId)
+    setBookmarks(bookmarks.filter((b) => b.id !== bookmarkId))
+    if (detailModalId === bookmarkId) setDetailModalId(null)
+  }, [bookmarkId, bookmarks, detailModalId, setBookmarks, setDetailModalId])
 
   return (
     <div className={`absolute right-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 ${variant === 'card' ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
@@ -246,20 +281,11 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
-      <button
-        tabIndex={-1}
-        onClick={handleDeleteClick}
-        onMouseLeave={() => setConfirmDelete(false)}
-        disabled={deleting}
-        className={`rounded p-1.5 backdrop-blur-sm transition-colors disabled:opacity-50 ${
-          confirmDelete
-            ? 'bg-danger/20 text-danger'
-            : 'bg-bg/80 text-text-muted hover:bg-danger/20 hover:text-danger'
-        }`}
-        title={confirmDelete ? 'Click again to confirm' : 'Delete'}
-      >
-        {confirmDelete ? <CircleHelp className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
-      </button>
+      <DeleteButton
+        onDelete={handleDelete}
+        stopPropagation
+        className="bg-bg/80 backdrop-blur-sm"
+      />
     </div>
   )
 }
