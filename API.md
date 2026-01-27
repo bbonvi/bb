@@ -37,8 +37,7 @@ Search for bookmarks with optional semantic ranking.
   "exact": false,
   "semantic": "find by meaning",
   "threshold": 0.35,
-  "limit": 50,
-  "offset": 0
+  "limit": 50
 }
 ```
 
@@ -56,7 +55,8 @@ All fields are optional. When `semantic` is provided:
     "title": "Example",
     "description": "An example bookmark",
     "tags": ["example", "test"],
-    "created_at": "2024-01-01T00:00:00Z"
+    "image_id": "abc123.png",
+    "icon_id": "def456.png"
   }
 ]
 ```
