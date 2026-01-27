@@ -145,11 +145,12 @@ export function Toolbar() {
     if (all === '1' || all === 'true') setShowAll(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Responsive columns on mount
+  // Responsive columns — auto-sync unless user manually overrode
   const responsiveCols = useResponsiveColumns()
+  const columnsOverridden = useRef(false)
   useEffect(() => {
-    setColumns(responsiveCols)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!columnsOverridden.current) setColumns(responsiveCols)
+  }, [responsiveCols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasAdvancedFilters = !!debouncedTags || !!debouncedTitle || !!debouncedUrl || !!debouncedDescription || (semanticEnabled && !!debouncedKeywordAlt)
   const hasAnySearch = !!debouncedPrimary || hasAdvancedFilters
@@ -252,7 +253,7 @@ export function Toolbar() {
         <div className="hidden sm:flex items-center rounded-lg bg-surface shrink-0">
           <button
             tabIndex={-1}
-            onClick={() => setColumns(Math.max(1, columns - 1))}
+            onClick={() => { columnsOverridden.current = true; setColumns(Math.max(1, columns - 1)) }}
             className="flex h-7 w-7 items-center justify-center rounded-l-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
             <MinusIcon />
@@ -262,7 +263,7 @@ export function Toolbar() {
           </span>
           <button
             tabIndex={-1}
-            onClick={() => setColumns(Math.min(12, columns + 1))}
+            onClick={() => { columnsOverridden.current = true; setColumns(Math.min(12, columns + 1)) }}
             className="flex h-7 w-7 items-center justify-center rounded-r-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
             <PlusIcon />
