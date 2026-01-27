@@ -125,7 +125,7 @@ export function Toolbar() {
 
   // Responsive columns — auto-sync unless user manually overrode
   const responsiveCols = useResponsiveColumns()
-  const columnsOverridden = useRef(false)
+  const columnsOverridden = useRef(!!localStorage.getItem('bb_columns'))
   useEffect(() => {
     if (!columnsOverridden.current) setColumns(responsiveCols)
   }, [responsiveCols]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -227,8 +227,8 @@ export function Toolbar() {
           ))}
         </div>
 
-        {/* Column stepper — hidden on mobile */}
-        <div className="hidden sm:flex items-center rounded-lg bg-surface shrink-0">
+        {/* Column stepper — hidden on mobile and non-grid views */}
+        <div className={`items-center rounded-lg bg-surface shrink-0 ${viewMode === 'grid' ? 'hidden sm:flex' : 'hidden'}`}>
           <button
             tabIndex={-1}
             onClick={() => { columnsOverridden.current = true; setColumns(Math.max(1, columns - 1)) }}

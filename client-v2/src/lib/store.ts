@@ -130,14 +130,17 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // UI
   viewMode: (localStorage.getItem('bb_view_mode') as 'grid' | 'cards' | 'table') || 'grid',
-  columns: 3,
+  columns: Number(localStorage.getItem('bb_columns')) || 4,
   shuffle: false,
   showAll: new URLSearchParams(window.location.search).get('all') === '1',
   setViewMode: (viewMode) => {
     localStorage.setItem('bb_view_mode', viewMode)
     set({ viewMode })
   },
-  setColumns: (columns) => set({ columns }),
+  setColumns: (columns) => {
+    localStorage.setItem('bb_columns', String(columns))
+    set({ columns })
+  },
   setShuffle: (shuffle) => set({ shuffle }),
   setShowAll: (showAll) => set({ showAll }),
   pinToUrl: () => {

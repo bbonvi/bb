@@ -24,11 +24,11 @@ export function useResponsiveColumns(): number {
 }
 
 function getColumns(): number {
-  if (typeof window === 'undefined') return 3
+  if (typeof window === 'undefined') return 4
   const w = window.innerWidth
   if (w < 640) return 1
-  if (w < 1024) return 2
-  if (w < 1440) return 3
-  if (w < 1920) return 4
+  if (w < 900) return 2
+  if (w < 1200) return 3
+  if (w < 1800) return 4
   return 5
 }
