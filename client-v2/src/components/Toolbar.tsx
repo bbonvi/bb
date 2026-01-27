@@ -1,7 +1,5 @@
 import { useEffect, useCallback } from 'react'
 import { useStore } from '@/lib/store'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Tooltip,
@@ -13,10 +11,41 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import type { SearchQuery } from '@/lib/api'
 
 const VIEW_MODES = [
-  { value: 'grid' as const, label: 'Grid', icon: '⊞' },
-  { value: 'cards' as const, label: 'Cards', icon: '☰' },
-  { value: 'table' as const, label: 'Table', icon: '▤' },
+  { value: 'grid' as const, label: 'Grid', icon: GridIcon },
+  { value: 'cards' as const, label: 'Cards', icon: CardsIcon },
+  { value: 'table' as const, label: 'Table', icon: TableIcon },
 ]
+
+function GridIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="1" y="1" width="6" height="6" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
+      <rect x="9" y="1" width="6" height="6" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
+      <rect x="1" y="9" width="6" height="6" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
+      <rect x="9" y="9" width="6" height="6" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
+    </svg>
+  )
+}
+
+function CardsIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="1" y="1" width="14" height="4" rx="1" className={active ? 'fill-accent' : 'fill-text-muted'} />
+      <rect x="1" y="7" width="14" height="4" rx="1" className={active ? 'fill-accent/60' : 'fill-text-dim'} />
+      <rect x="1" y="13" width="14" height="2" rx="1" className={active ? 'fill-accent/30' : 'fill-text-dim/60'} />
+    </svg>
+  )
+}
+
+function TableIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      {[1, 5, 9, 13].map((y) => (
+        <rect key={y} x="1" y={y} width="14" height="2" rx="0.5" className={active ? 'fill-accent' : 'fill-text-muted'} />
+      ))}
+    </svg>
+  )
+}
 
 function useResponsiveColumns(): number {
   if (typeof window === 'undefined') return 3
@@ -26,6 +55,10 @@ function useResponsiveColumns(): number {
   if (w < 1440) return 3
   if (w < 1920) return 4
   return 5
+}
+
+function Separator() {
+  return <div className="mx-1 h-6 w-px bg-white/[0.06]" />
 }
 
 export function Toolbar() {
@@ -46,7 +79,6 @@ export function Toolbar() {
   const saveQueries = useStore((s) => s.saveQueries)
   const setSaveQueries = useStore((s) => s.setSaveQueries)
 
-  // Debounced search fields
   const [debouncedSemantic, setLocalSemantic, localSemantic] =
     useDebouncedValue(searchQuery.semantic ?? '', 500)
   const [debouncedKeyword, setLocalKeyword, localKeyword] =
@@ -60,7 +92,6 @@ export function Toolbar() {
   const [debouncedDescription, setLocalDescription, localDescription] =
     useDebouncedValue(searchQuery.description ?? '', 300)
 
-  // Apply debounced values to store
   useEffect(() => {
     const query: SearchQuery = {}
     if (debouncedSemantic) query.semantic = debouncedSemantic
@@ -80,7 +111,6 @@ export function Toolbar() {
     setSearchQuery,
   ])
 
-  // Save queries to URL params
   useEffect(() => {
     if (!saveQueries) return
     const url = new URL(window.location.href)
@@ -94,7 +124,6 @@ export function Toolbar() {
     window.history.replaceState({}, '', url)
   }, [saveQueries, debouncedTags, debouncedTitle, debouncedUrl, debouncedDescription, showAll])
 
-  // Restore queries from URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const tags = params.get('tags') ?? ''
@@ -109,7 +138,6 @@ export function Toolbar() {
     if (all === '1' || all === 'true') setShowAll(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Set responsive column default on mount
   useEffect(() => {
     setColumns(useResponsiveColumns())
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -133,146 +161,198 @@ export function Toolbar() {
     setLocalDescription('')
   }, [setLocalSemantic, setLocalKeyword, setLocalTags, setLocalTitle, setLocalUrl, setLocalDescription])
 
-  const inputClass =
-    'h-8 bg-surface border-border text-text placeholder:text-text-muted text-sm focus-visible:ring-1 focus-visible:ring-ring'
-
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="sticky top-0 z-40 flex flex-wrap items-center gap-2 border-b border-border bg-bg/80 px-4 py-3 backdrop-blur-xl">
-        {/* Search fields */}
-        <div className="flex flex-wrap items-center gap-2">
-          {semanticEnabled && (
-            <Input
-              value={localSemantic}
-              onChange={(e) => setLocalSemantic(e.target.value)}
-              placeholder="Semantic…"
-              className={inputClass + ' w-36'}
-            />
-          )}
-          <Input
-            value={localKeyword}
-            onChange={(e) => setLocalKeyword(e.target.value)}
-            placeholder="Keyword"
-            className={inputClass + ' w-28'}
-          />
-          <Input
-            value={localTags}
-            onChange={(e) => setLocalTags(e.target.value)}
-            placeholder="Tags"
-            className={inputClass + ' w-28'}
-          />
-          <Input
-            value={localTitle}
-            onChange={(e) => setLocalTitle(e.target.value)}
-            placeholder="Title"
-            className={inputClass + ' w-24'}
-          />
-          <Input
-            value={localUrl}
-            onChange={(e) => setLocalUrl(e.target.value)}
-            placeholder="URL"
-            className={inputClass + ' w-24'}
-          />
-          <Input
-            value={localDescription}
-            onChange={(e) => setLocalDescription(e.target.value)}
-            placeholder="Description"
-            className={inputClass + ' w-28'}
-          />
-          {hasSearch && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearAllFields}
-              className="h-8 px-2 text-text-muted hover:text-text"
-            >
-              ✕
-            </Button>
-          )}
-        </div>
-
-        {/* Counter */}
-        <span className="text-sm text-text-muted tabular-nums">
-          {matchedCount}/{totalCount}
-        </span>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Toggles */}
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-sm text-text-muted">
-            <Checkbox
-              checked={shuffle}
-              onCheckedChange={(v) => setShuffle(!!v)}
-              className="h-3.5 w-3.5"
-            />
-            Shuffle
-          </label>
-          <label className="flex items-center gap-1.5 text-sm text-text-muted">
-            <Checkbox
-              checked={showAll}
-              onCheckedChange={(v) => setShowAll(!!v)}
-              className="h-3.5 w-3.5"
-            />
-            Show all
-          </label>
-          <label className="flex items-center gap-1.5 text-sm text-text-muted">
-            <Checkbox
-              checked={saveQueries}
-              onCheckedChange={(v) => setSaveQueries(!!v)}
-              className="h-3.5 w-3.5"
-            />
-            Save queries
-          </label>
-        </div>
-
-        {/* Column controls */}
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setColumns(Math.max(1, columns - 1))}
-            className="h-7 w-7 p-0 text-text-muted hover:text-text"
-          >
-            −
-          </Button>
-          <span className="w-4 text-center text-sm tabular-nums text-text-muted">
-            {columns}
+      <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-bg/90 backdrop-blur-xl">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-4 py-2.5">
+          {/* Brand */}
+          <span className="font-mono text-sm font-medium tracking-tight text-accent mr-1 select-none">
+            bb
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setColumns(Math.min(12, columns + 1))}
-            className="h-7 w-7 p-0 text-text-muted hover:text-text"
-          >
-            +
-          </Button>
-        </div>
 
-        {/* View mode toggle */}
-        <div className="flex items-center rounded-md border border-border">
-          {VIEW_MODES.map((mode) => (
-            <Tooltip key={mode.value}>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setViewMode(mode.value)}
-                  className={`px-2 py-1 text-sm transition-colors ${
-                    viewMode === mode.value
-                      ? 'bg-surface text-text'
-                      : 'text-text-muted hover:text-text'
-                  } ${mode.value === 'grid' ? 'rounded-l-md' : ''} ${
-                    mode.value === 'table' ? 'rounded-r-md' : ''
-                  }`}
-                >
-                  {mode.icon}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{mode.label}</TooltipContent>
-            </Tooltip>
-          ))}
+          <Separator />
+
+          {/* Search fields */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {semanticEnabled && (
+              <SearchField
+                value={localSemantic}
+                onChange={setLocalSemantic}
+                placeholder="semantic"
+                className="w-32"
+                accent
+              />
+            )}
+            <SearchField
+              value={localKeyword}
+              onChange={setLocalKeyword}
+              placeholder="keyword"
+              className="w-24"
+            />
+            <SearchField
+              value={localTags}
+              onChange={setLocalTags}
+              placeholder="tags"
+              className="w-24"
+            />
+            <SearchField
+              value={localTitle}
+              onChange={setLocalTitle}
+              placeholder="title"
+              className="w-20"
+            />
+            <SearchField
+              value={localUrl}
+              onChange={setLocalUrl}
+              placeholder="url"
+              className="w-20"
+            />
+            <SearchField
+              value={localDescription}
+              onChange={setLocalDescription}
+              placeholder="desc"
+              className="w-20"
+            />
+            {hasSearch && (
+              <button
+                onClick={clearAllFields}
+                className="ml-0.5 flex h-7 w-7 items-center justify-center rounded text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Counter */}
+          <span className="font-mono text-xs tabular-nums tracking-wide">
+            <span className={hasSearch ? 'text-accent' : 'text-text-muted'}>
+              {matchedCount}
+            </span>
+            <span className="text-text-dim">/</span>
+            <span className="text-text-dim">{totalCount}</span>
+          </span>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Toggles */}
+          <div className="flex items-center gap-2.5">
+            <Toggle checked={shuffle} onChange={setShuffle} label="shfl" />
+            <Toggle checked={showAll} onChange={setShowAll} label="all" />
+            <Toggle checked={saveQueries} onChange={setSaveQueries} label="pin" />
+          </div>
+
+          <Separator />
+
+          {/* Column controls */}
+          <div className="flex items-center gap-0">
+            <button
+              onClick={() => setColumns(Math.max(1, columns - 1))}
+              className="flex h-7 w-6 items-center justify-center rounded-l text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </button>
+            <span className="flex h-7 min-w-[1.25rem] items-center justify-center border-x border-white/[0.04] bg-surface/50 px-1 font-mono text-xs tabular-nums text-text-muted">
+              {columns}
+            </span>
+            <button
+              onClick={() => setColumns(Math.min(12, columns + 1))}
+              className="flex h-7 w-6 items-center justify-center rounded-r text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10"><path d="M5 2v6M2 5h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </button>
+          </div>
+
+          <Separator />
+
+          {/* View mode toggle */}
+          <div className="flex items-center gap-0 rounded-md border border-white/[0.06] bg-surface/40">
+            {VIEW_MODES.map((mode) => (
+              <Tooltip key={mode.value}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setViewMode(mode.value)}
+                    className={`flex h-7 w-8 items-center justify-center transition-all ${
+                      viewMode === mode.value
+                        ? 'bg-surface-active'
+                        : 'hover:bg-surface-hover'
+                    } ${mode.value === 'grid' ? 'rounded-l-[5px]' : ''} ${
+                      mode.value === 'table' ? 'rounded-r-[5px]' : ''
+                    }`}
+                  >
+                    <mode.icon active={viewMode === mode.value} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {mode.label}
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
         </div>
-      </div>
+      </header>
     </TooltipProvider>
+  )
+}
+
+function SearchField({
+  value,
+  onChange,
+  placeholder,
+  className = '',
+  accent,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  className?: string
+  accent?: boolean
+}) {
+  const hasValue = value.length > 0
+  return (
+    <div className={`relative ${className}`}>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`toolbar-field h-7 w-full px-2 font-mono text-xs ${
+          hasValue && accent
+            ? 'border-accent-dim/60 text-accent'
+            : hasValue
+              ? 'border-white/[0.12] text-text'
+              : ''
+        }`}
+      />
+    </div>
+  )
+}
+
+function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  label: string
+}) {
+  return (
+    <label className="group flex cursor-pointer items-center gap-1.5 select-none">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(v) => onChange(!!v)}
+        className="h-3 w-3 rounded-[3px] border-text-dim data-[state=checked]:border-accent-muted data-[state=checked]:bg-accent-muted"
+      />
+      <span className={`font-mono text-[11px] tracking-wide transition-colors ${
+        checked ? 'text-text-muted' : 'text-text-dim'
+      } group-hover:text-text-muted`}>
+        {label}
+      </span>
+    </label>
   )
 }
