@@ -3,6 +3,7 @@ import { Toolbar } from '@/components/Toolbar'
 import { BookmarkGrid } from '@/components/BookmarkGrid'
 import { BookmarkList } from '@/components/BookmarkList'
 import { BookmarkTable } from '@/components/BookmarkTable'
+import { BookmarkDetailModal } from '@/components/BookmarkDetailModal'
 import { usePolling } from '@/hooks/usePolling'
 import { useStore } from '@/lib/store'
 
@@ -27,6 +28,7 @@ function AppShell() {
         {viewMode === 'cards' && <BookmarkList />}
         {viewMode === 'table' && <BookmarkTable />}
       </main>
+      <BookmarkDetailModal />
     </div>
   )
 }
