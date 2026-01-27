@@ -48,19 +48,16 @@ function Favicon({ iconId }: { iconId: string | null }) {
 
 // ─── URL display ───────────────────────────────────────────────────
 function UrlDisplay({ url }: { url: string }) {
-  const display = useMemo(() => {
-    try {
-      const u = new URL(url)
-      return u.hostname + (u.pathname !== '/' ? u.pathname : '')
-    } catch {
-      return url
-    }
-  }, [url])
-
   return (
-    <span className="truncate font-mono text-[11px] text-text-dim">
-      {display}
-    </span>
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="block truncate font-mono text-[11px] text-text-dim hover:text-text-muted"
+    >
+      {url}
+    </a>
   )
 }
 
@@ -174,7 +171,7 @@ export function BookmarkCard({ bookmark, onClick }: BookmarkCardProps) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="line-clamp-2 text-sm font-medium leading-snug text-text hover:text-accent"
+              className="line-clamp-2 text-sm font-medium leading-snug text-text underline-offset-2 hover:text-accent hover:underline"
             >
               {bookmark.title || bookmark.url}
             </a>
