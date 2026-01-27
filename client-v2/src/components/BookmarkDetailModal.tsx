@@ -164,7 +164,7 @@ export function BookmarkDetailModal() {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) setDetailModalId(null) }}>
       <DialogContent
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col gap-0 overflow-hidden bg-surface p-0"
+        className="flex h-[85vh] w-full max-w-2xl flex-col gap-0 overflow-hidden bg-surface p-0"
         showCloseButton={false}
       >
         {bookmark && (

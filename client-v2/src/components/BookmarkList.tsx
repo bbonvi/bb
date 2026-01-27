@@ -71,7 +71,7 @@ function ListCard({
   return (
     <article
       onClick={onClick}
-      className="group flex overflow-hidden rounded-lg border border-white/[0.06] bg-surface"
+      className="group flex overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-[border-color] duration-150 hover:border-white/[0.12] cursor-default"
     >
       {/* Thumbnail on the left */}
       <div className="hidden shrink-0 sm:block">
