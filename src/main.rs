@@ -19,6 +19,7 @@ mod storage;
 #[cfg(test)]
 mod tests;
 mod web;
+mod workspaces;
 
 use cli::{Args, Command};
 

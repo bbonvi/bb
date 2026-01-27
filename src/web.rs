@@ -10,13 +10,14 @@ use crate::{
     eid::Eid,
     metadata::MetaOptions,
     storage::{self, StorageManager},
+    workspaces::{WorkspaceError, WorkspaceStore},
 };
 use anyhow::Context;
 use axum::{
-    extract::{DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::{delete as delete_method, get, post, put},
     Json, Router,
 };
 use base64::Engine;
@@ -28,13 +29,17 @@ use tower_http::services::{ServeDir, ServeFile};
 struct SharedState {
     app_service: Arc<RwLock<AppService>>,
     storage_mgr: Arc<dyn StorageManager>,
+    workspace_store: Arc<RwLock<WorkspaceStore>>,
 }
 
 async fn start_app(app_service: AppService, base_path: &str) {
     let storage_mgr = Arc::new(storage::BackendLocal::new(&format!("{base_path}/uploads")));
+    let workspace_store = WorkspaceStore::load(base_path)
+        .expect("failed to load workspace store");
     let shared_state = Arc::new(RwLock::new(SharedState {
         app_service: Arc::new(RwLock::new(app_service)),
         storage_mgr,
+        workspace_store: Arc::new(RwLock::new(workspace_store)),
     }));
 
     let webui = Router::new()
@@ -77,6 +82,10 @@ async fn start_app(app_service: AppService, base_path: &str) {
         .route("/api/config", post(update_config))
         .route("/api/task_queue", get(task_queue))
         .route("/api/semantic/status", get(semantic_status))
+        .route("/api/workspaces", get(list_workspaces))
+        .route("/api/workspaces", post(create_workspace))
+        .route("/api/workspaces/{id}", put(update_workspace))
+        .route("/api/workspaces/{id}", delete_method(delete_workspace))
         .layer(auth_layer);
 
     // Health endpoint - no auth required (for container health checks)
@@ -166,6 +175,9 @@ pub enum AppError {
     #[error("{message}")]
     ModelUnavailable { message: String },
 
+    #[error("{0}")]
+    Workspace(#[from] WorkspaceError),
+
     #[error("unexpected error: {0:?}")]
     Other(#[from] anyhow::Error),
 }
@@ -184,6 +196,16 @@ impl IntoResponse for AppError {
             }
             AppError::ModelUnavailable { message } => {
                 (StatusCode::SERVICE_UNAVAILABLE, "MODEL_UNAVAILABLE", message.clone())
+            }
+            AppError::Workspace(ref e) => {
+                let status = match e {
+                    WorkspaceError::NotFound(_) => StatusCode::NOT_FOUND,
+                    WorkspaceError::InvalidName
+                    | WorkspaceError::DuplicateName(_)
+                    | WorkspaceError::InvalidPattern { .. } => StatusCode::BAD_REQUEST,
+                    WorkspaceError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                };
+                (status, "WORKSPACE_ERROR", self.to_string())
             }
             AppError::Other(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", self.to_string())
@@ -671,6 +693,66 @@ async fn semantic_status(
     }))
 }
 
+// -- Workspace handlers --
+
+async fn list_workspaces(
+    State(state): State<Arc<RwLock<SharedState>>>,
+) -> Result<axum::Json<Vec<crate::workspaces::Workspace>>, AppError> {
+    let state = state.read().unwrap();
+    let store = state.workspace_store.read().unwrap();
+    Ok(Json(store.list().to_vec()))
+}
+
+#[derive(Deserialize)]
+struct WorkspaceCreateRequest {
+    name: String,
+    #[serde(default)]
+    filters: Option<crate::workspaces::WorkspaceFilters>,
+    #[serde(default)]
+    view_prefs: Option<crate::workspaces::ViewPrefs>,
+}
+
+async fn create_workspace(
+    State(state): State<Arc<RwLock<SharedState>>>,
+    Json(payload): Json<WorkspaceCreateRequest>,
+) -> Result<(StatusCode, axum::Json<crate::workspaces::Workspace>), AppError> {
+    let state = state.read().unwrap();
+    let mut store = state.workspace_store.write().unwrap();
+    let workspace = store.create(payload.name, payload.filters, payload.view_prefs)?;
+    Ok((StatusCode::CREATED, Json(workspace)))
+}
+
+#[derive(Deserialize)]
+struct WorkspaceUpdateRequest {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    filters: Option<crate::workspaces::WorkspaceFilters>,
+    #[serde(default)]
+    view_prefs: Option<crate::workspaces::ViewPrefs>,
+}
+
+async fn update_workspace(
+    State(state): State<Arc<RwLock<SharedState>>>,
+    Path(id): Path<String>,
+    Json(payload): Json<WorkspaceUpdateRequest>,
+) -> Result<axum::Json<crate::workspaces::Workspace>, AppError> {
+    let state = state.read().unwrap();
+    let mut store = state.workspace_store.write().unwrap();
+    let workspace = store.update(&id, payload.name, payload.filters, payload.view_prefs)?;
+    Ok(Json(workspace))
+}
+
+async fn delete_workspace(
+    State(state): State<Arc<RwLock<SharedState>>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let state = state.read().unwrap();
+    let mut store = state.workspace_store.write().unwrap();
+    store.delete(&id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -884,9 +966,13 @@ mod tests {
 
         /// Build a test router with the given app service
         fn test_api_router(app_service: AppService) -> Router {
+            let test_dir = test_dir();
+            let workspace_store = WorkspaceStore::load(test_dir.to_str().unwrap())
+                .expect("failed to load workspace store");
             let shared_state = Arc::new(RwLock::new(SharedState {
                 app_service: Arc::new(RwLock::new(app_service)),
                 storage_mgr: Arc::new(MockStorageManager),
+                workspace_store: Arc::new(RwLock::new(workspace_store)),
             }));
 
             Router::new()
