@@ -229,9 +229,11 @@ function WorkspaceEditor({
   const [descPattern, setDescPattern] = useState(workspace.filters.description_pattern ?? '')
   const [anyFieldPattern, setAnyFieldPattern] = useState(workspace.filters.any_field_pattern ?? '')
 
-  // Related tags
-  const [relatedTags, setRelatedTags] = useState<string[]>([])
-  const [fetchingRelated, setFetchingRelated] = useState(false)
+  // Related tags (separate per list)
+  const [whitelistRelated, setWhitelistRelated] = useState<string[]>([])
+  const [blacklistRelated, setBlacklistRelated] = useState<string[]>([])
+  const [fetchingWhitelistRelated, setFetchingWhitelistRelated] = useState(false)
+  const [fetchingBlacklistRelated, setFetchingBlacklistRelated] = useState(false)
 
   // Reset form when workspace changes
   useEffect(() => {
@@ -242,7 +244,8 @@ function WorkspaceEditor({
     setAnyFieldPattern(workspace.filters.any_field_pattern ?? '')
     setWhitelistInput('')
     setBlacklistInput('')
-    setRelatedTags([])
+    setWhitelistRelated([])
+    setBlacklistRelated([])
   }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered autocomplete suggestions (exclude already-added tags)
@@ -314,30 +317,27 @@ function WorkspaceEditor({
     })
   }
 
-  async function fetchRelatedTags() {
-    if (workspace.filters.tag_whitelist.length === 0) return
-    setFetchingRelated(true)
+  async function fetchRelated(
+    sourceTags: string[],
+    setResult: (tags: string[]) => void,
+    setLoading: (v: boolean) => void,
+  ) {
+    const concrete = sourceTags.filter((t) => !t.includes('*') && !t.includes('?'))
+    if (concrete.length === 0) { setResult([]); return }
+    setLoading(true)
     try {
-      // Fetch all bookmarks matching the whitelist tags
-      const tags = workspace.filters.tag_whitelist.filter((t) => !t.includes('*') && !t.includes('?'))
-      if (tags.length === 0) {
-        setRelatedTags([])
-        return
-      }
-      const bookmarks: Bookmark[] = await searchBookmarks({ tags: tags.join(',') })
-      // Collect all tags from matched bookmarks, excluding already-known tags
+      const bookmarks: Bookmark[] = await searchBookmarks({ tags: concrete.join(',') })
       const relatedSet = new Set<string>()
       for (const bm of bookmarks) {
         for (const t of bm.tags) {
           if (!existingTags.has(t)) relatedSet.add(t)
         }
       }
-      const sorted = Array.from(relatedSet).sort((a, b) => a.localeCompare(b))
-      setRelatedTags(sorted)
+      setResult(Array.from(relatedSet).sort((a, b) => a.localeCompare(b)))
     } catch {
       // ignore
     } finally {
-      setFetchingRelated(false)
+      setLoading(false)
     }
   }
 
@@ -383,6 +383,13 @@ function WorkspaceEditor({
           onRemove={removeWhitelistTag}
           placeholder="Add tag pattern (supports glob: dev/*)"
         />
+        <RelatedTags
+          tags={whitelistRelated}
+          fetching={fetchingWhitelistRelated}
+          disabled={whitelist.length === 0}
+          onFetch={() => fetchRelated(whitelist, setWhitelistRelated, setFetchingWhitelistRelated)}
+          onAdd={addWhitelistTag}
+        />
       </div>
 
       {/* Tag blacklist */}
@@ -399,6 +406,13 @@ function WorkspaceEditor({
           onRemove={removeBlacklistTag}
           placeholder="Add tag to exclude"
         />
+        <RelatedTags
+          tags={blacklistRelated}
+          fetching={fetchingBlacklistRelated}
+          disabled={blacklist.length === 0}
+          onFetch={() => fetchRelated(blacklist, setBlacklistRelated, setFetchingBlacklistRelated)}
+          onAdd={addBlacklistTag}
+        />
       </div>
 
       {/* Regex pattern filters */}
@@ -409,30 +423,6 @@ function WorkspaceEditor({
         <PatternInput label="Any field" value={anyFieldPattern} onChange={setAnyFieldPattern} onBlur={handlePatternBlur} placeholder="regex" />
       </div>
 
-      {/* Fetch related tags */}
-      <div>
-        <button
-          onClick={fetchRelatedTags}
-          disabled={fetchingRelated || workspace.filters.tag_whitelist.length === 0}
-          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3 w-3 ${fetchingRelated ? 'animate-spin' : ''}`} />
-          Fetch related tags
-        </button>
-        {relatedTags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {relatedTags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => addWhitelistTag(tag)}
-                className="rounded px-1.5 py-0.5 text-[11px] text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }
@@ -511,6 +501,48 @@ function TagListEditor({
                 <X className="h-2.5 w-2.5" />
               </button>
             </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Related Tags ───────────────────────────────────────────────
+
+function RelatedTags({
+  tags,
+  fetching,
+  disabled,
+  onFetch,
+  onAdd,
+}: {
+  tags: string[]
+  fetching: boolean
+  disabled: boolean
+  onFetch: () => void
+  onAdd: (tag: string) => void
+}) {
+  return (
+    <div className="mt-1.5">
+      <button
+        onClick={onFetch}
+        disabled={fetching || disabled}
+        className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-text-dim transition-colors hover:bg-surface-hover hover:text-text-muted disabled:opacity-40"
+      >
+        <RefreshCw className={`h-2.5 w-2.5 ${fetching ? 'animate-spin' : ''}`} />
+        Related tags
+      </button>
+      {tags.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <button
+              key={tag}
+              onClick={() => onAdd(tag)}
+              className="rounded px-1.5 py-0.5 text-[11px] text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+            >
+              {tag}
+            </button>
           ))}
         </div>
       )}
