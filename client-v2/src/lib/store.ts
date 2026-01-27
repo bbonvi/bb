@@ -52,6 +52,12 @@ export interface AppState {
   setCreateModalOpen: (open: boolean) => void
   openCreateWithUrl: (url: string) => void
 
+  // Bulk operations
+  bulkEditOpen: boolean
+  bulkDeleteOpen: boolean
+  setBulkEditOpen: (open: boolean) => void
+  setBulkDeleteOpen: (open: boolean) => void
+
   // Settings
   settingsOpen: boolean
   setSettingsOpen: (open: boolean) => void
@@ -196,6 +202,12 @@ export const useStore = create<AppState>()((set, get) => ({
   createModalInitialUrl: '',
   setCreateModalOpen: (createModalOpen) => set({ createModalOpen, createModalInitialUrl: '' }),
   openCreateWithUrl: (url) => set({ createModalOpen: true, createModalInitialUrl: url }),
+
+  // Bulk operations
+  bulkEditOpen: false,
+  bulkDeleteOpen: false,
+  setBulkEditOpen: (bulkEditOpen) => set({ bulkEditOpen }),
+  setBulkDeleteOpen: (bulkDeleteOpen) => set({ bulkDeleteOpen }),
 
   // Settings
   settingsOpen: false,

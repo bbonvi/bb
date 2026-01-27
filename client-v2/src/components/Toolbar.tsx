@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useIsMobile, useResponsiveColumns } from '@/hooks/useResponsive'
@@ -69,6 +69,8 @@ export function Toolbar() {
   const setShowAll = useStore((s) => s.setShowAll)
   const pinToUrl = useStore((s) => s.pinToUrl)
   const setCreateModalOpen = useStore((s) => s.setCreateModalOpen)
+  const setBulkEditOpen = useStore((s) => s.setBulkEditOpen)
+  const setBulkDeleteOpen = useStore((s) => s.setBulkDeleteOpen)
 
   // Primary search — semantic if enabled, keyword otherwise
   const primaryDelay = semanticEnabled ? 500 : 300
@@ -213,6 +215,39 @@ export function Toolbar() {
           <Plus className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">New</span>
         </button>
+
+        {/* Bulk actions — visible when non-semantic search active with results */}
+        {hasAnySearch && matchedCount > 0 && (
+          <>
+            <div className="hidden h-5 w-px bg-white/[0.06] sm:block shrink-0" />
+            {searchQuery.semantic ? (
+              <span className="hidden sm:block text-[10px] text-text-dim shrink-0" title="Bulk operations are not available during semantic search">
+                Bulk N/A
+              </span>
+            ) : (
+              <div className="hidden sm:flex items-center gap-1 shrink-0">
+                <button
+                  tabIndex={-1}
+                  onClick={() => setBulkEditOpen(true)}
+                  className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+                  title="Bulk edit matched bookmarks"
+                >
+                  <Pencil className="h-3 w-3" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  tabIndex={-1}
+                  onClick={() => setBulkDeleteOpen(true)}
+                  className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-danger/70 transition-colors hover:bg-danger/10 hover:text-danger"
+                  title="Bulk delete matched bookmarks"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            )}
+          </>
+        )}
 
         {/* Divider — hidden on mobile */}
         <div className="hidden h-5 w-px bg-white/[0.06] sm:block shrink-0" />

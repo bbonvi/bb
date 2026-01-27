@@ -5,6 +5,7 @@ import { BookmarkList } from '@/components/BookmarkList'
 import { BookmarkTable } from '@/components/BookmarkTable'
 import { BookmarkDetailModal } from '@/components/BookmarkDetailModal'
 import { CreateBookmarkModal } from '@/components/CreateBookmarkModal'
+import { BulkEditModal, BulkDeleteModal } from '@/components/BulkOperationsModal'
 import { usePolling } from '@/hooks/usePolling'
 import { useStore } from '@/lib/store'
 
@@ -12,6 +13,10 @@ function AppShell() {
   usePolling()
   const initialLoadComplete = useStore((s) => s.initialLoadComplete)
   const viewMode = useStore((s) => s.viewMode)
+  const bulkEditOpen = useStore((s) => s.bulkEditOpen)
+  const setBulkEditOpen = useStore((s) => s.setBulkEditOpen)
+  const bulkDeleteOpen = useStore((s) => s.bulkDeleteOpen)
+  const setBulkDeleteOpen = useStore((s) => s.setBulkDeleteOpen)
 
   if (!initialLoadComplete) {
     return (
@@ -31,6 +36,8 @@ function AppShell() {
       </main>
       <BookmarkDetailModal />
       <CreateBookmarkModal />
+      <BulkEditModal open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
+      <BulkDeleteModal open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
     </div>
   )
 }
