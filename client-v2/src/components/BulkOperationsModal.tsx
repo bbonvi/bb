@@ -180,7 +180,7 @@ export function BulkEditModal({
                 <Input
                   value={tagsInput}
                   onChange={(e) => setTagsInput(e.target.value)}
-                  placeholder="tag1, tag2, tag3"
+                  placeholder="rust, webdev"
                   autoFocus
                   className="bg-surface-hover"
                   onKeyDown={(e) => {
