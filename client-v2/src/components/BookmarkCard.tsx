@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { Bookmark } from '@/lib/api'
 import { fileUrl } from '@/lib/api'
 import { useStore } from '@/lib/store'
@@ -112,20 +112,27 @@ function TagChip({ tag }: { tag: string }) {
 // ─── Description with expand ───────────────────────────────────────
 function Description({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false)
-  const isLong = text.length > 150
+  const [clamped, setClamped] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (el) setClamped(el.scrollHeight > el.clientHeight)
+  }, [text])
 
   if (!text) return null
 
   return (
     <div className="relative">
       <p
+        ref={ref}
         className={`text-xs leading-relaxed text-text-muted ${
-          !expanded && isLong ? 'line-clamp-3' : ''
+          !expanded ? 'line-clamp-3' : ''
         }`}
       >
         {text}
       </p>
-      {isLong && (
+      {clamped && (
         <button
           tabIndex={-1}
           onClick={(e) => {
