@@ -67,10 +67,16 @@ export function usePolling() {
         ? injectWorkspaceFilters(searchQuery, activeWorkspace)
         : searchQuery
 
+      // On first load with a stored workspace, defer bookmark fetch until
+      // workspaces are loaded so filters can be applied correctly
+      const awaitingWorkspaces = !store.initialLoadComplete
+        && activeWorkspaceId !== null
+        && workspaces.length === 0
+
       // When a workspace is active, always fetch bookmarks (workspace implies filtering)
       const hasWorkspace = activeWorkspaceId !== null
       // Skip bookmark fetch when show-all OFF + no query + no workspace
-      const shouldFetchBookmarks = showAll || !isQueryEmpty(searchQuery) || hasWorkspace
+      const shouldFetchBookmarks = !awaitingWorkspaces && (showAll || !isQueryEmpty(searchQuery) || hasWorkspace)
 
       try {
         const [bookmarks, totalResp, tags, config, taskQueue, semanticStatus, workspacesResult] =
@@ -115,6 +121,10 @@ export function usePolling() {
 
         if (!state.initialLoadComplete) {
           state.setInitialLoadComplete(true)
+          // Bookmarks were deferred until workspaces loaded — fetch now
+          if (awaitingWorkspaces) {
+            poll()
+          }
         }
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) return
