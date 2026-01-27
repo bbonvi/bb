@@ -99,6 +99,18 @@ export interface Workspace {
 
 const emptySearchQuery: SearchQuery = {}
 
+function searchQueryFromUrl(): SearchQuery {
+  const p = new URLSearchParams(window.location.search)
+  const q: SearchQuery = {}
+  if (p.get('tags')) q.tags = p.get('tags')!
+  if (p.get('title')) q.title = p.get('title')!
+  if (p.get('url')) q.url = p.get('url')!
+  if (p.get('description')) q.description = p.get('description')!
+  if (p.get('keyword')) q.keyword = p.get('keyword')!
+  if (p.get('semantic')) q.semantic = p.get('semantic')!
+  return q
+}
+
 export const useStore = create<AppState>()((set, get) => ({
   // Auth
   token: localStorage.getItem('bb_token'),
@@ -124,7 +136,7 @@ export const useStore = create<AppState>()((set, get) => ({
   setConfig: (config) => set({ config }),
 
   // Search
-  searchQuery: emptySearchQuery,
+  searchQuery: searchQueryFromUrl(),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   clearSearch: () => set({ searchQuery: emptySearchQuery }),
 

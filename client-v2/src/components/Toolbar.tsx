@@ -110,17 +110,12 @@ export function Toolbar() {
     setSearchQuery,
   ])
 
-  // Restore search fields from URL on mount (showAll restored in store init)
+  // Open filters panel if URL had advanced filters (values already in store from init)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const t = params.get('tags') ?? ''
-    const ti = params.get('title') ?? ''
-    const u = params.get('url') ?? ''
-    const d = params.get('description') ?? ''
-    if (t) { setLocalTags(t); setFiltersOpen(true) }
-    if (ti) { setLocalTitle(ti); setFiltersOpen(true) }
-    if (u) { setLocalUrl(u); setFiltersOpen(true) }
-    if (d) { setLocalDescription(d); setFiltersOpen(true) }
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('tags') || p.get('title') || p.get('url') || p.get('description')) {
+      setFiltersOpen(true)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Responsive columns — auto-sync unless user manually overrode
