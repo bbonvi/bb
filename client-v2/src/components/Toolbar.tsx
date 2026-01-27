@@ -66,8 +66,7 @@ export function Toolbar() {
   const setShuffle = useStore((s) => s.setShuffle)
   const showAll = useStore((s) => s.showAll)
   const setShowAll = useStore((s) => s.setShowAll)
-  const saveQueries = useStore((s) => s.saveQueries)
-  const setSaveQueries = useStore((s) => s.setSaveQueries)
+  const pinToUrl = useStore((s) => s.pinToUrl)
 
   // Primary search — semantic if enabled, keyword otherwise
   const primaryDelay = semanticEnabled ? 500 : 300
@@ -111,38 +110,17 @@ export function Toolbar() {
     setSearchQuery,
   ])
 
-  // URL param sync
-  useEffect(() => {
-    if (!saveQueries) return
-    const url = new URL(window.location.href)
-    const fields: Record<string, string> = {
-      tags: debouncedTags,
-      title: debouncedTitle,
-      url: debouncedUrl,
-      description: debouncedDescription,
-    }
-    for (const [key, val] of Object.entries(fields)) {
-      if (val) url.searchParams.set(key, val)
-      else url.searchParams.delete(key)
-    }
-    if (showAll) url.searchParams.set('all', '1')
-    else url.searchParams.delete('all')
-    window.history.replaceState({}, '', url)
-  }, [saveQueries, debouncedTags, debouncedTitle, debouncedUrl, debouncedDescription, showAll])
-
-  // Restore from URL on mount
+  // Restore search fields from URL on mount (showAll restored in store init)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const t = params.get('tags') ?? ''
     const ti = params.get('title') ?? ''
     const u = params.get('url') ?? ''
     const d = params.get('description') ?? ''
-    const all = params.get('all')
     if (t) { setLocalTags(t); setFiltersOpen(true) }
     if (ti) { setLocalTitle(ti); setFiltersOpen(true) }
     if (u) { setLocalUrl(u); setFiltersOpen(true) }
     if (d) { setLocalDescription(d); setFiltersOpen(true) }
-    if (all === '1' || all === 'true') setShowAll(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Responsive columns — auto-sync unless user manually overrode
@@ -297,7 +275,7 @@ export function Toolbar() {
         <div className="flex items-center gap-1.5">
           <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shfl" />
           <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="All" />
-          <PillToggle active={saveQueries} onClick={() => setSaveQueries(!saveQueries)} label="Pin" />
+          <PillButton onClick={pinToUrl} label="Pin" />
         </div>
       </div>
 
@@ -322,7 +300,7 @@ export function Toolbar() {
             <div className="ml-auto hidden sm:flex items-center gap-3">
               <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shuffle" />
               <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="Show all" />
-              <PillToggle active={saveQueries} onClick={() => setSaveQueries(!saveQueries)} label="Pin" />
+              <PillButton onClick={pinToUrl} label="Pin" />
             </div>
           </div>
         </div>
@@ -382,6 +360,18 @@ function PillToggle({
           ? 'bg-hi-dim text-text'
           : 'text-text-muted hover:text-text hover:bg-surface-hover'
       }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+function PillButton({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      tabIndex={-1}
+      onClick={onClick}
+      className="rounded-full px-2.5 py-1 text-xs font-medium text-text-muted transition-all select-none hover:text-text hover:bg-surface-hover active:bg-hi-dim active:text-text"
     >
       {label}
     </button>

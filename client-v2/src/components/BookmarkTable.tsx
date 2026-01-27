@@ -92,7 +92,7 @@ function TableRow({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="truncate text-sm text-text hover:text-hi"
+          className="block truncate text-sm text-text hover:text-hi"
         >
           {bookmark.title || bookmark.url}
         </a>

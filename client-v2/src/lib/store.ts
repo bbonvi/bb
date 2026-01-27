@@ -33,12 +33,11 @@ export interface AppState {
   columns: number
   shuffle: boolean
   showAll: boolean
-  saveQueries: boolean
   setViewMode: (mode: 'grid' | 'cards' | 'table') => void
   setColumns: (columns: number) => void
   setShuffle: (shuffle: boolean) => void
   setShowAll: (showAll: boolean) => void
-  setSaveQueries: (saveQueries: boolean) => void
+  pinToUrl: () => void
 
   // Detail modal
   detailModalId: number | null
@@ -130,16 +129,36 @@ export const useStore = create<AppState>()((set, get) => ({
   clearSearch: () => set({ searchQuery: emptySearchQuery }),
 
   // UI
-  viewMode: 'grid',
+  viewMode: (localStorage.getItem('bb_view_mode') as 'grid' | 'cards' | 'table') || 'grid',
   columns: 3,
   shuffle: false,
-  showAll: false,
-  saveQueries: false,
-  setViewMode: (viewMode) => set({ viewMode }),
+  showAll: new URLSearchParams(window.location.search).get('all') === '1',
+  setViewMode: (viewMode) => {
+    localStorage.setItem('bb_view_mode', viewMode)
+    set({ viewMode })
+  },
   setColumns: (columns) => set({ columns }),
   setShuffle: (shuffle) => set({ shuffle }),
   setShowAll: (showAll) => set({ showAll }),
-  setSaveQueries: (saveQueries) => set({ saveQueries }),
+  pinToUrl: () => {
+    const { searchQuery, showAll } = get()
+    const url = new URL(window.location.href)
+    const fields: Record<string, string | undefined> = {
+      tags: searchQuery.tags,
+      title: searchQuery.title,
+      url: searchQuery.url,
+      description: searchQuery.description,
+      keyword: searchQuery.keyword,
+      semantic: searchQuery.semantic,
+    }
+    for (const [key, val] of Object.entries(fields)) {
+      if (val) url.searchParams.set(key, val)
+      else url.searchParams.delete(key)
+    }
+    if (showAll) url.searchParams.set('all', '1')
+    else url.searchParams.delete('all')
+    window.history.replaceState({}, '', url)
+  },
 
   // Detail modal
   detailModalId: null,
