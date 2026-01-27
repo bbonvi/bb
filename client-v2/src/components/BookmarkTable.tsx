@@ -31,7 +31,6 @@ export function BookmarkTable() {
     <div ref={parentRef} className="h-full overflow-auto">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.06] bg-bg/95 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-text-dim backdrop-blur-sm">
-        <span className="w-5" />
         <span className="min-w-0 flex-[3]">Title</span>
         <span className="hidden min-w-0 flex-[2] sm:block">URL</span>
         <span className="hidden min-w-0 flex-[2] md:block">Tags</span>
@@ -83,8 +82,6 @@ function TableRow({
       onClick={onClick}
       className="flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover"
     >
-      <Favicon iconId={bookmark.icon_id} />
-
       {/* Title */}
       <div className="min-w-0 flex-[3]">
         <a
@@ -94,6 +91,7 @@ function TableRow({
           onClick={(e) => e.stopPropagation()}
           className="block truncate text-sm text-text hover:text-hi"
         >
+          <Favicon iconId={bookmark.icon_id} />{' '}
           {bookmark.title || bookmark.url}
         </a>
       </div>

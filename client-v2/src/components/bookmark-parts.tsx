@@ -37,11 +37,22 @@ export function Thumbnail({
 }
 
 // ─── Favicon ───────────────────────────────────────────────────────
-export function Favicon({ iconId }: { iconId: string | null }) {
+export function Favicon({
+  iconId,
+  className = 'h-4 w-4',
+}: {
+  iconId: string | null
+  className?: string
+}) {
   const [failed, setFailed] = useState(false)
 
   if (!iconId || failed) {
-    return <div className="h-4 w-4 shrink-0 rounded-sm bg-surface-hover" />
+    return (
+      <span
+        className={`inline-block shrink-0 rounded-sm bg-surface-hover ${className}`}
+        style={{ verticalAlign: '-3px', marginRight: '0.3em' }}
+      />
+    )
   }
 
   return (
@@ -49,7 +60,8 @@ export function Favicon({ iconId }: { iconId: string | null }) {
       src={fileUrl(iconId)}
       alt=""
       onError={() => setFailed(true)}
-      className="h-4 w-4 shrink-0 rounded-sm object-contain"
+      className={`inline-block shrink-0 rounded-sm object-contain ${className}`}
+      style={{ verticalAlign: '-3px', marginRight: '0.3em' }}
     />
   )
 }

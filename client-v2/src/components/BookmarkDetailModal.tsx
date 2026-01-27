@@ -321,13 +321,10 @@ function ViewContent({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      {/* Title + favicon */}
-      <div className="flex items-start gap-3">
-        <Favicon iconId={bookmark.icon_id} />
-        <h2 className="min-w-0 break-words text-lg font-medium leading-snug text-text">
-          {bookmark.title || bookmark.url}
-        </h2>
-      </div>
+      <h2 className="break-words text-lg font-medium leading-snug text-text">
+        <Favicon iconId={bookmark.icon_id} className="h-5 w-5" />{' '}
+        {bookmark.title || bookmark.url}
+      </h2>
 
       {/* URL */}
       <UrlDisplay url={bookmark.url} />

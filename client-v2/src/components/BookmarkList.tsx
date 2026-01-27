@@ -83,20 +83,16 @@ function ListCard({
 
       {/* Content on the right */}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-3">
-        <div className="flex items-start gap-2">
-          <Favicon iconId={bookmark.icon_id} />
-          <div className="min-w-0 flex-1">
-            <a
-              href={bookmark.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="line-clamp-1 text-sm font-medium leading-snug text-text hover:text-hi"
-            >
-              {bookmark.title || bookmark.url}
-            </a>
-          </div>
-        </div>
+        <a
+          href={bookmark.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="line-clamp-1 text-sm font-medium leading-snug text-text hover:text-hi"
+        >
+          <Favicon iconId={bookmark.icon_id} />{' '}
+          {bookmark.title || bookmark.url}
+        </a>
 
         <UrlDisplay url={bookmark.url} />
         <Tags tags={bookmark.tags} hiddenTags={hiddenTags} />

@@ -18,21 +18,16 @@ export function BookmarkCard({ bookmark, onClick }: BookmarkCardProps) {
     >
       <Thumbnail bookmark={bookmark} className="h-36 w-full rounded-t-lg" />
       <div className="flex flex-col gap-1.5 p-3">
-        {/* Title row with favicon */}
-        <div className="flex items-start gap-2">
-          <Favicon iconId={bookmark.icon_id} />
-          <div className="min-w-0 flex-1">
-            <a
-              href={bookmark.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="line-clamp-2 text-sm font-medium leading-snug text-text hover:text-hi"
-            >
-              {bookmark.title || bookmark.url}
-            </a>
-          </div>
-        </div>
+        <a
+          href={bookmark.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="line-clamp-2 text-sm font-medium leading-snug text-text hover:text-hi"
+        >
+          <Favicon iconId={bookmark.icon_id} />{' '}
+          {bookmark.title || bookmark.url}
+        </a>
 
         <UrlDisplay url={bookmark.url} />
         <Tags tags={bookmark.tags} hiddenTags={hiddenTags} />
