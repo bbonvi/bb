@@ -45,7 +45,7 @@ function BookmarkPreview({ count }: { count: number }) {
         </span>
       </div>
       <div className="max-h-40 overflow-y-auto rounded-md border border-white/[0.06] bg-bg p-2">
-        {bookmarks.slice(0, maxPreview).map((b) => (
+        {[...bookmarks].reverse().slice(0, maxPreview).map((b) => (
           <div key={b.id} className="flex items-center gap-2 py-1 text-xs">
             <span className="truncate text-text-muted" title={b.url}>
               {b.title || b.url}
