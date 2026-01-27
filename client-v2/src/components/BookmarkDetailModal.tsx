@@ -232,7 +232,7 @@ export function BookmarkDetailModal() {
               />
 
               {/* Content */}
-              <div className="flex flex-col gap-4 p-4 sm:p-6">
+              <div className="flex flex-col gap-4 px-4 pt-4 pb-0 sm:px-6 sm:pt-6">
                 {error && (
                   <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
                     {error}
@@ -243,9 +243,6 @@ export function BookmarkDetailModal() {
                   <EditForm
                     form={editForm}
                     onChange={setEditForm}
-                    onSave={saveEdit}
-                    onCancel={cancelEdit}
-                    saving={saving}
                   />
                 ) : (
                   <ViewContent
@@ -257,41 +254,53 @@ export function BookmarkDetailModal() {
             </div>
 
             {/* Footer actions */}
-            {!editing && (
-              <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-3 sm:px-6">
-                <div className="flex items-center gap-2">
-                  <DeleteButton onDelete={handleDelete} iconClass="h-4 w-4" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    tabIndex={-1}
-                    onClick={handleRefreshMetadata}
-                    disabled={refreshing}
-                    className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
-                    title="Refresh metadata"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                  </button>
-                  <button
-                    tabIndex={-1}
-                    onClick={startEdit}
-                    className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-                    title="Edit"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <a
-                    href={bookmark.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-                    title="Open URL"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </div>
+            <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-3 sm:px-6">
+              <div className="flex items-center gap-2">
+                <DeleteButton onDelete={handleDelete} iconClass="h-4 w-4" />
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                {editing ? (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={saving}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={saveEdit} disabled={saving}>
+                      <Check className="mr-1 h-3.5 w-3.5" />
+                      {saving ? 'Saving...' : 'Save'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      tabIndex={-1}
+                      onClick={handleRefreshMetadata}
+                      disabled={refreshing}
+                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+                      title="Refresh metadata"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      tabIndex={-1}
+                      onClick={startEdit}
+                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+                      title="Edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <a
+                      href={bookmark.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+                      title="Open URL"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </>
+                )}
+              </div>
+            </div>
           </>
         )}
       </DialogContent>
@@ -350,15 +359,9 @@ interface EditFormState {
 function EditForm({
   form,
   onChange,
-  onSave,
-  onCancel,
-  saving,
 }: {
   form: EditFormState
   onChange: (form: EditFormState) => void
-  onSave: () => void
-  onCancel: () => void
-  saving: boolean
 }) {
   const update = (field: keyof EditFormState, value: string) =>
     onChange({ ...form, [field]: value })
@@ -370,7 +373,6 @@ function EditForm({
         <Input
           value={form.title}
           onChange={(e) => update('title', e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
           className="bg-surface-hover"
         />
       </label>
@@ -379,7 +381,6 @@ function EditForm({
         <Input
           value={form.url}
           onChange={(e) => update('url', e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
           className="bg-surface-hover"
         />
       </label>
@@ -388,8 +389,7 @@ function EditForm({
         <Input
           value={form.tags}
           onChange={(e) => update('tags', e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
-          placeholder="comma-separated"
+          placeholder="comma or space separated"
           className="bg-surface-hover"
         />
       </label>
@@ -398,21 +398,10 @@ function EditForm({
         <textarea
           value={form.description}
           onChange={(e) => update('description', e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
           rows={4}
-          className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text outline-none focus:ring-1 focus:ring-ring"
+          className="resize-none rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text outline-none focus:ring-1 focus:ring-ring"
         />
       </label>
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
-          <X className="mr-1 h-3.5 w-3.5" />
-          Cancel
-        </Button>
-        <Button size="sm" onClick={onSave} disabled={saving}>
-          <Check className="mr-1 h-3.5 w-3.5" />
-          {saving ? 'Saving...' : 'Save'}
-        </Button>
-      </div>
     </div>
   )
 }
