@@ -106,7 +106,7 @@ export function BookmarkGrid() {
   }
 
   return (
-    <div ref={parentRef} className="h-full overflow-auto px-4 pb-4">
+    <div ref={parentRef} className="h-full overflow-auto p-4">
       <div
         className="relative w-full"
         style={{ height: virtualizer.getTotalSize() }}
