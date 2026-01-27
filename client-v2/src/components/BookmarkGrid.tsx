@@ -50,8 +50,10 @@ export function BookmarkGrid() {
   )
 
   const displayBookmarks = useMemo(() => {
-    if (!shuffle || searchQuery.semantic) return bookmarks
-    return shuffleBookmarks(bookmarks, shuffleSeed)
+    if (shuffle && !searchQuery.semantic) return shuffleBookmarks(bookmarks, shuffleSeed)
+    // Semantic results are relevance-ranked; non-semantic are ID-ascending — reverse for newest-first
+    if (!searchQuery.semantic) return [...bookmarks].reverse()
+    return bookmarks
   }, [bookmarks, shuffle, shuffleSeed, searchQuery.semantic])
 
   const rows = useMemo(
