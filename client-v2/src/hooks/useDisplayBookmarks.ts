@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useStore } from '@/lib/store'
-import type { Bookmark } from '@/lib/api'
+import type { Bookmark, Workspace } from '@/lib/api'
+import { applyWorkspaceFilter, filterUncategorized } from '@/lib/workspaceFilters'
 
 // Deterministic shuffle using seed + bookmark ID (Knuth multiplicative hash)
 function shuffleBookmarks(bookmarks: Bookmark[], seed: number): Bookmark[] {
@@ -23,6 +24,8 @@ export function useDisplayBookmarks() {
   const searchQuery = useStore((s) => s.searchQuery)
   const totalCount = useStore((s) => s.totalCount)
   const bookmarksFresh = useStore((s) => s.bookmarksFresh)
+  const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
+  const workspaces = useStore((s) => s.workspaces)
 
   const hasQuery = !!(
     searchQuery.semantic ||
@@ -33,20 +36,37 @@ export function useDisplayBookmarks() {
     searchQuery.description
   )
 
+  const hasWorkspace = activeWorkspaceId !== null
+
   const emptyReason: EmptyReason = useMemo(() => {
     if (totalCount === 0 && bookmarksFresh) return 'no-bookmarks'
-    if (!showAll && !hasQuery) return 'no-query'
-    if (bookmarks.length === 0 && hasQuery && bookmarksFresh) return 'no-matches'
+    if (!showAll && !hasQuery && !hasWorkspace) return 'no-query'
+    if (bookmarks.length === 0 && (hasQuery || hasWorkspace) && bookmarksFresh) return 'no-matches'
     return null
-  }, [totalCount, showAll, hasQuery, bookmarks.length, bookmarksFresh])
+  }, [totalCount, showAll, hasQuery, hasWorkspace, bookmarks.length, bookmarksFresh])
+
+  // Apply client-side workspace filters (glob patterns, regex, blacklist)
+  const workspaceFiltered = useMemo(() => {
+    if (!bookmarksFresh) return null
+    if (!activeWorkspaceId) return bookmarks
+
+    if (activeWorkspaceId === '__uncategorized__') {
+      return filterUncategorized(bookmarks, workspaces)
+    }
+
+    const ws = workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
+    if (!ws) return bookmarks
+
+    return applyWorkspaceFilter(bookmarks, ws)
+  }, [bookmarks, activeWorkspaceId, workspaces, bookmarksFresh])
 
   const freshDisplay = useMemo(() => {
-    if (!bookmarksFresh) return null // stale — don't recompute
-    if (shuffle && !searchQuery.semantic) return shuffleBookmarks(bookmarks, shuffleSeed)
+    if (!bookmarksFresh || workspaceFiltered === null) return null
+    if (shuffle && !searchQuery.semantic) return shuffleBookmarks(workspaceFiltered, shuffleSeed)
     // Non-semantic: reverse for newest-first; semantic: relevance-ranked as-is
-    if (!searchQuery.semantic) return [...bookmarks].reverse()
-    return bookmarks
-  }, [bookmarks, shuffle, shuffleSeed, searchQuery.semantic, bookmarksFresh])
+    if (!searchQuery.semantic) return [...workspaceFiltered].reverse()
+    return workspaceFiltered
+  }, [workspaceFiltered, shuffle, shuffleSeed, searchQuery.semantic, bookmarksFresh])
 
   // Cache last fresh result to avoid flashing stale data with new ordering
   const cachedRef = useRef<Bookmark[]>([])

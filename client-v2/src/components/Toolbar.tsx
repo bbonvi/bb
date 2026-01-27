@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Settings, ChevronDown } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useIsMobile } from '@/hooks/useResponsive'
@@ -53,6 +53,11 @@ export function Toolbar() {
   const setCreateModalOpen = useStore((s) => s.setCreateModalOpen)
   const setBulkEditOpen = useStore((s) => s.setBulkEditOpen)
   const setBulkDeleteOpen = useStore((s) => s.setBulkDeleteOpen)
+  const workspacesAvailable = useStore((s) => s.workspacesAvailable)
+  const workspaces = useStore((s) => s.workspaces)
+  const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
+  const setActiveWorkspaceId = useStore((s) => s.setActiveWorkspaceId)
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen)
 
   // Primary search — semantic if enabled, keyword otherwise
   const primaryDelay = semanticEnabled ? 500 : 300
@@ -161,9 +166,31 @@ export function Toolbar() {
           </button>
         </div>
 
+        {/* Workspace selector */}
+        {workspacesAvailable && (
+          <div className="relative shrink-0">
+            <select
+              tabIndex={-1}
+              value={activeWorkspaceId ?? ''}
+              onChange={(e) => {
+                const v = e.target.value
+                setActiveWorkspaceId(v === '' ? null : v)
+              }}
+              className="h-7 appearance-none rounded-md border border-white/[0.06] bg-surface pl-2 pr-7 text-xs text-text outline-none transition-colors hover:bg-surface-hover focus:border-hi-dim cursor-pointer"
+            >
+              <option value="">All</option>
+              <option value="__uncategorized__">Uncategorized</option>
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>{ws.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-text-dim" />
+          </div>
+        )}
+
         {/* Counter */}
         <div className="flex items-baseline gap-0.5 font-mono text-xs tabular-nums select-none shrink-0">
-          <span className={hasAnySearch ? 'text-hi' : 'text-text-muted'}>
+          <span className={hasAnySearch || activeWorkspaceId ? 'text-hi' : 'text-text-muted'}>
             {matchedCount}
           </span>
           <span className="text-text-dim">/</span>
@@ -245,6 +272,16 @@ export function Toolbar() {
             </button>
           ))}
         </div>
+
+        {/* Settings */}
+        <button
+          tabIndex={-1}
+          onClick={() => setSettingsOpen(true)}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+          title="Settings"
+        >
+          <Settings className="h-3.5 w-3.5" />
+        </button>
 
       </div>
 

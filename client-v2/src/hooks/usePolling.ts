@@ -10,7 +10,8 @@ import {
   fetchWorkspaces,
   ApiError,
 } from '@/lib/api'
-import type { Bookmark, SearchQuery } from '@/lib/api'
+import type { Bookmark, SearchQuery, Workspace } from '@/lib/api'
+import { injectWorkspaceFilters } from '@/lib/workspaceFilters'
 
 const POLL_INTERVAL = 3000
 
@@ -56,15 +57,25 @@ export function usePolling() {
 
       const store = useStore.getState()
       const seq = store.nextPollSequence()
-      const { searchQuery, showAll } = store
+      const { searchQuery, showAll, activeWorkspaceId, workspaces } = store
 
-      // Skip bookmark fetch when show-all OFF + no query
-      const shouldFetchBookmarks = showAll || !isQueryEmpty(searchQuery)
+      // Inject workspace filters into the search query for server-side filtering
+      const activeWorkspace = activeWorkspaceId && activeWorkspaceId !== '__uncategorized__'
+        ? workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
+        : null
+      const effectiveQuery = activeWorkspace
+        ? injectWorkspaceFilters(searchQuery, activeWorkspace)
+        : searchQuery
+
+      // When a workspace is active, always fetch bookmarks (workspace implies filtering)
+      const hasWorkspace = activeWorkspaceId !== null
+      // Skip bookmark fetch when show-all OFF + no query + no workspace
+      const shouldFetchBookmarks = showAll || !isQueryEmpty(searchQuery) || hasWorkspace
 
       try {
         const [bookmarks, totalResp, tags, config, taskQueue, semanticStatus, workspacesResult] =
           await Promise.all([
-            shouldFetchBookmarks ? searchBookmarks(searchQuery) : Promise.resolve(null),
+            shouldFetchBookmarks ? searchBookmarks(effectiveQuery) : Promise.resolve(null),
             fetchTotal(),
             fetchTags(),
             fetchConfig(),
