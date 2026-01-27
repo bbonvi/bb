@@ -10,6 +10,7 @@ import { useStore } from '@/lib/store'
 import {
   searchUpdateBookmarks,
   searchDeleteBookmarks,
+  type Bookmark,
   type SearchQuery,
   type BulkSearchQuery,
 } from '@/lib/api'
@@ -65,6 +66,28 @@ function BookmarkPreview({ count }: { count: number }) {
 // ─── Helpers ──────────────────────────────────────────────────────
 function parseTags(raw: string): string[] {
   return raw.split(/[\s,]+/).map((t) => t.trim()).filter(Boolean)
+}
+
+// ─── Remove tag match preview ─────────────────────────────────────
+function RemoveTagPreview({ input, bookmarks }: { input: string; bookmarks: Bookmark[] }) {
+  const tags = parseTags(input)
+  if (tags.length === 0) return null
+
+  const counts = tags.map((tag) => {
+    const matched = bookmarks.filter((b) => b.tags.includes(tag)).length
+    return { tag, matched }
+  })
+
+  return (
+    <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+      {counts.map(({ tag, matched }) => (
+        <span key={tag} className="text-[11px]">
+          <span className={matched > 0 ? 'text-text-muted' : 'text-text-dim line-through'}>{tag}</span>
+          <span className="ml-0.5 font-mono text-text-dim">{matched > 0 ? matched : 0}</span>
+        </span>
+      ))}
+    </div>
+  )
 }
 
 // ─── Bulk Edit Modal ──────────────────────────────────────────────
@@ -130,18 +153,18 @@ export function BulkEditModal({
     setTimeout(reset, 200)
   }, [onOpenChange, reset])
 
-  // Summary of what will happen
-  const summary = (() => {
+  // Summary lines
+  const summaryLines = (() => {
     if (replaceMode) {
       const tags = parseTags(replaceTags)
-      return tags.length > 0 ? `Replace all tags with: ${tags.join(', ')}` : null
+      return tags.length > 0 ? [{ label: 'Replace all with', tags, color: 'text-text-muted' }] : []
     }
-    const parts: string[] = []
-    const add = parseTags(addTags)
+    const lines: { label: string; tags: string[]; color: string }[] = []
     const remove = parseTags(removeTags)
-    if (add.length > 0) parts.push(`add: ${add.join(', ')}`)
-    if (remove.length > 0) parts.push(`remove: ${remove.join(', ')}`)
-    return parts.length > 0 ? parts.join(' · ') : null
+    const add = parseTags(addTags)
+    if (remove.length > 0) lines.push({ label: '- Remove', tags: remove, color: 'text-danger/70' })
+    if (add.length > 0) lines.push({ label: '+ Add', tags: add, color: 'text-green-400/70' })
+    return lines
   })()
 
   return (
@@ -212,16 +235,19 @@ export function BulkEditModal({
               ) : (
                 /* Default mode: add + remove side by side */
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-danger/80">- Remove tags</span>
-                    <Input
-                      value={removeTags}
-                      onChange={(e) => setRemoveTags(e.target.value)}
-                      placeholder="old-tag, deprecated"
-                      autoFocus
-                      className="bg-surface-hover"
-                    />
-                  </label>
+                  <div className="flex flex-col gap-1">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-danger/80">- Remove tags</span>
+                      <Input
+                        value={removeTags}
+                        onChange={(e) => setRemoveTags(e.target.value)}
+                        placeholder="old-tag, deprecated"
+                        autoFocus
+                        className="bg-surface-hover"
+                      />
+                    </label>
+                    <RemoveTagPreview input={removeTags} bookmarks={bookmarks} />
+                  </div>
                   <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-green-400/80">+ Add tags</span>
                     <Input
@@ -235,9 +261,14 @@ export function BulkEditModal({
               )}
 
               {/* Operation summary */}
-              {summary && (
-                <div className="rounded-md bg-white/[0.03] px-3 py-2 font-mono text-xs text-text-muted">
-                  {summary}
+              {summaryLines.length > 0 && (
+                <div className="flex flex-col gap-1 rounded-md bg-white/[0.03] px-3 py-2 font-mono text-xs">
+                  {summaryLines.map((line) => (
+                    <div key={line.label} className="flex items-baseline gap-2">
+                      <span className={`shrink-0 ${line.color}`}>{line.label}</span>
+                      <span className="text-text-muted">{line.tags.join(', ')}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </>
