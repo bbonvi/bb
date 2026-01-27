@@ -204,3 +204,198 @@ fn validate_patterns(filters: &WorkspaceFilters) -> Result<(), WorkspaceError> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn tmp_dir() -> String {
+        let c = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let p = std::env::temp_dir().join(format!("bb-ws-test-{}-{}", std::process::id(), c));
+        std::fs::create_dir_all(&p).unwrap();
+        p.to_str().unwrap().to_string()
+    }
+
+    // -- WorkspaceStore load/save/CRUD --
+
+    #[test]
+    fn load_creates_empty_file_if_absent() {
+        let dir = tmp_dir();
+        let store = WorkspaceStore::load(&dir).unwrap();
+        assert!(store.list().is_empty());
+        // file should exist now
+        assert!(std::path::Path::new(&dir).join("workspaces.yaml").exists());
+    }
+
+    #[test]
+    fn load_existing_file() {
+        let dir = tmp_dir();
+        let yaml = r#"
+- id: "abc"
+  name: "Dev"
+  filters: {}
+  view_prefs: {}
+"#;
+        std::fs::write(std::path::Path::new(&dir).join("workspaces.yaml"), yaml).unwrap();
+        let store = WorkspaceStore::load(&dir).unwrap();
+        assert_eq!(store.list().len(), 1);
+        assert_eq!(store.list()[0].name, "Dev");
+    }
+
+    #[test]
+    fn create_and_reload_roundtrip() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let ws = store.create("Test".into(), None, None).unwrap();
+        assert!(!ws.id.is_empty());
+        assert_eq!(ws.name, "Test");
+
+        // reload from disk
+        let store2 = WorkspaceStore::load(&dir).unwrap();
+        assert_eq!(store2.list().len(), 1);
+        assert_eq!(store2.list()[0].id, ws.id);
+    }
+
+    #[test]
+    fn update_existing() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let ws = store.create("Original".into(), None, None).unwrap();
+        let updated = store
+            .update(&ws.id, Some("Renamed".into()), None, None)
+            .unwrap();
+        assert_eq!(updated.name, "Renamed");
+    }
+
+    #[test]
+    fn update_nonexistent_returns_not_found() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let err = store.update("nope", Some("X".into()), None, None).unwrap_err();
+        assert!(matches!(err, WorkspaceError::NotFound(_)));
+    }
+
+    #[test]
+    fn delete_existing() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let ws = store.create("ToDelete".into(), None, None).unwrap();
+        store.delete(&ws.id).unwrap();
+        assert!(store.list().is_empty());
+    }
+
+    #[test]
+    fn delete_nonexistent_returns_not_found() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let err = store.delete("nope").unwrap_err();
+        assert!(matches!(err, WorkspaceError::NotFound(_)));
+    }
+
+    #[test]
+    fn concurrent_access_no_panic() {
+        let dir = tmp_dir();
+        let store = std::sync::Arc::new(std::sync::RwLock::new(
+            WorkspaceStore::load(&dir).unwrap(),
+        ));
+
+        let handles: Vec<_> = (0..4)
+            .map(|i| {
+                let s = store.clone();
+                std::thread::spawn(move || {
+                    let mut guard = s.write().unwrap();
+                    guard.create(format!("ws-{i}"), None, None).unwrap();
+                })
+            })
+            .collect();
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        let guard = store.read().unwrap();
+        assert_eq!(guard.list().len(), 4);
+    }
+
+    // -- Validation --
+
+    #[test]
+    fn empty_name_rejected() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let err = store.create("".into(), None, None).unwrap_err();
+        assert!(matches!(err, WorkspaceError::InvalidName));
+    }
+
+    #[test]
+    fn whitespace_only_name_rejected() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let err = store.create("   ".into(), None, None).unwrap_err();
+        assert!(matches!(err, WorkspaceError::InvalidName));
+    }
+
+    #[test]
+    fn long_name_rejected() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let name = "a".repeat(101);
+        let err = store.create(name, None, None).unwrap_err();
+        assert!(matches!(err, WorkspaceError::InvalidName));
+    }
+
+    #[test]
+    fn invalid_regex_rejected() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let filters = WorkspaceFilters {
+            url_pattern: Some("[invalid".into()),
+            ..Default::default()
+        };
+        let err = store.create("Valid".into(), Some(filters), None).unwrap_err();
+        assert!(matches!(err, WorkspaceError::InvalidPattern { .. }));
+    }
+
+    #[test]
+    fn duplicate_name_rejected_case_insensitive() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        store.create("Dev".into(), None, None).unwrap();
+        let err = store.create("dev".into(), None, None).unwrap_err();
+        assert!(matches!(err, WorkspaceError::DuplicateName(_)));
+    }
+
+    #[test]
+    fn valid_workspace_accepted() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let filters = WorkspaceFilters {
+            tag_whitelist: vec!["rust".into()],
+            url_pattern: Some(r"https?://.*\.rs".into()),
+            ..Default::default()
+        };
+        let view_prefs = ViewPrefs {
+            mode: Some("grid".into()),
+            columns: Some(3),
+        };
+        let ws = store
+            .create("Rust".into(), Some(filters), Some(view_prefs))
+            .unwrap();
+        assert_eq!(ws.name, "Rust");
+        assert_eq!(ws.filters.tag_whitelist, vec!["rust"]);
+        assert_eq!(ws.view_prefs.columns, Some(3));
+    }
+
+    #[test]
+    fn update_same_name_on_self_allowed() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let ws = store.create("Keep".into(), None, None).unwrap();
+        // updating the same workspace with the same name should work
+        let updated = store.update(&ws.id, Some("Keep".into()), None, None).unwrap();
+        assert_eq!(updated.name, "Keep");
+    }
+}

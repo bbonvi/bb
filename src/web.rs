@@ -84,8 +84,8 @@ async fn start_app(app_service: AppService, base_path: &str) {
         .route("/api/semantic/status", get(semantic_status))
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workspaces", post(create_workspace))
-        .route("/api/workspaces/{id}", put(update_workspace))
-        .route("/api/workspaces/{id}", delete_method(delete_workspace))
+        .route("/api/workspaces/:id", put(update_workspace))
+        .route("/api/workspaces/:id", delete_method(delete_workspace))
         .layer(auth_layer);
 
     // Health endpoint - no auth required (for container health checks)
@@ -1259,6 +1259,194 @@ mod tests {
             let json: Vec<Bookmark> = serde_json::from_slice(&body).unwrap();
             // Mock backend returns all bookmarks (doesn't filter)
             assert_eq!(json.len(), 2);
+        }
+
+        // -----------------------------------------------------------------
+        // Workspace HTTP Integration Tests
+        // -----------------------------------------------------------------
+
+        fn workspace_api_router() -> Router {
+            let dir = test_dir();
+            let workspace_store = WorkspaceStore::load(dir.to_str().unwrap())
+                .expect("failed to load workspace store");
+            let backend = Box::new(MockBackend::new(vec![], false));
+            let service = AppService::new(backend);
+            let shared_state = Arc::new(RwLock::new(SharedState {
+                app_service: Arc::new(RwLock::new(service)),
+                storage_mgr: Arc::new(MockStorageManager),
+                workspace_store: Arc::new(RwLock::new(workspace_store)),
+            }));
+
+            Router::new()
+                .route("/api/workspaces", get(list_workspaces))
+                .route("/api/workspaces", post(create_workspace))
+                .route("/api/workspaces/:id", put(update_workspace))
+                .route("/api/workspaces/:id", delete_method(delete_workspace))
+                .with_state(shared_state)
+        }
+
+        #[tokio::test]
+        async fn test_workspace_list_empty() {
+            let app = workspace_api_router();
+            let req = axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/workspaces")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+            assert!(json.is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_workspace_create_success() {
+            let app = workspace_api_router();
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/workspaces")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"name":"Dev"}"#))
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::CREATED);
+
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(json["name"], "Dev");
+            assert!(json["id"].as_str().map_or(false, |s| !s.is_empty()));
+        }
+
+        #[tokio::test]
+        async fn test_workspace_create_validation_error() {
+            let app = workspace_api_router();
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/workspaces")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"name":""}"#))
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        }
+
+        #[tokio::test]
+        async fn test_workspace_create_invalid_regex() {
+            let app = workspace_api_router();
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/workspaces")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"name":"Bad","filters":{"url_pattern":"[bad"}}"#,
+                ))
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        }
+
+        #[tokio::test]
+        async fn test_workspace_update_not_found() {
+            let app = workspace_api_router();
+            let req = axum::http::Request::builder()
+                .method("PUT")
+                .uri("/api/workspaces/nonexistent")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"name":"X"}"#))
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        }
+
+        #[tokio::test]
+        async fn test_workspace_delete_not_found() {
+            let app = workspace_api_router();
+            let req = axum::http::Request::builder()
+                .method("DELETE")
+                .uri("/api/workspaces/nonexistent")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        }
+
+        #[tokio::test]
+        async fn test_workspace_full_crud_flow() {
+            let dir = test_dir();
+            let workspace_store = WorkspaceStore::load(dir.to_str().unwrap()).unwrap();
+            let backend = Box::new(MockBackend::new(vec![], false));
+            let service = AppService::new(backend);
+            let shared_state = Arc::new(RwLock::new(SharedState {
+                app_service: Arc::new(RwLock::new(service)),
+                storage_mgr: Arc::new(MockStorageManager),
+                workspace_store: Arc::new(RwLock::new(workspace_store)),
+            }));
+
+            let app = Router::new()
+                .route("/api/workspaces", get(list_workspaces))
+                .route("/api/workspaces", post(create_workspace))
+                .route("/api/workspaces/:id", put(update_workspace))
+                .route("/api/workspaces/:id", delete_method(delete_workspace))
+                .with_state(shared_state.clone());
+
+            // Create
+            let req = axum::http::Request::builder()
+                .method("POST")
+                .uri("/api/workspaces")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"name":"Flow"}"#))
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::CREATED);
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            let id = created["id"].as_str().unwrap();
+
+            // List — should have 1
+            let req = axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/workspaces")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let list: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+            assert_eq!(list.len(), 1);
+
+            // Update
+            let req = axum::http::Request::builder()
+                .method("PUT")
+                .uri(&format!("/api/workspaces/{id}"))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"name":"Updated"}"#))
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let updated: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(updated["name"], "Updated");
+
+            // Delete
+            let req = axum::http::Request::builder()
+                .method("DELETE")
+                .uri(&format!("/api/workspaces/{id}"))
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+            // List — should be empty
+            let req = axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/workspaces")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.oneshot(req).await.unwrap();
+            let body = resp.into_body().collect().await.unwrap().to_bytes();
+            let list: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+            assert!(list.is_empty());
         }
     }
 }
