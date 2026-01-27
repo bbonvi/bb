@@ -29,9 +29,12 @@ services:
       BB_AUTH_TOKEN: ${BB_AUTH_TOKEN:?BB_AUTH_TOKEN is required}
       # Optional: external API for link previews
       PEEKALINK_API_KEY: ${PEEKALINK_API_KEY:-}
-      # Optional: proxy for metadata fetching
-      HTTP_PROXY: ${HTTP_PROXY:-}
-      OPT_PROXY: ${OPT_PROXY:-}
+      # Optional: proxy for metadata fetching (uncomment if needed).
+      # WARNING: Do not set to empty string — ureq (used by fastembed's
+      # HuggingFace Hub client) parses "" as a proxy URL, causing DNS
+      # resolution to fail on ":80" and breaking ONNX model downloads.
+      # HTTP_PROXY: ${HTTP_PROXY}
+      # OPT_PROXY: ${OPT_PROXY}
 
     ports:
       - "${BB_HOST:-127.0.0.1}:${BB_PORT:-8080}:8080"

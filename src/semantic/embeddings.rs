@@ -66,7 +66,7 @@ impl EmbeddingModel {
             .with_show_download_progress(true);
 
         let mut model = TextEmbedding::try_new(options)
-            .map_err(|e| EmbeddingError::InitFailed(e.to_string()))?;
+            .map_err(|e| EmbeddingError::InitFailed(format!("{:?}", e)))?;
 
         // Get model dimensions by embedding a test string
         let dimensions = Self::probe_dimensions(&mut model)?;
