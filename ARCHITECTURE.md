@@ -102,7 +102,17 @@ semantic_search:
 
 Config validates on load; invalid config panics early.
 
-### 4. CLI Layer (`src/cli/`)
+### 4. Workspace Storage (`src/workspaces.rs`)
+
+YAML-persisted workspace definitions at `~/.local/share/bb/workspaces.yaml`:
+- `WorkspaceStore` holds `Vec<Workspace>` in `Arc<RwLock<>>` (same concurrency pattern as config)
+- Atomic writes via `BackendLocal::write`
+- Auto-creates empty file on first load
+- Validation: name non-empty/trimmed/max 100 chars, regex patterns must compile, no duplicate names (case-insensitive)
+- ID generation via `Eid` (ULID-based)
+- Workspace filtering is frontend-only; the backend stores filter definitions but does not evaluate them
+
+### 5. CLI Layer (`src/cli/`)
 
 **handlers.rs** — Entry points called from `main.rs`:
 - `handle_search()`, `handle_add()`, `handle_rule()`, etc.
@@ -116,7 +126,7 @@ Config validates on load; invalid config panics early.
 - Semantic threshold in [0.0, 1.0]
 - Tag format validation (no spaces, max length)
 
-### 5. Web/API Layer (`src/web.rs`)
+### 6. Web/API Layer (`src/web.rs`)
 
 Daemon HTTP server (port 8080):
 
@@ -129,11 +139,15 @@ Daemon HTTP server (port 8080):
 | `/api/semantic/status` | GET | Yes | Semantic search feature status |
 | `/api/config` | GET/POST | Yes | Read/update config |
 | `/api/file/{id}` | GET | Yes | Serve uploaded images |
+| `/api/workspaces` | GET | Yes | List all workspaces |
+| `/api/workspaces` | POST | Yes | Create workspace |
+| `/api/workspaces/:id` | PUT | Yes | Update workspace |
+| `/api/workspaces/:id` | DELETE | Yes | Delete workspace |
 | `/api/health` | GET | No | Health check |
 
 Authentication via `BB_AUTH_TOKEN` env var; constant-time token comparison.
 
-### 6. Task Queue (`src/app/task_runner.rs`)
+### 7. Task Queue (`src/app/task_runner.rs`)
 
 Background metadata fetching for `--async-meta` flag:
 - Tasks persisted to `task-queue.json` for recovery
@@ -182,6 +196,7 @@ Background metadata fetching for `--async-meta` flag:
 | `src/app/remote.rs` | HTTP client backend |
 | `src/bookmarks.rs` | CSV bookmark storage |
 | `src/config.rs` | Configuration loading/validation |
+| `src/workspaces.rs` | Workspace CRUD and YAML persistence |
 | `src/web.rs` | HTTP API server |
 | `src/cli/handlers.rs` | CLI command routing |
 | `src/semantic/` | Semantic search subsystem (see below) |
@@ -379,6 +394,7 @@ Error types: `SemanticDisabled`, `InvalidThreshold`, `ModelUnavailable`, `Embedd
 ## Thread Safety
 
 - `Arc<RwLock<Config>>` — shared configuration
+- `Arc<RwLock<WorkspaceStore>>` — workspace persistence
 - `Arc<dyn BookmarkManager>` — cloned per worker
 - `Mutex<Option<SemanticState>>` — lazy-loaded semantic state
 - `AtomicBool` — reconciliation flag (ensures single execution)

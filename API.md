@@ -90,6 +90,100 @@ Check semantic search feature status.
 | `indexed_count` | Number of bookmarks with embeddings |
 | `total_bookmarks` | Total bookmark count |
 
+### `GET /api/workspaces`
+
+List all workspaces.
+
+**Response:**
+```json
+[
+  {
+    "id": "01JJXYZ...",
+    "name": "Dev",
+    "filters": {
+      "tag_whitelist": ["dev/*", "rust"],
+      "tag_blacklist": ["internal"],
+      "url_pattern": null,
+      "title_pattern": null,
+      "description_pattern": null,
+      "any_field_pattern": null
+    },
+    "view_prefs": {
+      "mode": "grid",
+      "columns": 3
+    }
+  }
+]
+```
+
+### `POST /api/workspaces`
+
+Create a new workspace.
+
+**Request Body:**
+```json
+{
+  "name": "Dev",
+  "filters": {
+    "tag_whitelist": ["dev/*"],
+    "tag_blacklist": [],
+    "url_pattern": "https?://.*\\.dev",
+    "title_pattern": null,
+    "description_pattern": null,
+    "any_field_pattern": null
+  },
+  "view_prefs": {
+    "mode": "grid",
+    "columns": 3
+  }
+}
+```
+
+Only `name` is required. `filters` and `view_prefs` default to empty/null values.
+
+**Response (201):**
+Returns the created workspace object (same shape as list items).
+
+**Error Responses:**
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Empty/whitespace name, name > 100 chars, invalid regex pattern, duplicate name (case-insensitive) |
+
+### `PUT /api/workspaces/:id`
+
+Update an existing workspace. All fields are optional (partial update).
+
+**Request Body:**
+```json
+{
+  "name": "Renamed",
+  "filters": { "tag_whitelist": ["new-tag"] },
+  "view_prefs": { "columns": 4 }
+}
+```
+
+**Response (200):** Updated workspace object.
+
+**Error Responses:**
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Same validation as create |
+| 404 | Workspace ID not found |
+
+### `DELETE /api/workspaces/:id`
+
+Delete a workspace.
+
+**Response:** 204 No Content.
+
+**Error Responses:**
+
+| Status | Condition |
+|--------|-----------|
+| 404 | Workspace ID not found |
+
 ---
 
 **Command Overview:**
