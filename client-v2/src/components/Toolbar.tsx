@@ -3,7 +3,20 @@ import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import type { SearchQuery } from '@/lib/api'
 
-// ─── Responsive columns ────────────────────────────────────────────
+// ─── Responsive hooks ───────────────────────────────────────────────
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 640 : false,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const handler = (e: MediaQueryListEvent) => setMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return mobile
+}
+
 function useResponsiveColumns(): number {
   if (typeof window === 'undefined') return 3
   const w = window.innerWidth
@@ -58,7 +71,8 @@ function PlusIcon() {
 
 // ─── Main component ────────────────────────────────────────────────
 export function Toolbar() {
-  const [filtersOpen, setFiltersOpen] = useState(true)
+  const isMobile = useIsMobile()
+  const [filtersOpen, setFiltersOpen] = useState(!isMobile)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const searchQuery = useStore((s) => s.searchQuery)
@@ -182,21 +196,23 @@ export function Toolbar() {
 
   return (
     <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur-md">
-      {/* ── Row 1: Main bar ── */}
-      <div className="flex items-center gap-3 px-4 py-2.5">
+      {/* ── Search row ── */}
+      <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
         {/* Search bar */}
-        <div className="relative flex min-w-0 flex-1 items-center max-w-2xl">
+        <div className="relative flex min-w-0 flex-1 items-center sm:max-w-2xl">
           <SearchIcon className="pointer-events-none absolute left-3 text-text-dim" />
           <input
             ref={searchInputRef}
             type="text"
             value={localPrimary}
             onChange={(e) => setLocalPrimary(e.target.value)}
+            autoFocus
             placeholder={semanticEnabled ? 'Search semantically…' : 'Search bookmarks…'}
             className="h-9 w-full rounded-lg border border-white/[0.06] bg-surface pl-9 pr-10 text-sm text-text placeholder:text-text-dim outline-none transition-colors focus:border-accent-dim focus:bg-surface-hover"
           />
           {/* Filter toggle inside search bar */}
           <button
+            tabIndex={-1}
             onClick={() => setFiltersOpen(!filtersOpen)}
             className={`absolute right-1.5 flex h-6 items-center gap-1 rounded-md px-1.5 text-xs transition-colors ${
               filtersOpen || hasAdvancedFilters
@@ -225,6 +241,7 @@ export function Toolbar() {
         {/* Clear all */}
         {hasAnySearch && (
           <button
+            tabIndex={-1}
             onClick={clearAll}
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
@@ -232,14 +249,15 @@ export function Toolbar() {
           </button>
         )}
 
-        {/* Divider */}
-        <div className="h-5 w-px bg-white/[0.06] shrink-0" />
+        {/* Divider — hidden on mobile */}
+        <div className="hidden h-5 w-px bg-white/[0.06] sm:block shrink-0" />
 
-        {/* View mode */}
-        <div className="flex items-center rounded-lg bg-surface p-0.5 shrink-0">
+        {/* View mode — hidden on mobile, shown in controls row */}
+        <div className="hidden sm:flex items-center rounded-lg bg-surface p-0.5 shrink-0">
           {(['grid', 'cards', 'table'] as const).map((mode) => (
             <button
               key={mode}
+              tabIndex={-1}
               onClick={() => setViewMode(mode)}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
                 viewMode === mode
@@ -252,9 +270,10 @@ export function Toolbar() {
           ))}
         </div>
 
-        {/* Column stepper */}
-        <div className="flex items-center rounded-lg bg-surface shrink-0">
+        {/* Column stepper — hidden on mobile */}
+        <div className="hidden sm:flex items-center rounded-lg bg-surface shrink-0">
           <button
+            tabIndex={-1}
             onClick={() => setColumns(Math.max(1, columns - 1))}
             className="flex h-7 w-7 items-center justify-center rounded-l-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
@@ -264,6 +283,7 @@ export function Toolbar() {
             {columns}
           </span>
           <button
+            tabIndex={-1}
             onClick={() => setColumns(Math.min(12, columns + 1))}
             className="flex h-7 w-7 items-center justify-center rounded-r-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
@@ -272,14 +292,44 @@ export function Toolbar() {
         </div>
       </div>
 
-      {/* ── Row 2: Expandable filters ── */}
+      {/* ── Mobile controls row ── */}
+      <div className="flex items-center gap-2 border-t border-white/[0.04] px-3 py-1.5 sm:hidden">
+        {/* View mode */}
+        <div className="flex items-center rounded-lg bg-surface p-0.5">
+          {(['grid', 'cards', 'table'] as const).map((mode) => (
+            <button
+              key={mode}
+              tabIndex={-1}
+              onClick={() => setViewMode(mode)}
+              className={`rounded-md px-2 py-1 text-xs font-medium transition-all ${
+                viewMode === mode
+                  ? 'bg-accent-dim text-text'
+                  : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {mode === 'grid' ? 'Grid' : mode === 'cards' ? 'List' : 'Table'}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Toggles on mobile */}
+        <div className="flex items-center gap-1.5">
+          <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shfl" />
+          <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="All" />
+          <PillToggle active={saveQueries} onClick={() => setSaveQueries(!saveQueries)} label="Pin" />
+        </div>
+      </div>
+
+      {/* ── Expandable filters ── */}
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${
           filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}
       >
         <div className="overflow-hidden">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/[0.04] px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/[0.04] px-3 py-2 sm:px-4 sm:py-2.5">
             {/* Advanced fields */}
             {semanticEnabled && (
               <FilterField label="keyword" value={localKeywordAlt} onChange={setLocalKeywordAlt} />
@@ -289,8 +339,8 @@ export function Toolbar() {
             <FilterField label="url" value={localUrl} onChange={setLocalUrl} />
             <FilterField label="description" value={localDescription} onChange={setLocalDescription} />
 
-            {/* Toggles */}
-            <div className="ml-auto flex items-center gap-3">
+            {/* Toggles — desktop only (mobile has them in controls row) */}
+            <div className="ml-auto hidden sm:flex items-center gap-3">
               <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shuffle" />
               <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="Show all" />
               <PillToggle active={saveQueries} onClick={() => setSaveQueries(!saveQueries)} label="Pin" />
@@ -316,15 +366,15 @@ function FilterField({
   onChange: (v: string) => void
 }) {
   return (
-    <label className="flex items-center gap-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim select-none">
+    <label className="flex items-center gap-1.5 min-w-0 w-[calc(50%-0.75rem)] sm:w-auto">
+      <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim select-none shrink-0">
         {label}
       </span>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`h-7 w-28 rounded-md border bg-transparent px-2 text-sm outline-none transition-colors ${
+        className={`h-7 w-full sm:w-28 rounded-md border bg-transparent px-2 text-sm outline-none transition-colors ${
           value
             ? 'border-accent/20 text-text'
             : 'border-white/[0.06] text-text placeholder:text-text-dim'
@@ -346,6 +396,7 @@ function PillToggle({
 }) {
   return (
     <button
+      tabIndex={-1}
       onClick={onClick}
       className={`rounded-full px-2.5 py-1 text-xs font-medium transition-all select-none ${
         active
