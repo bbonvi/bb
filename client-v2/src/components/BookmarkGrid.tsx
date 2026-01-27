@@ -6,7 +6,7 @@ import { EmptyState } from './bookmark-parts'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 
 const ROW_GAP = 16
-const ESTIMATED_ROW_HEIGHT = 320
+const ESTIMATED_ROW_HEIGHT = 330
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = []
@@ -50,14 +50,16 @@ export function BookmarkGrid() {
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const row = rows[virtualRow.index]
+          const measured = virtualRow.size !== ESTIMATED_ROW_HEIGHT
           return (
             <div
               key={virtualRow.index}
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
-              className="absolute left-0 top-0 w-full"
+              className="absolute left-0 top-0 w-full transition-opacity duration-100"
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
+                opacity: measured ? 1 : 0,
               }}
             >
               <div
