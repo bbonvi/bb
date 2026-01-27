@@ -1,31 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { useIsMobile, useResponsiveColumns } from '@/hooks/useResponsive'
 import type { SearchQuery } from '@/lib/api'
-
-// ─── Responsive hooks ───────────────────────────────────────────────
-function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth < 640 : false,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 639px)')
-    const handler = (e: MediaQueryListEvent) => setMobile(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
-  return mobile
-}
-
-function useResponsiveColumns(): number {
-  if (typeof window === 'undefined') return 3
-  const w = window.innerWidth
-  if (w < 640) return 1
-  if (w < 1024) return 2
-  if (w < 1440) return 3
-  if (w < 1920) return 4
-  return 5
-}
 
 // ─── Icons (inline SVG) ────────────────────────────────────────────
 function SearchIcon({ className = '' }: { className?: string }) {
@@ -169,8 +146,9 @@ export function Toolbar() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Responsive columns on mount
+  const responsiveCols = useResponsiveColumns()
   useEffect(() => {
-    setColumns(useResponsiveColumns())
+    setColumns(responsiveCols)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasAdvancedFilters = !!debouncedTags || !!debouncedTitle || !!debouncedUrl || !!debouncedDescription || (semanticEnabled && !!debouncedKeywordAlt)

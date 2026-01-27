@@ -1,5 +1,6 @@
 import { AuthGate } from '@/components/AuthGate'
 import { Toolbar } from '@/components/Toolbar'
+import { BookmarkGrid } from '@/components/BookmarkGrid'
 import { usePolling } from '@/hooks/usePolling'
 import { useStore } from '@/lib/store'
 
@@ -18,8 +19,8 @@ function AppShell() {
   return (
     <div className="flex h-screen flex-col bg-bg">
       <Toolbar />
-      <main className="flex-1 overflow-auto p-4">
-        {/* Bookmark views will render here */}
+      <main className="min-h-0 flex-1">
+        <BookmarkGrid />
       </main>
     </div>
   )
