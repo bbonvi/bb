@@ -24,11 +24,27 @@ export function BookmarkGrid() {
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
 
-  // Auto-compute columns from container width
+  // Auto-compute columns from container width, with scroll preservation
   const autoCols = useAutoColumns(parentRef)
+  const scrollTargetRef = useRef<number | null>(null)
+
   useEffect(() => {
+    if (autoCols === columns) return
+
+    // Capture first visible bookmark BEFORE column change
+    const scrollEl = parentRef.current
+    if (scrollEl) {
+      const scrollTop = scrollEl.scrollTop
+      const virtualItems = virtualizer.getVirtualItems()
+      if (virtualItems.length > 0) {
+        const firstVisible = virtualItems.find((item) => item.start >= scrollTop)
+          ?? virtualItems[0]
+        scrollTargetRef.current = firstVisible.index * columns
+      }
+    }
+
     setColumns(autoCols)
-  }, [autoCols, setColumns])
+  }, [autoCols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = useMemo(
     () => chunkArray(displayBookmarks, columns),
@@ -43,27 +59,13 @@ export function BookmarkGrid() {
     gap: ROW_GAP,
   })
 
-  // ── Scroll preservation on column change ──
-  const prevColumnsRef = useRef(columns)
+  // Scroll to preserved bookmark after layout settles
   useEffect(() => {
-    const prevCols = prevColumnsRef.current
-    if (prevCols === columns) return
-    prevColumnsRef.current = columns
+    const target = scrollTargetRef.current
+    if (target === null) return
+    scrollTargetRef.current = null
 
-    const scrollEl = parentRef.current
-    if (!scrollEl) return
-
-    const scrollTop = scrollEl.scrollTop
-    const virtualItems = virtualizer.getVirtualItems()
-    if (virtualItems.length === 0) return
-
-    // Find the first row fully visible in viewport (start >= scrollTop)
-    const firstVisibleVItem = virtualItems.find((item) => item.start >= scrollTop)
-      ?? virtualItems[0]
-    const firstBookmarkIndex = firstVisibleVItem.index * prevCols
-
-    // Compute new row for that bookmark and scroll to it
-    const newRow = Math.floor(firstBookmarkIndex / columns)
+    const newRow = Math.floor(target / columns)
     virtualizer.scrollToIndex(newRow, { align: 'start' })
   }, [columns, virtualizer])
 
