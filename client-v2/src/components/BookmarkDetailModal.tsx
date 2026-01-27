@@ -7,6 +7,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
+import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { updateBookmark, deleteBookmark, refreshMetadata, normalizeTags, toBase64, fileUrl } from '@/lib/api'
 import type { Bookmark } from '@/lib/api'
@@ -26,11 +27,10 @@ export function BookmarkDetailModal() {
   const detailModalEdit = useStore((s) => s.detailModalEdit)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const bookmarks = useStore((s) => s.bookmarks)
-  const config = useStore((s) => s.config)
   const markDirty = useStore((s) => s.markDirty)
   const clearDirty = useStore((s) => s.clearDirty)
   const setBookmarks = useStore((s) => s.setBookmarks)
-  const hiddenTags = config?.hidden_by_default ?? []
+  const hiddenTags = useHiddenTags()
 
   const { displayBookmarks } = useDisplayBookmarks()
 

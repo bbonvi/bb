@@ -1,5 +1,5 @@
 import type { Bookmark } from '@/lib/api'
-import { useStore } from '@/lib/store'
+import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { Thumbnail, Favicon, UrlDisplay, Tags, Description, CardActions } from './bookmark-parts'
 
 interface BookmarkCardProps {
@@ -8,8 +8,7 @@ interface BookmarkCardProps {
 }
 
 export function BookmarkCard({ bookmark, onClick }: BookmarkCardProps) {
-  const config = useStore((s) => s.config)
-  const hiddenTags = config?.hidden_by_default ?? []
+  const hiddenTags = useHiddenTags()
 
   return (
     <article

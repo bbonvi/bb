@@ -1,6 +1,7 @@
 import { useRef, useCallback, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
+import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { Favicon, TagChip, CardActions } from './bookmark-parts'
 import { ViewEmptyState } from './BookmarkGrid'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
@@ -70,8 +71,7 @@ function TableRow({
   bookmark: Bookmark
   onClick: () => void
 }) {
-  const config = useStore((s) => s.config)
-  const hiddenTags = config?.hidden_by_default ?? []
+  const hiddenTags = useHiddenTags()
   const visibleTags = useMemo(
     () => bookmark.tags.filter((t) => !hiddenTags.includes(t)),
     [bookmark.tags, hiddenTags],

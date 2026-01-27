@@ -6,6 +6,7 @@ import { BookmarkTable } from '@/components/BookmarkTable'
 import { BookmarkDetailModal } from '@/components/BookmarkDetailModal'
 import { CreateBookmarkModal } from '@/components/CreateBookmarkModal'
 import { BulkEditModal, BulkDeleteModal } from '@/components/BulkOperationsModal'
+import { SettingsPanel } from '@/components/SettingsPanel'
 import { usePolling } from '@/hooks/usePolling'
 import { useStore } from '@/lib/store'
 
@@ -38,6 +39,7 @@ function AppShell() {
       <CreateBookmarkModal />
       <BulkEditModal open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
       <BulkDeleteModal open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
+      <SettingsPanel />
     </div>
   )
 }

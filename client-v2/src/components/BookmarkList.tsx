@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
+import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { Favicon, Thumbnail, UrlDisplay, Tags, Description, CardActions } from './bookmark-parts'
 import { ViewEmptyState } from './BookmarkGrid'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
@@ -65,8 +66,7 @@ function ListCard({
   bookmark: Bookmark
   onClick: () => void
 }) {
-  const config = useStore((s) => s.config)
-  const hiddenTags = config?.hidden_by_default ?? []
+  const hiddenTags = useHiddenTags()
 
   return (
     <article
