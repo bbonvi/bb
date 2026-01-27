@@ -31,8 +31,12 @@ export function BookmarkDetailModal() {
   const markDirty = useStore((s) => s.markDirty)
   const clearDirty = useStore((s) => s.clearDirty)
   const setBookmarks = useStore((s) => s.setBookmarks)
-  const tags = useStore((s) => s.tags)
+  const allTags = useStore((s) => s.tags)
   const hiddenTags = useHiddenTags()
+  const visibleTags = useMemo(() => {
+    const hidden = new Set(hiddenTags)
+    return allTags.filter((t) => !hidden.has(t))
+  }, [allTags, hiddenTags])
 
   const { displayBookmarks } = useDisplayBookmarks()
 
@@ -297,7 +301,7 @@ export function BookmarkDetailModal() {
                     bookmark={bookmark}
                     iconPreview={iconPreview}
                     onIconUpload={handleIconUpload}
-                    availableTags={tags}
+                    availableTags={visibleTags}
                   />
                 ) : (
                   <ViewContent
