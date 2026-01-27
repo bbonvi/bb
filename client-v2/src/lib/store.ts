@@ -76,10 +76,6 @@ export interface AppState {
   // Shuffle seed (§8) — generated once per session
   shuffleSeed: number
 
-  // Semantic search results (dual-poll §9)
-  semanticResults: Bookmark[] | null
-  setSemanticResults: (results: Bookmark[] | null) => void
-
   // Loading state
   initialLoadComplete: boolean
   setInitialLoadComplete: (done: boolean) => void
@@ -194,10 +190,6 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // Shuffle seed
   shuffleSeed: Math.floor(Math.random() * 2147483647),
-
-  // Semantic results
-  semanticResults: null,
-  setSemanticResults: (semanticResults) => set({ semanticResults }),
 
   // Loading
   initialLoadComplete: false,

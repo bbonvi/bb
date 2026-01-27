@@ -9,7 +9,7 @@ import {
   fetchSemanticStatus,
   ApiError,
 } from '@/lib/api'
-import type { Bookmark } from '@/lib/api'
+import type { Bookmark, SearchQuery } from '@/lib/api'
 
 const POLL_INTERVAL = 3000
 
@@ -30,10 +30,17 @@ function mergeWithDirty(
   return merged
 }
 
+function isQueryEmpty(q: SearchQuery): boolean {
+  return !q.semantic && !q.keyword && !q.tags && !q.title && !q.url && !q.description
+}
+
 export function usePolling() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const visibleRef = useRef(true)
   const lastAppliedSeq = useRef(0)
+
+  // Subscribe to searchQuery + showAll changes for immediate fetch
+  const prevQueryRef = useRef<{ query: SearchQuery; showAll: boolean } | null>(null)
 
   useEffect(() => {
     function handleVisibility() {
@@ -48,56 +55,35 @@ export function usePolling() {
 
       const store = useStore.getState()
       const seq = store.nextPollSequence()
-      const semanticQuery = store.searchQuery.semantic
+      const { searchQuery, showAll } = store
+
+      // Skip bookmark fetch when show-all OFF + no query
+      const shouldFetchBookmarks = showAll || !isQueryEmpty(searchQuery)
 
       try {
-        // Build parallel requests
-        const requests: [
-          Promise<Bookmark[]>,
-          Promise<{ total: number }>,
-          Promise<string[]>,
-          Promise<ReturnType<typeof fetchConfig>>,
-          Promise<ReturnType<typeof fetchTaskQueue>>,
-          Promise<ReturnType<typeof fetchSemanticStatus>>,
-          Promise<Bookmark[]> | null,
-        ] = [
-          searchBookmarks({}),
-          fetchTotal(),
-          fetchTags(),
-          fetchConfig(),
-          fetchTaskQueue(),
-          fetchSemanticStatus(),
-          // Dual-poll: if semantic search active, also fetch ranked results
-          semanticQuery
-            ? searchBookmarks({ semantic: semanticQuery, threshold: store.searchQuery.threshold })
-            : null,
-        ]
-
         const [bookmarks, totalResp, tags, config, taskQueue, semanticStatus] =
-          await Promise.all(requests.slice(0, 6) as [
-            Promise<Bookmark[]>,
-            Promise<{ total: number }>,
-            Promise<string[]>,
-            Promise<ReturnType<typeof fetchConfig>>,
-            Promise<ReturnType<typeof fetchTaskQueue>>,
-            Promise<ReturnType<typeof fetchSemanticStatus>>,
+          await Promise.all([
+            shouldFetchBookmarks ? searchBookmarks(searchQuery) : Promise.resolve(null),
+            fetchTotal(),
+            fetchTags(),
+            fetchConfig(),
+            fetchTaskQueue(),
+            fetchSemanticStatus(),
           ])
-
-        const semanticResults = requests[6] ? await requests[6] : null
 
         // Stale poll suppression
         if (seq <= lastAppliedSeq.current) return
         lastAppliedSeq.current = seq
 
         const state = useStore.getState()
-        const dirtyIds = state.dirtyIds
 
-        state.setBookmarks(mergeWithDirty(bookmarks, state.bookmarks, dirtyIds))
-        state.setSemanticResults(
-          semanticResults
-            ? mergeWithDirty(semanticResults, state.semanticResults ?? [], dirtyIds)
-            : null,
-        )
+        if (bookmarks !== null) {
+          state.setBookmarks(mergeWithDirty(bookmarks, state.bookmarks, state.dirtyIds))
+        } else {
+          // show-all OFF + no query → clear display
+          state.setBookmarks([])
+        }
+
         state.setTotalCount(totalResp.total)
         state.setTags(tags)
         state.setConfig(config)
@@ -109,6 +95,7 @@ export function usePolling() {
         }
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) return
+        // Silently continue polling on other errors
       }
     }
 
@@ -122,9 +109,21 @@ export function usePolling() {
 
     poll().then(() => schedulePoll())
 
+    // Subscribe to store changes for immediate fetch on query change
+    const unsub = useStore.subscribe((state) => {
+      const current = { query: state.searchQuery, showAll: state.showAll }
+      const prev = prevQueryRef.current
+      if (prev && (prev.query !== current.query || prev.showAll !== current.showAll)) {
+        // Immediate fetch — reset poll timer
+        schedulePoll(0)
+      }
+      prevQueryRef.current = current
+    })
+
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
       document.removeEventListener('visibilitychange', handleVisibility)
+      unsub()
     }
   }, [])
 }
