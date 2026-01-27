@@ -1,12 +1,11 @@
 import { AuthGate } from '@/components/AuthGate'
+import { Toolbar } from '@/components/Toolbar'
 import { usePolling } from '@/hooks/usePolling'
 import { useStore } from '@/lib/store'
 
 function AppShell() {
   usePolling()
   const initialLoadComplete = useStore((s) => s.initialLoadComplete)
-  const totalCount = useStore((s) => s.totalCount)
-  const bookmarks = useStore((s) => s.bookmarks)
 
   if (!initialLoadComplete) {
     return (
@@ -18,9 +17,10 @@ function AppShell() {
 
   return (
     <div className="flex h-screen flex-col bg-bg">
-      <div className="flex items-center justify-center p-4 text-text-muted">
-        bb — {bookmarks.length}/{totalCount} bookmarks
-      </div>
+      <Toolbar />
+      <main className="flex-1 overflow-auto p-4">
+        {/* Bookmark views will render here */}
+      </main>
     </div>
   )
 }

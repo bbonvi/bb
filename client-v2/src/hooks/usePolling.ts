@@ -9,8 +9,26 @@ import {
   fetchSemanticStatus,
   ApiError,
 } from '@/lib/api'
+import type { Bookmark } from '@/lib/api'
 
 const POLL_INTERVAL = 3000
+
+function mergeWithDirty(
+  incoming: Bookmark[],
+  current: Bookmark[],
+  dirtyIds: Set<number>,
+): Bookmark[] {
+  if (dirtyIds.size === 0) return incoming
+  const dirtyMap = new Map<number, Bookmark>()
+  for (const bm of current) {
+    if (dirtyIds.has(bm.id)) dirtyMap.set(bm.id, bm)
+  }
+  const merged = incoming.map((bm) => dirtyMap.get(bm.id) ?? bm)
+  for (const [id, bm] of dirtyMap) {
+    if (!incoming.some((b) => b.id === id)) merged.push(bm)
+  }
+  return merged
+}
 
 export function usePolling() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -20,10 +38,7 @@ export function usePolling() {
   useEffect(() => {
     function handleVisibility() {
       visibleRef.current = document.visibilityState === 'visible'
-      // Resume polling immediately when tab becomes visible
-      if (visibleRef.current) {
-        schedulePoll(0)
-      }
+      if (visibleRef.current) schedulePoll(0)
     }
 
     document.addEventListener('visibilitychange', handleVisibility)
@@ -33,46 +48,56 @@ export function usePolling() {
 
       const store = useStore.getState()
       const seq = store.nextPollSequence()
+      const semanticQuery = store.searchQuery.semantic
 
       try {
-        // Fire all poll requests in parallel
+        // Build parallel requests
+        const requests: [
+          Promise<Bookmark[]>,
+          Promise<{ total: number }>,
+          Promise<string[]>,
+          Promise<ReturnType<typeof fetchConfig>>,
+          Promise<ReturnType<typeof fetchTaskQueue>>,
+          Promise<ReturnType<typeof fetchSemanticStatus>>,
+          Promise<Bookmark[]> | null,
+        ] = [
+          searchBookmarks({}),
+          fetchTotal(),
+          fetchTags(),
+          fetchConfig(),
+          fetchTaskQueue(),
+          fetchSemanticStatus(),
+          // Dual-poll: if semantic search active, also fetch ranked results
+          semanticQuery
+            ? searchBookmarks({ semantic: semanticQuery, threshold: store.searchQuery.threshold })
+            : null,
+        ]
+
         const [bookmarks, totalResp, tags, config, taskQueue, semanticStatus] =
-          await Promise.all([
-            searchBookmarks({}),
-            fetchTotal(),
-            fetchTags(),
-            fetchConfig(),
-            fetchTaskQueue(),
-            fetchSemanticStatus(),
+          await Promise.all(requests.slice(0, 6) as [
+            Promise<Bookmark[]>,
+            Promise<{ total: number }>,
+            Promise<string[]>,
+            Promise<ReturnType<typeof fetchConfig>>,
+            Promise<ReturnType<typeof fetchTaskQueue>>,
+            Promise<ReturnType<typeof fetchSemanticStatus>>,
           ])
 
-        // Stale poll suppression: discard if a newer poll was already applied
+        const semanticResults = requests[6] ? await requests[6] : null
+
+        // Stale poll suppression
         if (seq <= lastAppliedSeq.current) return
         lastAppliedSeq.current = seq
 
         const state = useStore.getState()
-
-        // Merge bookmarks respecting dirty IDs (§9.1)
         const dirtyIds = state.dirtyIds
-        if (dirtyIds.size > 0) {
-          const dirtyMap = new Map<number, typeof bookmarks[0]>()
-          for (const bm of state.bookmarks) {
-            if (dirtyIds.has(bm.id)) {
-              dirtyMap.set(bm.id, bm)
-            }
-          }
-          const merged = bookmarks.map((bm) => dirtyMap.get(bm.id) ?? bm)
-          // Keep dirty bookmarks that aren't in server response (pending save)
-          for (const [id, bm] of dirtyMap) {
-            if (!bookmarks.some((b) => b.id === id)) {
-              merged.push(bm)
-            }
-          }
-          state.setBookmarks(merged)
-        } else {
-          state.setBookmarks(bookmarks)
-        }
 
+        state.setBookmarks(mergeWithDirty(bookmarks, state.bookmarks, dirtyIds))
+        state.setSemanticResults(
+          semanticResults
+            ? mergeWithDirty(semanticResults, state.semanticResults ?? [], dirtyIds)
+            : null,
+        )
         state.setTotalCount(totalResp.total)
         state.setTags(tags)
         state.setConfig(config)
@@ -83,8 +108,6 @@ export function usePolling() {
           state.setInitialLoadComplete(true)
         }
       } catch (err) {
-        // On 401 the API client handles redirect; skip other errors silently
-        // (poll will retry next cycle)
         if (err instanceof ApiError && err.status === 401) return
       }
     }
@@ -93,13 +116,10 @@ export function usePolling() {
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(async () => {
         await poll()
-        if (visibleRef.current) {
-          schedulePoll()
-        }
+        if (visibleRef.current) schedulePoll()
       }, delay)
     }
 
-    // Initial poll immediately
     poll().then(() => schedulePoll())
 
     return () => {
