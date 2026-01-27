@@ -5,6 +5,7 @@ import type {
   SearchQuery,
   TaskQueue,
   Config,
+  Workspace,
 } from './api'
 
 export interface AppState {
@@ -96,22 +97,8 @@ export interface AppState {
   bookmarksFresh: boolean
 }
 
-export interface Workspace {
-  id: string
-  name: string
-  filters: {
-    tag_whitelist: string[]
-    tag_blacklist: string[]
-    url_pattern: string | null
-    title_pattern: string | null
-    description_pattern: string | null
-    any_field_pattern: string | null
-  }
-  view_prefs: {
-    mode: 'grid' | 'cards' | 'table' | null
-    columns: number | null
-  }
-}
+// Re-export Workspace from api for consumers that import from store
+export type { Workspace } from './api'
 
 const emptySearchQuery: SearchQuery = {}
 

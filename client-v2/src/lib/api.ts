@@ -289,3 +289,56 @@ export function fetchTaskQueue(): Promise<TaskQueue> {
 export function fetchSemanticStatus(): Promise<SemanticStatus> {
   return fetchApi('/api/semantic/status')
 }
+
+// --- Workspace types ---
+
+export interface WorkspaceFilters {
+  tag_whitelist: string[]
+  tag_blacklist: string[]
+  url_pattern: string | null
+  title_pattern: string | null
+  description_pattern: string | null
+  any_field_pattern: string | null
+}
+
+export interface ViewPrefs {
+  mode: 'grid' | 'cards' | 'table' | null
+  columns: number | null
+}
+
+export interface Workspace {
+  id: string
+  name: string
+  filters: WorkspaceFilters
+  view_prefs: ViewPrefs
+}
+
+export interface WorkspaceCreate {
+  name: string
+  filters?: Partial<WorkspaceFilters>
+  view_prefs?: Partial<ViewPrefs>
+}
+
+export interface WorkspaceUpdate {
+  name?: string
+  filters?: Partial<WorkspaceFilters>
+  view_prefs?: Partial<ViewPrefs>
+}
+
+// --- Workspace endpoints ---
+
+export function fetchWorkspaces(): Promise<Workspace[]> {
+  return fetchApi('/api/workspaces')
+}
+
+export function createWorkspace(data: WorkspaceCreate): Promise<Workspace> {
+  return fetchApi('/api/workspaces', { method: 'POST', body: data })
+}
+
+export function updateWorkspace(id: string, data: WorkspaceUpdate): Promise<Workspace> {
+  return fetchApi(`/api/workspaces/${encodeURIComponent(id)}`, { method: 'PUT', body: data })
+}
+
+export function deleteWorkspace(id: string): Promise<void> {
+  return fetchApi(`/api/workspaces/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}

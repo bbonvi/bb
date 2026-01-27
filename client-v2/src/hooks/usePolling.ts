@@ -7,6 +7,7 @@ import {
   fetchConfig,
   fetchTaskQueue,
   fetchSemanticStatus,
+  fetchWorkspaces,
   ApiError,
 } from '@/lib/api'
 import type { Bookmark, SearchQuery } from '@/lib/api'
@@ -40,7 +41,7 @@ export function usePolling() {
   const lastAppliedSeq = useRef(0)
 
   // Subscribe to searchQuery + showAll changes for immediate fetch
-  const prevQueryRef = useRef<{ query: SearchQuery; showAll: boolean } | null>(null)
+  const prevQueryRef = useRef<{ query: SearchQuery; showAll: boolean; activeWorkspaceId: string | null } | null>(null)
 
   useEffect(() => {
     function handleVisibility() {
@@ -61,7 +62,7 @@ export function usePolling() {
       const shouldFetchBookmarks = showAll || !isQueryEmpty(searchQuery)
 
       try {
-        const [bookmarks, totalResp, tags, config, taskQueue, semanticStatus] =
+        const [bookmarks, totalResp, tags, config, taskQueue, semanticStatus, workspacesResult] =
           await Promise.all([
             shouldFetchBookmarks ? searchBookmarks(searchQuery) : Promise.resolve(null),
             fetchTotal(),
@@ -69,6 +70,15 @@ export function usePolling() {
             fetchConfig(),
             fetchTaskQueue(),
             fetchSemanticStatus(),
+            fetchWorkspaces().then(
+              (ws) => ({ available: true as const, workspaces: ws }),
+              (err) => {
+                if (err instanceof ApiError && err.status === 404) {
+                  return { available: false as const, workspaces: [] }
+                }
+                throw err
+              },
+            ),
           ])
 
         // Stale poll suppression
@@ -89,6 +99,8 @@ export function usePolling() {
         state.setConfig(config)
         state.setTaskQueue(taskQueue)
         state.setSemanticEnabled(semanticStatus.enabled)
+        state.setWorkspacesAvailable(workspacesResult.available)
+        state.setWorkspaces(workspacesResult.workspaces)
 
         if (!state.initialLoadComplete) {
           state.setInitialLoadComplete(true)
@@ -111,9 +123,9 @@ export function usePolling() {
 
     // Subscribe to store changes for immediate fetch on query change
     const unsub = useStore.subscribe((state) => {
-      const current = { query: state.searchQuery, showAll: state.showAll }
+      const current = { query: state.searchQuery, showAll: state.showAll, activeWorkspaceId: state.activeWorkspaceId }
       const prev = prevQueryRef.current
-      if (prev && (prev.query !== current.query || prev.showAll !== current.showAll)) {
+      if (prev && (prev.query !== current.query || prev.showAll !== current.showAll || prev.activeWorkspaceId !== current.activeWorkspaceId)) {
         // Immediate fetch — reset poll timer
         schedulePoll(0)
       }
