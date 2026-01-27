@@ -132,6 +132,16 @@ export class ApiError extends Error {
   }
 }
 
+// --- Tag normalization ---
+// Accepts comma-separated, space-separated, or mixed. Returns comma-separated, no empty entries.
+export function normalizeTags(raw: string): string {
+  return raw
+    .split(/[\s,]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .join(',')
+}
+
 // --- Token management (injected via callbacks) ---
 
 let _getToken: () => string | null = () => null

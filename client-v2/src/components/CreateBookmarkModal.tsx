@@ -7,7 +7,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
-import { createBookmark } from '@/lib/api'
+import { createBookmark, normalizeTags } from '@/lib/api'
 import { Check, X } from 'lucide-react'
 
 interface CreateForm {
@@ -131,7 +131,7 @@ export function CreateBookmarkModal() {
         url,
         title: form.title.trim() || undefined,
         description: form.description.trim() || undefined,
-        tags: form.tags.trim() || undefined,
+        tags: normalizeTags(form.tags) || undefined,
         no_meta: form.no_meta || undefined,
         async_meta: form.async_meta || undefined,
         no_headless: form.no_headless || undefined,

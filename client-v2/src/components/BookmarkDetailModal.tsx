@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
-import { updateBookmark, deleteBookmark, refreshMetadata } from '@/lib/api'
+import { updateBookmark, deleteBookmark, refreshMetadata, normalizeTags } from '@/lib/api'
 import type { Bookmark } from '@/lib/api'
 import { Thumbnail, Favicon, Tags, UrlDisplay } from './bookmark-parts'
 import {
@@ -128,7 +128,7 @@ export function BookmarkDetailModal() {
         title: editForm.title,
         description: editForm.description,
         url: editForm.url,
-        tags: editForm.tags,
+        tags: normalizeTags(editForm.tags),
       })
       // Update in local bookmarks array
       setBookmarks(bookmarks.map((b) => (b.id === updated.id ? updated : b)))
