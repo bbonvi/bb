@@ -323,7 +323,14 @@ function ViewContent({
     <div className="flex flex-col gap-3">
       <h2 className="break-words text-lg font-medium leading-snug text-text">
         <Favicon iconId={bookmark.icon_id} className="h-5 w-5" />{' '}
-        {bookmark.title || bookmark.url}
+        <a
+          href={bookmark.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-hi"
+        >
+          {bookmark.title || bookmark.url}
+        </a>
       </h2>
 
       {/* URL */}
