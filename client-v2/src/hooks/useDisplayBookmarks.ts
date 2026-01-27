@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useStore } from '@/lib/store'
 import type { Bookmark } from '@/lib/api'
 
@@ -40,12 +40,18 @@ export function useDisplayBookmarks() {
     return null
   }, [totalCount, showAll, hasQuery, bookmarks.length, bookmarksFresh])
 
-  const displayBookmarks = useMemo(() => {
+  const freshDisplay = useMemo(() => {
+    if (!bookmarksFresh) return null // stale — don't recompute
     if (shuffle && !searchQuery.semantic) return shuffleBookmarks(bookmarks, shuffleSeed)
     // Non-semantic: reverse for newest-first; semantic: relevance-ranked as-is
     if (!searchQuery.semantic) return [...bookmarks].reverse()
     return bookmarks
-  }, [bookmarks, shuffle, shuffleSeed, searchQuery.semantic])
+  }, [bookmarks, shuffle, shuffleSeed, searchQuery.semantic, bookmarksFresh])
+
+  // Cache last fresh result to avoid flashing stale data with new ordering
+  const cachedRef = useRef<Bookmark[]>([])
+  if (freshDisplay !== null) cachedRef.current = freshDisplay
+  const displayBookmarks = cachedRef.current
 
   return { displayBookmarks, emptyReason, hasQuery }
 }
