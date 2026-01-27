@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Pencil,
   Trash2,
+  CircleHelp,
   RefreshCw,
   X,
   Check,
@@ -70,18 +71,6 @@ export function BookmarkDetailModal() {
     },
     [currentIndex, displayBookmarks, setDetailModalId],
   )
-
-  // Keyboard: left/right arrows for prev/next
-  useEffect(() => {
-    if (detailModalId === null) return
-    const handler = (e: KeyboardEvent) => {
-      if (editing) return // don't navigate while editing
-      if (e.key === 'ArrowLeft' && canPrev) navigate(-1)
-      if (e.key === 'ArrowRight' && canNext) navigate(1)
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [detailModalId, editing, canPrev, canNext, navigate])
 
   // Reset state when modal opens/closes or bookmark changes
   useEffect(() => {
@@ -170,6 +159,29 @@ export function BookmarkDetailModal() {
     }
   }, [bookmark])
 
+  // Keyboard: arrows for nav, Ctrl+Enter to save, Escape to discard edit first
+  useEffect(() => {
+    if (detailModalId === null) return
+    const handler = (e: KeyboardEvent) => {
+      if (editing) {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !saving) {
+          e.preventDefault()
+          saveEdit()
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          cancelEdit()
+        }
+        return
+      }
+      if (e.key === 'ArrowLeft' && canPrev) navigate(-1)
+      if (e.key === 'ArrowRight' && canNext) navigate(1)
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [detailModalId, editing, saving, canPrev, canNext, navigate, saveEdit, cancelEdit])
+
   const open = detailModalId !== null && bookmark !== null
 
   return (
@@ -254,35 +266,20 @@ export function BookmarkDetailModal() {
             {!editing && (
               <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-3 sm:px-6">
                 <div className="flex items-center gap-2">
-                  {confirmDelete ? (
-                    <>
-                      <span className="text-sm text-danger">Delete this bookmark?</span>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleDelete}
-                        disabled={deleting}
-                      >
-                        {deleting ? 'Deleting...' : 'Confirm'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConfirmDelete(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <button
-                      tabIndex={-1}
-                      onClick={() => setConfirmDelete(true)}
-                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                  <button
+                    tabIndex={-1}
+                    onClick={confirmDelete ? handleDelete : () => setConfirmDelete(true)}
+                    onMouseLeave={() => setConfirmDelete(false)}
+                    disabled={deleting}
+                    className={`rounded p-1.5 transition-colors disabled:opacity-50 ${
+                      confirmDelete
+                        ? 'bg-danger/10 text-danger'
+                        : 'text-text-muted hover:bg-danger/10 hover:text-danger'
+                    }`}
+                    title={confirmDelete ? 'Click again to confirm' : 'Delete'}
+                  >
+                    {confirmDelete ? <CircleHelp className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <button

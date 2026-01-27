@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { Bookmark } from '@/lib/api'
 import { fileUrl, deleteBookmark } from '@/lib/api'
 import { useStore } from '@/lib/store'
-import { Pencil, Trash2 } from 'lucide-react'
+import { CircleHelp, Pencil, Trash2 } from 'lucide-react'
 
 // ─── Thumbnail with styled fallback ────────────────────────────────
 export function Thumbnail({
@@ -214,14 +214,13 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
     [bookmarkId, openDetailInEditMode],
   )
 
-  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    setConfirmDelete(true)
-  }, [])
-
-  const handleConfirmDelete = useCallback(
+  const handleDeleteClick = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation()
+      if (!confirmDelete) {
+        setConfirmDelete(true)
+        return
+      }
       setDeleting(true)
       try {
         await deleteBookmark(bookmarkId)
@@ -234,39 +233,8 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
         setConfirmDelete(false)
       }
     },
-    [bookmarkId, bookmarks, detailModalId, setBookmarks, setDetailModalId],
+    [confirmDelete, bookmarkId, bookmarks, detailModalId, setBookmarks, setDetailModalId],
   )
-
-  const handleCancelDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    setConfirmDelete(false)
-  }, [])
-
-  if (confirmDelete) {
-    return (
-      <div
-        className={`absolute inset-0 z-10 flex items-center justify-center gap-2 bg-bg/90 backdrop-blur-sm ${variant === 'card' ? 'rounded-lg' : ''}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <span className="text-sm text-danger">Delete?</span>
-        <button
-          tabIndex={-1}
-          onClick={handleConfirmDelete}
-          disabled={deleting}
-          className="rounded bg-danger px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-danger/80 disabled:opacity-50"
-        >
-          {deleting ? '...' : 'Yes'}
-        </button>
-        <button
-          tabIndex={-1}
-          onClick={handleCancelDelete}
-          className="rounded bg-surface-hover px-2 py-1 text-xs font-medium text-text-muted transition-colors hover:text-text"
-        >
-          No
-        </button>
-      </div>
-    )
-  }
 
   return (
     <div className={`absolute right-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 ${variant === 'card' ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
@@ -281,10 +249,16 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
       <button
         tabIndex={-1}
         onClick={handleDeleteClick}
-        className="rounded bg-bg/80 p-1.5 text-text-muted backdrop-blur-sm transition-colors hover:bg-danger/20 hover:text-danger"
-        title="Delete"
+        onMouseLeave={() => setConfirmDelete(false)}
+        disabled={deleting}
+        className={`rounded p-1.5 backdrop-blur-sm transition-colors disabled:opacity-50 ${
+          confirmDelete
+            ? 'bg-danger/20 text-danger'
+            : 'bg-bg/80 text-text-muted hover:bg-danger/20 hover:text-danger'
+        }`}
+        title={confirmDelete ? 'Click again to confirm' : 'Delete'}
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        {confirmDelete ? <CircleHelp className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
       </button>
     </div>
   )
