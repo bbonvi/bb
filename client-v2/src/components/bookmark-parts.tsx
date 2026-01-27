@@ -11,28 +11,36 @@ export function Thumbnail({
   bookmark: Bookmark
   className?: string
 }) {
+  const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
+  const hasImage = !!bookmark.image_id && !failed
 
-  if (!bookmark.image_id || failed) {
-    return (
+  return (
+    <div className={`relative overflow-hidden ${className}`}>
+      {/* Fallback — always rendered, visible until image loads */}
       <div
-        className={`flex items-center justify-center bg-gradient-to-br from-surface-hover to-surface ${className}`}
+        className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-hover to-surface transition-opacity duration-150 ${
+          hasImage && loaded ? 'opacity-0' : 'opacity-100'
+        }`}
       >
         <span className="text-3xl text-text-dim select-none">
           {bookmark.title?.[0]?.toUpperCase() || '?'}
         </span>
       </div>
-    )
-  }
-
-  return (
-    <img
-      src={fileUrl(bookmark.image_id)}
-      alt=""
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className={`object-cover ${className}`}
-    />
+      {/* Image — hidden until loaded */}
+      {hasImage && (
+        <img
+          src={fileUrl(bookmark.image_id!)}
+          alt=""
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${
+            loaded ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+      )}
+    </div>
   )
 }
 
@@ -44,25 +52,34 @@ export function Favicon({
   iconId: string | null
   className?: string
 }) {
+  const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
-
-  if (!iconId || failed) {
-    return (
-      <span
-        className={`inline-block shrink-0 rounded-sm bg-surface-hover ${className}`}
-        style={{ verticalAlign: '-3px', marginRight: '0.3em' }}
-      />
-    )
-  }
+  const hasIcon = !!iconId && !failed
+  const inlineStyle = { verticalAlign: '-3px' as const, marginRight: '0.3em' }
 
   return (
-    <img
-      src={fileUrl(iconId)}
-      alt=""
-      onError={() => setFailed(true)}
-      className={`inline-block shrink-0 rounded-sm object-contain ${className}`}
-      style={{ verticalAlign: '-3px', marginRight: '0.3em' }}
-    />
+    <span
+      className={`relative inline-block shrink-0 ${className}`}
+      style={inlineStyle}
+    >
+      {/* Fallback placeholder — always present, fades out when image loads */}
+      <span
+        className={`absolute inset-0 rounded-sm bg-surface-hover transition-opacity duration-100 ${
+          hasIcon && loaded ? 'opacity-0' : 'opacity-100'
+        }`}
+      />
+      {hasIcon && (
+        <img
+          src={fileUrl(iconId!)}
+          alt=""
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className={`relative h-full w-full rounded-sm object-contain transition-opacity duration-100 ${
+            loaded ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+      )}
+    </span>
   )
 }
 
