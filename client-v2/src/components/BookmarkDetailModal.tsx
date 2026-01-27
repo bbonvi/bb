@@ -164,7 +164,7 @@ export function BookmarkDetailModal() {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) setDetailModalId(null) }}>
       <DialogContent
-        className="flex h-[85vh] w-full max-w-2xl flex-col gap-0 overflow-hidden bg-surface p-0"
+        className="flex h-[min(72vh,720px)] w-full max-w-2xl flex-col gap-0 overflow-hidden bg-surface p-0"
         showCloseButton={false}
       >
         {bookmark && (
@@ -324,7 +324,7 @@ function ViewContent({
       {/* Title + favicon */}
       <div className="flex items-start gap-3">
         <Favicon iconId={bookmark.icon_id} />
-        <h2 className="text-lg font-medium leading-snug text-text">
+        <h2 className="min-w-0 break-words text-lg font-medium leading-snug text-text">
           {bookmark.title || bookmark.url}
         </h2>
       </div>
