@@ -389,6 +389,7 @@ function WorkspaceEditor({
           disabled={whitelist.length === 0}
           onFetch={() => fetchRelated(whitelist, setWhitelistRelated, setFetchingWhitelistRelated)}
           onAdd={addWhitelistTag}
+          setTags={setWhitelistRelated}
         />
       </div>
 
@@ -412,6 +413,7 @@ function WorkspaceEditor({
           disabled={blacklist.length === 0}
           onFetch={() => fetchRelated(blacklist, setBlacklistRelated, setFetchingBlacklistRelated)}
           onAdd={addBlacklistTag}
+          setTags={setBlacklistRelated}
         />
       </div>
 
@@ -516,13 +518,20 @@ function RelatedTags({
   disabled,
   onFetch,
   onAdd,
+  setTags,
 }: {
   tags: string[]
   fetching: boolean
   disabled: boolean
   onFetch: () => void
   onAdd: (tag: string) => void
+  setTags: (tags: string[]) => void
 }) {
+  function handleAdd(tag: string) {
+    onAdd(tag)
+    setTags(tags.filter((t) => t !== tag))
+  }
+
   return (
     <div className="mt-1.5">
       <button
@@ -538,7 +547,7 @@ function RelatedTags({
           {tags.map((tag) => (
             <button
               key={tag}
-              onClick={() => onAdd(tag)}
+              onClick={() => handleAdd(tag)}
               className="rounded px-1.5 py-0.5 text-[11px] text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
             >
               {tag}
