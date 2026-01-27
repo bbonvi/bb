@@ -136,7 +136,7 @@ function Description({ text }: { text: string }) {
             e.stopPropagation()
             setExpanded(!expanded)
           }}
-          className="mt-0.5 text-[11px] text-accent-muted hover:text-accent"
+          className="mt-0.5 text-[11px] text-hi-muted hover:text-hi"
         >
           {expanded ? 'Show less' : 'Show more'}
         </button>
@@ -171,7 +171,7 @@ export function BookmarkCard({ bookmark, onClick }: BookmarkCardProps) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="line-clamp-2 text-sm font-medium leading-snug text-text underline-offset-2 hover:text-accent hover:underline"
+              className="line-clamp-2 text-sm font-medium leading-snug text-text hover:text-hi"
             >
               {bookmark.title || bookmark.url}
             </a>

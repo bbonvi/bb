@@ -187,7 +187,7 @@ export function Toolbar() {
             onChange={(e) => setLocalPrimary(e.target.value)}
             autoFocus
             placeholder={semanticEnabled ? 'Search semantically…' : 'Search bookmarks…'}
-            className="h-9 w-full rounded-lg border border-white/[0.06] bg-surface pl-9 pr-10 text-sm text-text placeholder:text-text-dim outline-none transition-colors focus:border-accent-dim focus:bg-surface-hover"
+            className="h-9 w-full rounded-lg border border-white/[0.06] bg-surface pl-9 pr-10 text-sm text-text placeholder:text-text-dim outline-none transition-colors focus:border-hi-dim focus:bg-surface-hover"
           />
           {/* Filter toggle inside search bar */}
           <button
@@ -195,7 +195,7 @@ export function Toolbar() {
             onClick={() => setFiltersOpen(!filtersOpen)}
             className={`absolute right-1.5 flex h-6 items-center gap-1 rounded-md px-1.5 text-xs transition-colors ${
               filtersOpen || hasAdvancedFilters
-                ? 'bg-accent-dim text-text'
+                ? 'bg-hi-dim text-text'
                 : 'text-text-muted hover:text-text'
             }`}
           >
@@ -210,7 +210,7 @@ export function Toolbar() {
 
         {/* Counter */}
         <div className="flex items-baseline gap-0.5 font-mono text-xs tabular-nums select-none shrink-0">
-          <span className={hasAnySearch ? 'text-accent' : 'text-text-muted'}>
+          <span className={hasAnySearch ? 'text-hi' : 'text-text-muted'}>
             {matchedCount}
           </span>
           <span className="text-text-dim">/</span>
@@ -240,7 +240,7 @@ export function Toolbar() {
               onClick={() => setViewMode(mode)}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
                 viewMode === mode
-                  ? 'bg-accent-dim text-text'
+                  ? 'bg-hi-dim text-text'
                   : 'text-text-muted hover:text-text'
               }`}
             >
@@ -282,7 +282,7 @@ export function Toolbar() {
               onClick={() => setViewMode(mode)}
               className={`rounded-md px-2 py-1 text-xs font-medium transition-all ${
                 viewMode === mode
-                  ? 'bg-accent-dim text-text'
+                  ? 'bg-hi-dim text-text'
                   : 'text-text-muted hover:text-text'
               }`}
             >
@@ -355,9 +355,9 @@ function FilterField({
         onChange={(e) => onChange(e.target.value)}
         className={`h-7 w-full sm:w-28 rounded-md border bg-transparent px-2 text-sm outline-none transition-colors ${
           value
-            ? 'border-accent/20 text-text'
+            ? 'border-hi/20 text-text'
             : 'border-white/[0.06] text-text placeholder:text-text-dim'
-        } focus:border-accent-dim focus:bg-surface`}
+        } focus:border-hi-dim focus:bg-surface`}
       />
     </label>
   )
@@ -379,7 +379,7 @@ function PillToggle({
       onClick={onClick}
       className={`rounded-full px-2.5 py-1 text-xs font-medium transition-all select-none ${
         active
-          ? 'bg-accent-dim text-text'
+          ? 'bg-hi-dim text-text'
           : 'text-text-muted hover:text-text hover:bg-surface-hover'
       }`}
     >
