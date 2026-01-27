@@ -12,3 +12,6 @@ config.yaml
 uploads/
 client-v2/node_modules/
 .env
+.ckignore
+.ck
+.claude
