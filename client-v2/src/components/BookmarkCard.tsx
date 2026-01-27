@@ -158,7 +158,7 @@ export function BookmarkCard({ bookmark, onClick }: BookmarkCardProps) {
   return (
     <article
       onClick={onClick}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-colors hover:border-white/[0.1] hover:bg-surface-hover"
+      className="group flex flex-col overflow-hidden rounded-lg border border-white/[0.06] bg-surface"
     >
       <Thumbnail bookmark={bookmark} />
       <div className="flex flex-col gap-1.5 p-3">
