@@ -10,4 +10,5 @@ bookmarks*csv
 buku.json
 config.yaml
 uploads/
+client-v2/node_modules/
 .env
