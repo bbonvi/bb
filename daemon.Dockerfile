@@ -46,10 +46,11 @@ RUN apt-get update && \
             libnss3 \
             libfreetype6 \
             fonts-freefont-ttf \
+            ca-certificates \
             wget \
         ; \
     else \
-        apt-get install -y --no-install-recommends wget ; \
+        apt-get install -y --no-install-recommends ca-certificates wget ; \
     fi && \
     rm -rf /var/lib/apt/lists/*
 
