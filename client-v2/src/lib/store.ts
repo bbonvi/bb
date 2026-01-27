@@ -199,10 +199,17 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // Workspace
   workspaces: [],
-  activeWorkspaceId: null,
+  activeWorkspaceId: localStorage.getItem('bb:activeWorkspaceId') ?? null,
   workspacesAvailable: false,
   setWorkspaces: (workspaces) => set({ workspaces }),
-  setActiveWorkspaceId: (activeWorkspaceId) => set({ activeWorkspaceId }),
+  setActiveWorkspaceId: (activeWorkspaceId) => {
+    if (activeWorkspaceId) {
+      localStorage.setItem('bb:activeWorkspaceId', activeWorkspaceId)
+    } else {
+      localStorage.removeItem('bb:activeWorkspaceId')
+    }
+    set({ activeWorkspaceId })
+  },
   setWorkspacesAvailable: (workspacesAvailable) => set({ workspacesAvailable }),
 
   // Task queue
