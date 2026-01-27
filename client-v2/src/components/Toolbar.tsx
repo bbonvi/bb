@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
-import { useIsMobile, useResponsiveColumns } from '@/hooks/useResponsive'
+import { useIsMobile } from '@/hooks/useResponsive'
 import type { SearchQuery } from '@/lib/api'
 
 // ─── Icons (inline SVG) ────────────────────────────────────────────
@@ -122,12 +122,7 @@ export function Toolbar() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Responsive columns — auto-sync unless user manually overrode
-  const responsiveCols = useResponsiveColumns()
-  const columnsOverridden = useRef(!!localStorage.getItem('bb_columns'))
-  useEffect(() => {
-    if (!columnsOverridden.current) setColumns(responsiveCols)
-  }, [responsiveCols]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Column auto-sync now handled by BookmarkGrid via useAutoColumns + ResizeObserver
 
   const hasAdvancedFilters = !!debouncedTags || !!debouncedTitle || !!debouncedUrl || !!debouncedDescription || (semanticEnabled && !!debouncedKeywordAlt)
   const hasAnySearch = !!debouncedPrimary || hasAdvancedFilters
@@ -274,7 +269,7 @@ export function Toolbar() {
         <div className={`items-center rounded-lg bg-surface shrink-0 ${viewMode === 'grid' ? 'hidden sm:flex' : 'hidden'}`}>
           <button
             tabIndex={-1}
-            onClick={() => { columnsOverridden.current = true; setColumns(Math.max(1, columns - 1)) }}
+            onClick={() => setColumns(Math.max(1, columns - 1))}
             className="flex h-7 w-7 items-center justify-center rounded-l-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
             <MinusIcon />
@@ -284,7 +279,7 @@ export function Toolbar() {
           </span>
           <button
             tabIndex={-1}
-            onClick={() => { columnsOverridden.current = true; setColumns(Math.min(12, columns + 1)) }}
+            onClick={() => setColumns(Math.min(12, columns + 1))}
             className="flex h-7 w-7 items-center justify-center rounded-r-lg text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
           >
             <PlusIcon />

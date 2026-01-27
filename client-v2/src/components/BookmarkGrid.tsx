@@ -1,9 +1,10 @@
-import { useRef, useMemo, useCallback } from 'react'
+import { useRef, useMemo, useCallback, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { BookmarkCard } from './BookmarkCard'
 import { EmptyState } from './bookmark-parts'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
+import { useAutoColumns } from '@/hooks/useResponsive'
 
 const ROW_GAP = 16
 const ESTIMATED_ROW_HEIGHT = 330
@@ -19,8 +20,18 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 export function BookmarkGrid() {
   const parentRef = useRef<HTMLDivElement>(null)
   const columns = useStore((s) => s.columns)
+  const setColumns = useStore((s) => s.setColumns)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
+
+  // Auto-compute columns from container width
+  const autoCols = useAutoColumns(parentRef)
+  const columnsOverridden = useStore((s) => s.columnsOverridden)
+
+  // Sync auto columns → store (unless manually overridden)
+  useEffect(() => {
+    if (!columnsOverridden) setColumns(autoCols, false)
+  }, [autoCols, columnsOverridden, setColumns])
 
   const rows = useMemo(
     () => chunkArray(displayBookmarks, columns),
@@ -34,6 +45,25 @@ export function BookmarkGrid() {
     overscan: 3,
     gap: ROW_GAP,
   })
+
+  // ── Scroll preservation on column change ──
+  const prevColumnsRef = useRef(columns)
+  useEffect(() => {
+    const prevCols = prevColumnsRef.current
+    if (prevCols === columns) return
+    prevColumnsRef.current = columns
+
+    // Find the first visible bookmark index from the old layout
+    const virtualItems = virtualizer.getVirtualItems()
+    if (virtualItems.length === 0) return
+
+    const firstVisibleRow = virtualItems[0].index
+    const firstBookmarkIndex = firstVisibleRow * prevCols
+
+    // Compute new row for that bookmark
+    const newRow = Math.floor(firstBookmarkIndex / columns)
+    virtualizer.scrollToIndex(newRow, { align: 'start' })
+  }, [columns, virtualizer])
 
   const handleCardClick = useCallback(
     (id: number) => setDetailModalId(id),
