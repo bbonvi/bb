@@ -50,14 +50,19 @@ export function BookmarkGrid() {
     if (prevCols === columns) return
     prevColumnsRef.current = columns
 
-    // Find the first visible bookmark index from the old layout
+    const scrollEl = parentRef.current
+    if (!scrollEl) return
+
+    const scrollTop = scrollEl.scrollTop
     const virtualItems = virtualizer.getVirtualItems()
     if (virtualItems.length === 0) return
 
-    const firstVisibleRow = virtualItems[0].index
-    const firstBookmarkIndex = firstVisibleRow * prevCols
+    // Find the first row fully visible in viewport (start >= scrollTop)
+    const firstVisibleVItem = virtualItems.find((item) => item.start >= scrollTop)
+      ?? virtualItems[0]
+    const firstBookmarkIndex = firstVisibleVItem.index * prevCols
 
-    // Compute new row for that bookmark
+    // Compute new row for that bookmark and scroll to it
     const newRow = Math.floor(firstBookmarkIndex / columns)
     virtualizer.scrollToIndex(newRow, { align: 'start' })
   }, [columns, virtualizer])
