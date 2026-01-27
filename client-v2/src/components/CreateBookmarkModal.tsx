@@ -30,9 +30,20 @@ const emptyForm: CreateForm = {
   no_headless: false,
 }
 
+function isUrl(text: string): boolean {
+  try {
+    const url = new URL(text)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export function CreateBookmarkModal() {
   const open = useStore((s) => s.createModalOpen)
   const setOpen = useStore((s) => s.setCreateModalOpen)
+  const initialUrl = useStore((s) => s.createModalInitialUrl)
+  const openCreateWithUrl = useStore((s) => s.openCreateWithUrl)
   const bookmarks = useStore((s) => s.bookmarks)
   const setBookmarks = useStore((s) => s.setBookmarks)
 
@@ -40,13 +51,13 @@ export function CreateBookmarkModal() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Reset form when modal opens
+  // Reset form when modal opens, pre-fill URL if provided
   useEffect(() => {
     if (open) {
-      setForm(emptyForm)
+      setForm(initialUrl ? { ...emptyForm, url: initialUrl } : emptyForm)
       setError(null)
     }
-  }, [open])
+  }, [open, initialUrl])
 
   // Ctrl+N global shortcut
   useEffect(() => {
@@ -59,6 +70,31 @@ export function CreateBookmarkModal() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [setOpen])
+
+  // Paste URL to auto-open create modal
+  useEffect(() => {
+    const handler = (e: ClipboardEvent) => {
+      // Skip if an input/textarea is focused (user is pasting into a field)
+      const active = document.activeElement
+      if (
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        (active instanceof HTMLElement && active.isContentEditable)
+      ) {
+        return
+      }
+      // Skip if modal already open
+      if (useStore.getState().createModalOpen) return
+
+      const text = e.clipboardData?.getData('text/plain')?.trim()
+      if (text && isUrl(text)) {
+        e.preventDefault()
+        openCreateWithUrl(text)
+      }
+    }
+    window.addEventListener('paste', handler)
+    return () => window.removeEventListener('paste', handler)
+  }, [openCreateWithUrl])
 
   const update = useCallback(
     <K extends keyof CreateForm>(field: K, value: CreateForm[K]) =>

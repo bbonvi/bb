@@ -45,7 +45,9 @@ export interface AppState {
 
   // Create modal
   createModalOpen: boolean
+  createModalInitialUrl: string
   setCreateModalOpen: (open: boolean) => void
+  openCreateWithUrl: (url: string) => void
 
   // Settings
   settingsOpen: boolean
@@ -186,7 +188,9 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // Create modal
   createModalOpen: false,
-  setCreateModalOpen: (createModalOpen) => set({ createModalOpen }),
+  createModalInitialUrl: '',
+  setCreateModalOpen: (createModalOpen) => set({ createModalOpen, createModalInitialUrl: '' }),
+  openCreateWithUrl: (url) => set({ createModalOpen: true, createModalInitialUrl: url }),
 
   // Settings
   settingsOpen: false,
