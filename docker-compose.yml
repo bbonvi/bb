@@ -25,7 +25,7 @@ services:
 
     environment:
       RUST_LOG: ${RUST_LOG:-info,bb=info,tower_http::trace::on_response=warn}
-      CHROME_PATH: /usr/bin/chromium-browser
+      CHROME_PATH: /usr/bin/chromium
       BB_AUTH_TOKEN: ${BB_AUTH_TOKEN:?BB_AUTH_TOKEN is required}
       # Optional: external API for link previews
       PEEKALINK_API_KEY: ${PEEKALINK_API_KEY:-}

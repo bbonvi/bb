@@ -7,49 +7,51 @@ RUN yarn run build
 
 #########################
 
-FROM rust:alpine AS rust_builder 
+FROM rust:1-slim-trixie AS rust_builder
 WORKDIR /app
 
-RUN apk add --no-cache openssl-dev musl-dev openssl-libs-static
-
-RUN rustup toolchain list | head -1 | cut -d" " -f1 | sed -e "s/gnu/musl/" > /target.txt
-
-RUN rustup target add $(cat /target.txt | cut -d"-" -f2- )
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libstdc++-14-dev \
+    libgomp1 \
+    libssl-dev \
+    build-essential \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY src src
 COPY Cargo.lock Cargo.toml .
 
 ARG NO_HEADLESS="false"
 
-ENV CFLAGS="-fPIC" 
-
 RUN if [ "$NO_HEADLESS" = "true" ]; then \
         echo "building without chromium" && \
         cargo install --locked --no-default-features \
-                --target=$(cat /target.txt | cut -d"-" -f2-) \
                 --root /usr/local/ --path ./ ; \
     else \
         echo "building with chromium" && \
-        cargo install --locked --target=$(cat /target.txt | cut -d"-" -f2-) --root /usr/local/ --path ./ ; \
+        cargo install --locked --root /usr/local/ --path ./ ; \
     fi
 
 #########################
 
-FROM alpine:latest
+FROM debian:trixie-slim
 
 ARG NO_HEADLESS="false"
 
-RUN if [ "$NO_HEADLESS" != "true" ]; then \
-        apk add --no-cache \
+RUN apt-get update && \
+    if [ "$NO_HEADLESS" != "true" ]; then \
+        apt-get install -y --no-install-recommends \
             chromium \
-            gcompat \
-            harfbuzz \
-            nss \
-            freetype \
-            ttf-freefont \
-            && mkdir /var/cache/chromium \
-            && chown root:root /var/cache/chromium; \
-    fi
+            libharfbuzz0b \
+            libnss3 \
+            libfreetype6 \
+            fonts-freefont-ttf \
+            wget \
+        ; \
+    else \
+        apt-get install -y --no-install-recommends wget ; \
+    fi && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=node_builder /app/build /client/build
 COPY --from=rust_builder /usr/local/bin/bb /usr/local/bin/bb
