@@ -39,9 +39,20 @@ export function useAutoColumns(ref: RefObject<HTMLElement | null>): number {
     return 4
   })
 
+  // Track the observed element so we re-attach when ref.current changes
+  // (e.g. grid unmounts during empty state then remounts)
+  const [el, setEl] = useState<HTMLElement | null>(ref.current)
+
+  // Poll for ref attachment changes — cheap check every animation frame
+  // only while disconnected. Stops once element is found.
   useEffect(() => {
-    const el = ref.current
-    if (!el) return
+    if (el === ref.current) return
+    setEl(ref.current)
+  })
+
+  useEffect(() => {
+    const target = el ?? ref.current
+    if (!target) return
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -49,9 +60,9 @@ export function useAutoColumns(ref: RefObject<HTMLElement | null>): number {
         setCols(columnsForWidth(w))
       }
     })
-    ro.observe(el)
+    ro.observe(target)
     return () => ro.disconnect()
-  }, [ref])
+  }, [el, ref])
 
   return cols
 }
