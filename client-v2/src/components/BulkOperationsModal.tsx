@@ -62,9 +62,12 @@ function BookmarkPreview({ count }: { count: number }) {
   )
 }
 
-// ─── Bulk Edit Modal ──────────────────────────────────────────────
-type TagMode = 'append' | 'remove' | 'replace'
+// ─── Helpers ──────────────────────────────────────────────────────
+function parseTags(raw: string): string[] {
+  return raw.split(/[\s,]+/).map((t) => t.trim()).filter(Boolean)
+}
 
+// ─── Bulk Edit Modal ──────────────────────────────────────────────
 export function BulkEditModal({
   open,
   onOpenChange,
@@ -75,36 +78,43 @@ export function BulkEditModal({
   const bookmarks = useStore((s) => s.bookmarks)
   const searchQuery = useStore((s) => s.searchQuery)
 
-  const [tagMode, setTagMode] = useState<TagMode>('append')
-  const [tagsInput, setTagsInput] = useState('')
+  const [addTags, setAddTags] = useState('')
+  const [removeTags, setRemoveTags] = useState('')
+  const [replaceMode, setReplaceMode] = useState(false)
+  const [replaceTags, setReplaceTags] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<number | null>(null)
 
   const count = bookmarks.length
 
+  const hasChanges = replaceMode
+    ? replaceTags.trim().length > 0
+    : addTags.trim().length > 0 || removeTags.trim().length > 0
+
   const reset = useCallback(() => {
-    setTagMode('append')
-    setTagsInput('')
+    setAddTags('')
+    setRemoveTags('')
+    setReplaceMode(false)
+    setReplaceTags('')
     setError(null)
     setResult(null)
   }, [])
 
   const handleSubmit = useCallback(async () => {
-    const tags = tagsInput.split(/[\s,]+/).map((t) => t.trim()).filter(Boolean)
-    if (tags.length === 0) return
+    if (!hasChanges) return
 
     setSubmitting(true)
     setError(null)
 
     try {
       const query = toBulkQuery(searchQuery)
-      const update =
-        tagMode === 'append'
-          ? { append_tags: tags }
-          : tagMode === 'remove'
-            ? { remove_tags: tags }
-            : { tags }
+      const update = replaceMode
+        ? { tags: parseTags(replaceTags) }
+        : {
+            ...(addTags.trim() ? { append_tags: parseTags(addTags) } : {}),
+            ...(removeTags.trim() ? { remove_tags: parseTags(removeTags) } : {}),
+          }
 
       const affected = await searchUpdateBookmarks(query, update)
       setResult(affected)
@@ -113,13 +123,26 @@ export function BulkEditModal({
     } finally {
       setSubmitting(false)
     }
-  }, [tagsInput, tagMode, searchQuery])
+  }, [hasChanges, replaceMode, replaceTags, addTags, removeTags, searchQuery])
 
   const close = useCallback(() => {
     onOpenChange(false)
-    // Reset after animation
     setTimeout(reset, 200)
   }, [onOpenChange, reset])
+
+  // Summary of what will happen
+  const summary = (() => {
+    if (replaceMode) {
+      const tags = parseTags(replaceTags)
+      return tags.length > 0 ? `Replace all tags with: ${tags.join(', ')}` : null
+    }
+    const parts: string[] = []
+    const add = parseTags(addTags)
+    const remove = parseTags(removeTags)
+    if (add.length > 0) parts.push(`add: ${add.join(', ')}`)
+    if (remove.length > 0) parts.push(`remove: ${remove.join(', ')}`)
+    return parts.length > 0 ? parts.join(' · ') : null
+  })()
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) close() }}>
@@ -158,44 +181,65 @@ export function BulkEditModal({
 
               <BookmarkPreview count={count} />
 
-              {/* Tag operation */}
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-medium text-text-muted">Tag operation</span>
-                <div className="flex items-center rounded-lg bg-bg p-0.5">
-                  {(['append', 'remove', 'replace'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      tabIndex={-1}
-                      onClick={() => setTagMode(mode)}
-                      className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
-                        tagMode === mode
-                          ? 'bg-hi-dim text-text'
-                          : 'text-text-muted hover:text-text'
-                      }`}
-                    >
-                      {mode === 'append' ? 'Add tags' : mode === 'remove' ? 'Remove tags' : 'Replace tags'}
-                    </button>
-                  ))}
-                </div>
-                <Input
-                  value={tagsInput}
-                  onChange={(e) => setTagsInput(e.target.value)}
-                  placeholder="rust, webdev"
-                  autoFocus
-                  className="bg-surface-hover"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSubmit()
-                    }
-                  }}
+              {/* Replace mode toggle */}
+              <label className="flex cursor-pointer items-center gap-2 select-none">
+                <input
+                  type="checkbox"
+                  checked={replaceMode}
+                  onChange={(e) => setReplaceMode(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-white/20 bg-surface-hover accent-hi"
                 />
-                <span className="text-[11px] text-text-dim">
-                  {tagMode === 'append' && 'These tags will be added to all matched bookmarks.'}
-                  {tagMode === 'remove' && 'These tags will be removed from all matched bookmarks.'}
-                  {tagMode === 'replace' && 'All existing tags will be replaced with these tags.'}
+                <span className="text-xs text-text-muted">
+                  Replace all tags (overwrites existing)
                 </span>
-              </div>
+              </label>
+
+              {replaceMode ? (
+                /* Replace mode: single input */
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-text-muted">New tags</span>
+                  <Input
+                    value={replaceTags}
+                    onChange={(e) => setReplaceTags(e.target.value)}
+                    placeholder="rust, webdev"
+                    autoFocus
+                    className="bg-surface-hover"
+                  />
+                  <span className="text-[11px] text-text-dim">
+                    All existing tags will be replaced with these.
+                  </span>
+                </label>
+              ) : (
+                /* Default mode: add + remove side by side */
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-danger/80">- Remove tags</span>
+                    <Input
+                      value={removeTags}
+                      onChange={(e) => setRemoveTags(e.target.value)}
+                      placeholder="old-tag, deprecated"
+                      autoFocus
+                      className="bg-surface-hover"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-green-400/80">+ Add tags</span>
+                    <Input
+                      value={addTags}
+                      onChange={(e) => setAddTags(e.target.value)}
+                      placeholder="rust, webdev"
+                      className="bg-surface-hover"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* Operation summary */}
+              {summary && (
+                <div className="rounded-md bg-white/[0.03] px-3 py-2 font-mono text-xs text-text-muted">
+                  {summary}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -209,7 +253,7 @@ export function BulkEditModal({
             <Button
               size="sm"
               onClick={handleSubmit}
-              disabled={submitting || !tagsInput.trim()}
+              disabled={submitting || !hasChanges}
             >
               <Pencil className="mr-1 h-3.5 w-3.5" />
               {submitting ? 'Updating...' : `Update ${count} bookmark${count !== 1 ? 's' : ''}`}
