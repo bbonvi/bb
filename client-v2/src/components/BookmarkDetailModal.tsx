@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
-import { updateBookmark, deleteBookmark, refreshMetadata, normalizeTags } from '@/lib/api'
+import { updateBookmark, deleteBookmark, refreshMetadata, normalizeTags, toBase64, fileUrl } from '@/lib/api'
 import type { Bookmark } from '@/lib/api'
-import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton } from './bookmark-parts'
+import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone } from './bookmark-parts'
 import {
   ChevronLeft,
   ChevronRight,
@@ -37,9 +37,11 @@ export function BookmarkDetailModal() {
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({ title: '', description: '', url: '', tags: '' })
   const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Local preview URLs for optimistic display after upload
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [iconPreview, setIconPreview] = useState<string | null>(null)
 
   // Find the bookmark by ID from the full bookmarks array (not display — may be reversed/shuffled)
   const bookmark = useMemo(
@@ -52,6 +54,47 @@ export function BookmarkDetailModal() {
     () => (detailModalId !== null ? displayBookmarks.findIndex((b) => b.id === detailModalId) : -1),
     [displayBookmarks, detailModalId],
   )
+
+  const uploadImage = useCallback(async (file: File, field: 'image_b64' | 'icon_b64') => {
+    if (!bookmark) return
+    markDirty(bookmark.id)
+    const previewUrl = URL.createObjectURL(file)
+    if (field === 'image_b64') setCoverPreview(previewUrl)
+    else setIconPreview(previewUrl)
+    try {
+      const b64 = await toBase64(file)
+      const updated = await updateBookmark({ id: bookmark.id, [field]: b64 })
+      setBookmarks(bookmarks.map((b) => (b.id === updated.id ? updated : b)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to upload image')
+      if (field === 'image_b64') setCoverPreview(null)
+      else setIconPreview(null)
+    } finally {
+      clearDirty(bookmark.id)
+    }
+  }, [bookmark, bookmarks, markDirty, clearDirty, setBookmarks])
+
+  const handleCoverUpload = useCallback((file: File) => uploadImage(file, 'image_b64'), [uploadImage])
+  const handleIconUpload = useCallback((file: File) => uploadImage(file, 'icon_b64'), [uploadImage])
+
+  // Clipboard paste for cover image (global, edit mode only)
+  useEffect(() => {
+    if (!editing || detailModalId === null) return
+    const handler = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault()
+          const file = item.getAsFile()
+          if (file) handleCoverUpload(file)
+          return
+        }
+      }
+    }
+    window.addEventListener('paste', handler)
+    return () => window.removeEventListener('paste', handler)
+  }, [editing, detailModalId, handleCoverUpload])
 
   const canPrev = currentIndex > 0
   const canNext = currentIndex >= 0 && currentIndex < displayBookmarks.length - 1
@@ -82,6 +125,8 @@ export function BookmarkDetailModal() {
       setEditing(false)
     }
     setError(null)
+    setCoverPreview(null)
+    setIconPreview(null)
   }, [detailModalId])
 
   const startEdit = useCallback(() => {
@@ -127,7 +172,6 @@ export function BookmarkDetailModal() {
 
   const handleDelete = useCallback(async () => {
     if (!bookmark) return
-    setDeleting(true)
     setError(null)
     try {
       await deleteBookmark(bookmark.id)
@@ -135,8 +179,6 @@ export function BookmarkDetailModal() {
       setDetailModalId(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete')
-    } finally {
-      setDeleting(false)
     }
   }, [bookmark, bookmarks, setBookmarks, setDetailModalId])
 
@@ -181,7 +223,7 @@ export function BookmarkDetailModal() {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) setDetailModalId(null) }}>
       <DialogContent
-        className="flex h-[min(72vh,720px)] w-full max-w-2xl flex-col gap-0 overflow-hidden bg-surface p-0"
+        className="flex h-[min(78vh,780px)] w-full max-w-2xl flex-col gap-0 overflow-hidden bg-surface p-0"
         showCloseButton={false}
       >
         {bookmark && (
@@ -225,11 +267,18 @@ export function BookmarkDetailModal() {
 
             {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto">
-              {/* Thumbnail */}
-              <Thumbnail
-                bookmark={bookmark}
-                className="h-48 w-full sm:h-64"
-              />
+              {/* Thumbnail — wraps in drop zone during edit mode */}
+              {editing ? (
+                <ImageDropZone onUpload={handleCoverUpload} label="Upload cover image" className="h-48 w-full sm:h-64">
+                  {coverPreview ? (
+                    <img src={coverPreview} alt="" className="h-48 w-full object-cover sm:h-64" />
+                  ) : (
+                    <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
+                  )}
+                </ImageDropZone>
+              ) : (
+                <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
+              )}
 
               {/* Content */}
               <div className="flex flex-col gap-4 px-4 pt-4 pb-0 sm:px-6 sm:pt-6">
@@ -243,6 +292,9 @@ export function BookmarkDetailModal() {
                   <EditForm
                     form={editForm}
                     onChange={setEditForm}
+                    bookmark={bookmark}
+                    iconPreview={iconPreview}
+                    onIconUpload={handleIconUpload}
                   />
                 ) : (
                   <ViewContent
@@ -359,15 +411,29 @@ interface EditFormState {
 function EditForm({
   form,
   onChange,
+  bookmark,
+  iconPreview,
+  onIconUpload,
 }: {
   form: EditFormState
   onChange: (form: EditFormState) => void
+  bookmark: Bookmark
+  iconPreview: string | null
+  onIconUpload: (file: File) => void
 }) {
   const update = (field: keyof EditFormState, value: string) =>
     onChange({ ...form, [field]: value })
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Icon upload */}
+      <div className="flex items-center gap-3">
+        <ImageDropZone onUpload={onIconUpload} label="Upload icon" className="h-10 w-10 shrink-0 rounded-md">
+          <EditableIcon iconId={bookmark.icon_id} previewUrl={iconPreview} />
+        </ImageDropZone>
+        <span className="text-xs text-text-dim">Click or drag to change icon</span>
+      </div>
+
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-text-muted">Title</span>
         <Input
@@ -402,6 +468,29 @@ function EditForm({
           className="resize-none rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text outline-none focus:ring-1 focus:ring-ring"
         />
       </label>
+    </div>
+  )
+}
+
+// Icon with proper fallback for edit mode — matches Favicon's plain square pattern
+function EditableIcon({ iconId, previewUrl }: { iconId: string | null; previewUrl: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const src = previewUrl ?? (iconId && !failed ? fileUrl(iconId) : null)
+
+  // Reset error state when icon changes
+  useEffect(() => { setFailed(false) }, [iconId, previewUrl])
+
+  return (
+    <div className="relative h-10 w-10 overflow-hidden rounded-md">
+      <div className={`absolute inset-0 bg-surface-hover transition-opacity duration-100 ${src ? 'opacity-0' : 'opacity-100'}`} />
+      {src && (
+        <img
+          src={src}
+          alt=""
+          onError={() => setFailed(true)}
+          className="absolute inset-0 h-full w-full object-contain"
+        />
+      )}
     </div>
   )
 }

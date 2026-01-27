@@ -122,14 +122,30 @@ export interface SemanticStatus {
 // --- API Error ---
 
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    public code: string,
-    message: string,
-  ) {
+  status: number
+  code: string
+
+  constructor(status: number, code: string, message: string) {
     super(message)
     this.name = 'ApiError'
+    this.status = status
+    this.code = code
   }
+}
+
+// --- Base64 file conversion ---
+// Reads a File as base64, strips the data: prefix per §13.3
+export function toBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      const idx = result.indexOf(',')
+      resolve(idx >= 0 ? result.slice(idx + 1) : result)
+    }
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.readAsDataURL(file)
+  })
 }
 
 // --- Tag normalization ---

@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { Bookmark } from '@/lib/api'
 import { fileUrl, deleteBookmark } from '@/lib/api'
 import { useStore } from '@/lib/store'
-import { CircleHelp, Pencil, Trash2 } from 'lucide-react'
+import { CircleHelp, Pencil, Trash2, Upload } from 'lucide-react'
 
 // ─── Thumbnail with styled fallback ────────────────────────────────
 export function Thumbnail({
@@ -346,6 +346,92 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
         onDelete={handleDelete}
         stopPropagation
         className="bg-bg/80 backdrop-blur-sm"
+      />
+    </div>
+  )
+}
+
+// ─── Image drop zone (edit mode) ──────────────────────────────────
+// Reusable component for click-to-upload + drag-and-drop image upload
+export function ImageDropZone({
+  onUpload,
+  children,
+  className = '',
+  label = 'Upload image',
+}: {
+  onUpload: (file: File) => void
+  children: React.ReactNode
+  className?: string
+  label?: string
+}) {
+  const [dragOver, setDragOver] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragOver(false)
+      const file = e.dataTransfer.files[0]
+      if (file && file.type.startsWith('image/')) onUpload(file)
+    },
+    [onUpload],
+  )
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+  }, [])
+
+  const handleClick = useCallback(() => inputRef.current?.click(), [])
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file) onUpload(file)
+      e.target.value = '' // reset so same file can be re-selected
+    },
+    [onUpload],
+  )
+
+  return (
+    <div
+      onClick={handleClick}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      className={`group/drop relative cursor-pointer ${className}`}
+      title={label}
+    >
+      {/* Drag overlay */}
+      {dragOver && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded bg-accent/20 ring-2 ring-accent">
+          <Upload className="h-8 w-8 text-accent" />
+        </div>
+      )}
+      {/* Dim existing content on dragover */}
+      <div className={`transition-opacity duration-100 ${dragOver ? 'opacity-50' : 'opacity-100'}`}>
+        {children}
+      </div>
+      {/* Upload hint on hover (not during drag) */}
+      {!dragOver && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded bg-black/40 opacity-0 transition-opacity duration-100 group-hover/drop:opacity-100">
+          <Upload className="h-6 w-6 text-white/70" />
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
       />
     </div>
   )
