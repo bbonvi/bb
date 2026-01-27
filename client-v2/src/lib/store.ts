@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getResponsiveColumns } from '@/hooks/useResponsive'
 import type {
   Bookmark,
   SearchQuery,
@@ -149,7 +150,7 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // UI
   viewMode: (localStorage.getItem('bb_view_mode') as 'grid' | 'cards' | 'table') || 'grid',
-  columns: Number(localStorage.getItem('bb_columns')) || 4,
+  columns: Number(localStorage.getItem('bb_columns')) || getResponsiveColumns(),
   shuffle: false,
   showAll: new URLSearchParams(window.location.search).get('all') === '1',
   setViewMode: (viewMode) => {

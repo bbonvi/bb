@@ -14,16 +14,16 @@ export function useIsMobile(): boolean {
 }
 
 export function useResponsiveColumns(): number {
-  const [cols, setCols] = useState(() => getColumns())
+  const [cols, setCols] = useState(() => getResponsiveColumns())
   useEffect(() => {
-    const handler = () => setCols(getColumns())
+    const handler = () => setCols(getResponsiveColumns())
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
   return cols
 }
 
-function getColumns(): number {
+export function getResponsiveColumns(): number {
   if (typeof window === 'undefined') return 4
   const w = window.innerWidth
   if (w < 640) return 1
