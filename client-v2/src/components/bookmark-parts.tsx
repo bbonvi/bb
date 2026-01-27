@@ -196,19 +196,37 @@ export function Description({
   )
 }
 
-// ─── Double-click delete button ────────────────────────────────────
-// First click: trash → question mark. Second click: executes delete.
-// Mouse leave resets to trash icon.
-export function DeleteButton({
-  onDelete,
+// ─── Double-click confirm button ──────────────────────────────────
+// First click arms (shows confirm state). Second click executes.
+// Mouse leave disarms.
+export function ConfirmButton({
+  onConfirm,
+  icon,
+  armedIcon,
   iconClass = 'h-3.5 w-3.5',
   className = '',
+  title = 'Confirm',
+  armedTitle = 'Click again to confirm',
+  colorClass = 'text-text-muted hover:bg-danger/20 hover:text-danger',
+  armedColorClass = 'bg-danger/20 text-danger',
   stopPropagation = false,
+  disabled = false,
+  children,
+  armedChildren,
 }: {
-  onDelete: () => void | Promise<void>
+  onConfirm: () => void | Promise<void>
+  icon?: React.ReactNode
+  armedIcon?: React.ReactNode
   iconClass?: string
   className?: string
+  title?: string
+  armedTitle?: string
+  colorClass?: string
+  armedColorClass?: string
   stopPropagation?: boolean
+  disabled?: boolean
+  children?: React.ReactNode
+  armedChildren?: React.ReactNode
 }) {
   const [armed, setArmed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -222,30 +240,73 @@ export function DeleteButton({
       }
       setBusy(true)
       try {
-        await onDelete()
+        await onConfirm()
       } finally {
         setBusy(false)
         setArmed(false)
       }
     },
-    [armed, onDelete, stopPropagation],
+    [armed, onConfirm, stopPropagation],
   )
+
+  const defaultIcon = <Trash2 className={iconClass} />
+  const defaultArmedIcon = <CircleHelp className={iconClass} />
+
+  // Render both states in a grid overlay so the button keeps the larger width
+  const hasSwap = armedChildren != null
+  const normalContent = <>{icon ?? defaultIcon}{children}</>
+  const armedContent = <>{armedIcon ?? defaultArmedIcon}{armedChildren ?? children}</>
 
   return (
     <button
       tabIndex={-1}
       onClick={handleClick}
       onMouseLeave={() => setArmed(false)}
-      disabled={busy}
-      className={`rounded p-1.5 transition-colors disabled:opacity-50 ${
-        armed
-          ? 'bg-danger/20 text-danger'
-          : 'text-text-muted hover:bg-danger/20 hover:text-danger'
+      disabled={busy || disabled}
+      className={`rounded p-1.5 transition-all duration-200 disabled:opacity-50 ${
+        armed ? armedColorClass : colorClass
       } ${className}`}
-      title={armed ? 'Click again to confirm' : 'Delete'}
+      title={armed ? armedTitle : title}
     >
-      {armed ? <CircleHelp className={iconClass} /> : <Trash2 className={iconClass} />}
+      {hasSwap ? (
+        <span className="inline-grid [&>*]:col-start-1 [&>*]:row-start-1">
+          <span className={`inline-flex items-center transition-opacity duration-150 ${armed ? 'opacity-0' : 'opacity-100'}`}>
+            {normalContent}
+          </span>
+          <span className={`inline-flex items-center transition-opacity duration-150 ${armed ? 'opacity-100' : 'opacity-0'}`}>
+            {armedContent}
+          </span>
+        </span>
+      ) : (
+        <span className="inline-flex items-center">
+          {armed ? armedContent : normalContent}
+        </span>
+      )}
     </button>
+  )
+}
+
+// Backward-compatible thin wrapper
+export function DeleteButton({
+  onDelete,
+  iconClass,
+  className,
+  stopPropagation,
+}: {
+  onDelete: () => void | Promise<void>
+  iconClass?: string
+  className?: string
+  stopPropagation?: boolean
+}) {
+  return (
+    <ConfirmButton
+      onConfirm={onDelete}
+      iconClass={iconClass}
+      className={className}
+      stopPropagation={stopPropagation}
+      title="Delete"
+      armedTitle="Click again to confirm"
+    />
   )
 }
 

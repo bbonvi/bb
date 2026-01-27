@@ -14,7 +14,8 @@ import {
   type SearchQuery,
   type BulkSearchQuery,
 } from '@/lib/api'
-import { X, Pencil, Trash2, AlertTriangle } from 'lucide-react'
+import { X, Pencil, Trash2, AlertTriangle, CircleHelp } from 'lucide-react'
+import { ConfirmButton } from '@/components/bookmark-parts'
 
 // Convert store SearchQuery (comma-separated tags) to BulkSearchQuery (JSON array tags)
 function toBulkQuery(q: SearchQuery): BulkSearchQuery {
@@ -284,14 +285,19 @@ export function BulkEditModal({
             {result !== null ? 'Close' : 'Cancel'}
           </Button>
           {result === null && (
-            <Button
-              size="sm"
-              onClick={handleSubmit}
+            <ConfirmButton
+              onConfirm={handleSubmit}
+              icon={<Pencil className="mr-1 h-3.5 w-3.5" />}
+              armedIcon={<CircleHelp className="mr-1 h-3.5 w-3.5" />}
               disabled={submitting || !hasChanges}
+              colorClass="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground text-sm font-medium px-3 h-8 hover:bg-primary/90"
+              armedColorClass="inline-flex items-center justify-center rounded-md bg-hi text-bg text-sm font-medium px-3 h-8 ring-2 ring-hi/50"
+              title={`Update ${count} bookmark${count !== 1 ? 's' : ''}`}
+              armedTitle="Click again to confirm"
+              armedChildren={<span>Confirm?</span>}
             >
-              <Pencil className="mr-1 h-3.5 w-3.5" />
-              {submitting ? 'Updating...' : `Update ${count} bookmark${count !== 1 ? 's' : ''}`}
-            </Button>
+              <span>{submitting ? 'Updating...' : `Update ${count}`}</span>
+            </ConfirmButton>
           )}
         </div>
       </DialogContent>
@@ -393,15 +399,19 @@ export function BulkDeleteModal({
             {result !== null ? 'Close' : 'Cancel'}
           </Button>
           {result === null && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={handleDelete}
+            <ConfirmButton
+              onConfirm={handleDelete}
+              icon={<Trash2 className="mr-1 h-3.5 w-3.5" />}
+              armedIcon={<CircleHelp className="mr-1 h-3.5 w-3.5" />}
               disabled={submitting || count === 0}
+              colorClass="inline-flex items-center justify-center rounded-md bg-destructive text-white text-sm font-medium px-3 h-8 hover:bg-destructive/90"
+              armedColorClass="inline-flex items-center justify-center rounded-md bg-danger text-white text-sm font-medium px-3 h-8 ring-2 ring-danger/50"
+              title={`Delete ${count} bookmark${count !== 1 ? 's' : ''}`}
+              armedTitle="Click again to confirm"
+              armedChildren={<span>Confirm?</span>}
             >
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
-              {submitting ? 'Deleting...' : `Delete ${count} bookmark${count !== 1 ? 's' : ''}`}
-            </Button>
+              <span>{submitting ? 'Deleting...' : `Delete ${count}`}</span>
+            </ConfirmButton>
           )}
         </div>
       </DialogContent>
