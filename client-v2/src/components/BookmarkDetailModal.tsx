@@ -12,6 +12,7 @@ import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { updateBookmark, deleteBookmark, refreshMetadata, normalizeTags, toBase64, fileUrl } from '@/lib/api'
 import type { Bookmark } from '@/lib/api'
 import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone } from './bookmark-parts'
+import { TagAutocompleteInput } from '@/components/TagAutocompleteInput'
 import {
   ChevronLeft,
   ChevronRight,
@@ -30,6 +31,7 @@ export function BookmarkDetailModal() {
   const markDirty = useStore((s) => s.markDirty)
   const clearDirty = useStore((s) => s.clearDirty)
   const setBookmarks = useStore((s) => s.setBookmarks)
+  const tags = useStore((s) => s.tags)
   const hiddenTags = useHiddenTags()
 
   const { displayBookmarks } = useDisplayBookmarks()
@@ -295,6 +297,7 @@ export function BookmarkDetailModal() {
                     bookmark={bookmark}
                     iconPreview={iconPreview}
                     onIconUpload={handleIconUpload}
+                    availableTags={tags}
                   />
                 ) : (
                   <ViewContent
@@ -414,12 +417,14 @@ function EditForm({
   bookmark,
   iconPreview,
   onIconUpload,
+  availableTags,
 }: {
   form: EditFormState
   onChange: (form: EditFormState) => void
   bookmark: Bookmark
   iconPreview: string | null
   onIconUpload: (file: File) => void
+  availableTags: string[]
 }) {
   const update = (field: keyof EditFormState, value: string) =>
     onChange({ ...form, [field]: value })
@@ -450,15 +455,16 @@ function EditForm({
           className="bg-surface-hover"
         />
       </label>
-      <label className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-text-muted">Tags</span>
-        <Input
+        <TagAutocompleteInput
           value={form.tags}
-          onChange={(e) => update('tags', e.target.value)}
+          onChange={(v) => update('tags', v)}
+          availableTags={availableTags}
           placeholder="comma or space separated"
-          className="bg-surface-hover"
+          inputClassName="flex h-9 w-full min-w-0 rounded-md border border-border bg-surface-hover px-3 py-1 text-sm text-text outline-none transition-colors focus:ring-1 focus:ring-ring"
         />
-      </label>
+      </div>
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-text-muted">Description</span>
         <textarea

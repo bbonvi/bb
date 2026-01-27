@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Plus, Pencil, Trash2, Settings, ChevronDown } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useIsMobile } from '@/hooks/useResponsive'
+import { useHiddenTags } from '@/hooks/useHiddenTags'
+import { TagAutocompleteInput } from '@/components/TagAutocompleteInput'
 import type { SearchQuery } from '@/lib/api'
 
 // ─── Icons (inline SVG) ────────────────────────────────────────────
@@ -58,6 +60,12 @@ export function Toolbar() {
   const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
   const setActiveWorkspaceId = useStore((s) => s.setActiveWorkspaceId)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const tags = useStore((s) => s.tags)
+  const hiddenTags = useHiddenTags()
+  const autocompleteTags = useMemo(() => {
+    const hidden = new Set(hiddenTags)
+    return tags.filter((t) => !hidden.has(t))
+  }, [tags, hiddenTags])
 
   // Primary search — semantic if enabled, keyword otherwise
   const primaryDelay = semanticEnabled ? 500 : 300
@@ -327,7 +335,7 @@ export function Toolbar() {
             {semanticEnabled && (
               <FilterField label="keyword" value={localKeywordAlt} onChange={setLocalKeywordAlt} />
             )}
-            <FilterField label="tags" value={localTags} onChange={setLocalTags} />
+            <TagFilterField label="tags" value={localTags} onChange={setLocalTags} availableTags={autocompleteTags} />
             <FilterField label="title" value={localTitle} onChange={setLocalTitle} />
             <FilterField label="url" value={localUrl} onChange={setLocalUrl} />
             <FilterField label="description" value={localDescription} onChange={setLocalDescription} />
@@ -345,6 +353,38 @@ export function Toolbar() {
       {/* Bottom edge */}
       <div className="h-px bg-white/[0.06]" />
     </header>
+  )
+}
+
+// ─── Tag filter field (with autocomplete) ─────────────────────────
+function TagFilterField({
+  label,
+  value,
+  onChange,
+  availableTags,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  availableTags: string[]
+}) {
+  return (
+    <label className="flex items-center gap-1.5 min-w-0 w-[calc(50%-0.75rem)] sm:w-auto">
+      <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim select-none shrink-0">
+        {label}
+      </span>
+      <TagAutocompleteInput
+        value={value}
+        onChange={onChange}
+        availableTags={availableTags}
+        className="w-full sm:w-28"
+        inputClassName={`h-7 w-full rounded-md border bg-transparent px-2 text-sm outline-none transition-colors ${
+          value
+            ? 'border-hi/20 text-text'
+            : 'border-white/[0.06] text-text placeholder:text-text-dim'
+        } focus:border-hi-dim focus:bg-surface`}
+      />
+    </label>
   )
 }
 
