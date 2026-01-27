@@ -82,7 +82,7 @@ function TableRow({
       onClick={onClick}
       className="group relative flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover"
     >
-      <CardActions bookmarkId={bookmark.id} />
+      <CardActions bookmarkId={bookmark.id} variant="row" />
       {/* Title */}
       <div className="min-w-0 flex-[3]">
         <a

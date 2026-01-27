@@ -197,7 +197,7 @@ export function Description({
 }
 
 // ─── Card action buttons (hover overlay) ──────────────────────────
-export function CardActions({ bookmarkId }: { bookmarkId: number }) {
+export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: number; variant?: 'card' | 'row' }) {
   const openDetailInEditMode = useStore((s) => s.openDetailInEditMode)
   const setBookmarks = useStore((s) => s.setBookmarks)
   const bookmarks = useStore((s) => s.bookmarks)
@@ -245,7 +245,7 @@ export function CardActions({ bookmarkId }: { bookmarkId: number }) {
   if (confirmDelete) {
     return (
       <div
-        className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-lg bg-bg/90 backdrop-blur-sm"
+        className={`absolute inset-0 z-10 flex items-center justify-center gap-2 bg-bg/90 backdrop-blur-sm ${variant === 'card' ? 'rounded-lg' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         <span className="text-sm text-danger">Delete?</span>
@@ -269,7 +269,7 @@ export function CardActions({ bookmarkId }: { bookmarkId: number }) {
   }
 
   return (
-    <div className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+    <div className={`absolute right-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 ${variant === 'card' ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
       <button
         tabIndex={-1}
         onClick={handleEdit}
