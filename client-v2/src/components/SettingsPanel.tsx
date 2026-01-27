@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, Plus, Trash2, RefreshCw, LogOut } from 'lucide-react'
+import { X, Plus, RefreshCw, LogOut } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import {
@@ -10,6 +10,7 @@ import {
   searchBookmarks,
 } from '@/lib/api'
 import type { Workspace, Bookmark } from '@/lib/api'
+import { DeleteButton } from './bookmark-parts'
 
 // ─── Settings Panel (Modal) ──────────────────────────────────────
 
@@ -174,7 +175,6 @@ export function SettingsPanel() {
                   }
                 }}
                 onDelete={() => handleDelete(selected.id)}
-                saving={saving}
               />
             ) : workspacesAvailable ? (
               <div className="flex flex-1 items-center justify-center text-sm text-text-dim">
@@ -215,13 +215,11 @@ function WorkspaceEditor({
   visibleTags,
   onSave,
   onDelete,
-  saving,
 }: {
   workspace: Workspace
   visibleTags: string[]
   onSave: (ws: Workspace) => Promise<void>
   onDelete: () => void
-  saving: boolean
 }) {
   const [name, setName] = useState(workspace.name)
   const [whitelistInput, setWhitelistInput] = useState('')
@@ -230,7 +228,6 @@ function WorkspaceEditor({
   const [titlePattern, setTitlePattern] = useState(workspace.filters.title_pattern ?? '')
   const [descPattern, setDescPattern] = useState(workspace.filters.description_pattern ?? '')
   const [anyFieldPattern, setAnyFieldPattern] = useState(workspace.filters.any_field_pattern ?? '')
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   // Related tags
   const [relatedTags, setRelatedTags] = useState<string[]>([])
@@ -245,7 +242,6 @@ function WorkspaceEditor({
     setAnyFieldPattern(workspace.filters.any_field_pattern ?? '')
     setWhitelistInput('')
     setBlacklistInput('')
-    setDeleteConfirm(false)
     setRelatedTags([])
   }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -370,31 +366,7 @@ function WorkspaceEditor({
           className="h-8 flex-1 rounded-md border border-white/[0.06] bg-surface px-2.5 text-sm text-text outline-none transition-colors focus:border-hi-dim"
           placeholder="Workspace name"
         />
-        {deleteConfirm ? (
-          <div className="flex items-center gap-1">
-            <button
-              onClick={onDelete}
-              disabled={saving}
-              className="rounded-md px-2 py-1 text-xs font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
-            >
-              Confirm
-            </button>
-            <button
-              onClick={() => setDeleteConfirm(false)}
-              className="rounded-md px-2 py-1 text-xs text-text-muted transition-colors hover:text-text"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setDeleteConfirm(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-            title="Delete workspace"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-8 w-8" />
       </div>
 
       {/* Tag whitelist */}
