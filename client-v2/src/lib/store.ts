@@ -78,6 +78,7 @@ export interface AppState {
   // Loading state
   initialLoadComplete: boolean
   setInitialLoadComplete: (done: boolean) => void
+  bookmarksFresh: boolean
 }
 
 export interface Workspace {
@@ -127,7 +128,7 @@ export const useStore = create<AppState>()((set, get) => ({
   bookmarks: [],
   totalCount: 0,
   tags: [],
-  setBookmarks: (bookmarks) => set({ bookmarks }),
+  setBookmarks: (bookmarks) => set({ bookmarks, bookmarksFresh: true }),
   setTotalCount: (totalCount) => set({ totalCount }),
   setTags: (tags) => set({ tags }),
 
@@ -137,8 +138,8 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // Search
   searchQuery: searchQueryFromUrl(),
-  setSearchQuery: (searchQuery) => set({ searchQuery }),
-  clearSearch: () => set({ searchQuery: emptySearchQuery }),
+  setSearchQuery: (searchQuery) => set({ searchQuery, bookmarksFresh: false }),
+  clearSearch: () => set({ searchQuery: emptySearchQuery, bookmarksFresh: false }),
 
   // UI
   viewMode: (localStorage.getItem('bb_view_mode') as 'grid' | 'cards' | 'table') || 'grid',
@@ -154,7 +155,7 @@ export const useStore = create<AppState>()((set, get) => ({
     set({ columns })
   },
   setShuffle: (shuffle) => set({ shuffle }),
-  setShowAll: (showAll) => set({ showAll }),
+  setShowAll: (showAll) => set({ showAll, bookmarksFresh: false }),
   pinToUrl: () => {
     const { searchQuery, showAll } = get()
     const url = new URL(window.location.href)
@@ -228,4 +229,5 @@ export const useStore = create<AppState>()((set, get) => ({
   // Loading
   initialLoadComplete: false,
   setInitialLoadComplete: (initialLoadComplete) => set({ initialLoadComplete }),
+  bookmarksFresh: true,
 }))

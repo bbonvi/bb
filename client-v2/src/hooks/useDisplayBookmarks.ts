@@ -22,6 +22,7 @@ export function useDisplayBookmarks() {
   const showAll = useStore((s) => s.showAll)
   const searchQuery = useStore((s) => s.searchQuery)
   const totalCount = useStore((s) => s.totalCount)
+  const bookmarksFresh = useStore((s) => s.bookmarksFresh)
 
   const hasQuery = !!(
     searchQuery.semantic ||
@@ -33,11 +34,11 @@ export function useDisplayBookmarks() {
   )
 
   const emptyReason: EmptyReason = useMemo(() => {
-    if (totalCount === 0) return 'no-bookmarks'
+    if (totalCount === 0 && bookmarksFresh) return 'no-bookmarks'
     if (!showAll && !hasQuery) return 'no-query'
-    if (bookmarks.length === 0 && hasQuery) return 'no-matches'
+    if (bookmarks.length === 0 && hasQuery && bookmarksFresh) return 'no-matches'
     return null
-  }, [totalCount, showAll, hasQuery, bookmarks.length])
+  }, [totalCount, showAll, hasQuery, bookmarks.length, bookmarksFresh])
 
   const displayBookmarks = useMemo(() => {
     if (shuffle && !searchQuery.semantic) return shuffleBookmarks(bookmarks, shuffleSeed)
