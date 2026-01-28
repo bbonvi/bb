@@ -45,11 +45,12 @@ export default function BookmarkDetailModal() {
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Local preview URLs for optimistic display after upload
+  // Pending image files (uploaded on save, not immediately)
+  const [pendingCover, setPendingCover] = useState<File | null>(null)
+  const [pendingIcon, setPendingIcon] = useState<File | null>(null)
+  // Local preview URLs for display
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [iconPreview, setIconPreview] = useState<string | null>(null)
-  // Upload feedback: 'cover' | 'icon' | null — triggers highlight animation
-  const [uploadedField, setUploadedField] = useState<'cover' | 'icon' | null>(null)
 
   // Find the bookmark by ID from the full bookmarks array (not display — may be reversed/shuffled)
   const bookmark = useMemo(
@@ -63,31 +64,16 @@ export default function BookmarkDetailModal() {
     [displayBookmarks, detailModalId],
   )
 
-  const uploadImage = useCallback(async (file: File, field: 'image_b64' | 'icon_b64') => {
-    if (!bookmark) return
-    markDirty(bookmark.id)
-    const previewUrl = URL.createObjectURL(file)
-    const feedbackKey = field === 'image_b64' ? 'cover' : 'icon' as const
-    if (field === 'image_b64') setCoverPreview(previewUrl)
-    else setIconPreview(previewUrl)
-    try {
-      const b64 = await toBase64(file)
-      const updated = await updateBookmark({ id: bookmark.id, [field]: b64 })
-      setBookmarks(bookmarks.map((b) => (b.id === updated.id ? updated : b)))
-      // Flash success feedback
-      setUploadedField(feedbackKey)
-      setTimeout(() => setUploadedField((cur) => cur === feedbackKey ? null : cur), 1500)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to upload image')
-      if (field === 'image_b64') setCoverPreview(null)
-      else setIconPreview(null)
-    } finally {
-      clearDirty(bookmark.id)
-    }
-  }, [bookmark, bookmarks, markDirty, clearDirty, setBookmarks])
+  // Stage image for upload (actual upload happens on save)
+  const handleCoverUpload = useCallback((file: File) => {
+    setPendingCover(file)
+    setCoverPreview(URL.createObjectURL(file))
+  }, [])
 
-  const handleCoverUpload = useCallback((file: File) => uploadImage(file, 'image_b64'), [uploadImage])
-  const handleIconUpload = useCallback((file: File) => uploadImage(file, 'icon_b64'), [uploadImage])
+  const handleIconUpload = useCallback((file: File) => {
+    setPendingIcon(file)
+    setIconPreview(URL.createObjectURL(file))
+  }, [])
 
   // Clipboard paste for cover image (global, edit mode only)
   useEffect(() => {
@@ -137,9 +123,10 @@ export default function BookmarkDetailModal() {
       setEditing(false)
     }
     setError(null)
+    setPendingCover(null)
+    setPendingIcon(null)
     setCoverPreview(null)
     setIconPreview(null)
-    setUploadedField(null)
   }, [detailModalId])
 
   const startEdit = useCallback(() => {
@@ -165,13 +152,19 @@ export default function BookmarkDetailModal() {
     setError(null)
     markDirty(bookmark.id)
     try {
-      const updated = await updateBookmark({
+      // Build update payload with form data + any pending images
+      const payload: Parameters<typeof updateBookmark>[0] = {
         id: bookmark.id,
         title: editForm.title,
         description: editForm.description,
         url: editForm.url,
         tags: normalizeTags(editForm.tags),
-      })
+      }
+      // Convert pending images to base64 if present
+      if (pendingCover) payload.image_b64 = await toBase64(pendingCover)
+      if (pendingIcon) payload.icon_b64 = await toBase64(pendingIcon)
+
+      const updated = await updateBookmark(payload)
       // Update in local bookmarks array
       setBookmarks(bookmarks.map((b) => (b.id === updated.id ? updated : b)))
       setEditing(false)
@@ -181,7 +174,7 @@ export default function BookmarkDetailModal() {
       clearDirty(bookmark.id)
       setSaving(false)
     }
-  }, [bookmark, editForm, bookmarks, markDirty, clearDirty, setBookmarks])
+  }, [bookmark, editForm, pendingCover, pendingIcon, bookmarks, markDirty, clearDirty, setBookmarks])
 
   const handleDelete = useCallback(async () => {
     if (!bookmark) return
@@ -282,22 +275,13 @@ export default function BookmarkDetailModal() {
             <div className="flex-1 overflow-y-auto">
               {/* Thumbnail — wraps in drop zone during edit mode */}
               {editing ? (
-                <div className="relative">
-                  <ImageDropZone onUpload={handleCoverUpload} label="Upload cover image" className="h-48 w-full sm:h-64">
-                    {coverPreview ? (
-                      <img src={coverPreview} alt="" className="h-48 w-full object-cover sm:h-64" />
-                    ) : (
-                      <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
-                    )}
-                  </ImageDropZone>
-                  {/* Success flash */}
-                  <div className={`pointer-events-none absolute inset-0 bg-green-500/20 transition-opacity duration-300 ${uploadedField === 'cover' ? 'opacity-100' : 'opacity-0'}`} />
-                  {uploadedField === 'cover' && (
-                    <div className="absolute bottom-2 right-2 rounded bg-green-600/90 px-2 py-1 text-xs font-medium text-white shadow">
-                      Uploaded
-                    </div>
+                <ImageDropZone onUpload={handleCoverUpload} label="Upload cover image" className="h-48 w-full sm:h-64">
+                  {coverPreview ? (
+                    <img src={coverPreview} alt="" className="h-48 w-full object-cover sm:h-64" />
+                  ) : (
+                    <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
                   )}
-                </div>
+                </ImageDropZone>
               ) : (
                 <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
               )}
@@ -318,7 +302,6 @@ export default function BookmarkDetailModal() {
                     iconPreview={iconPreview}
                     onIconUpload={handleIconUpload}
                     availableTags={visibleTags}
-                    iconUploaded={uploadedField === 'icon'}
                   />
                 ) : (
                   <ViewContent
@@ -439,7 +422,6 @@ function EditForm({
   iconPreview,
   onIconUpload,
   availableTags,
-  iconUploaded,
 }: {
   form: EditFormState
   onChange: (form: EditFormState) => void
@@ -447,7 +429,6 @@ function EditForm({
   iconPreview: string | null
   onIconUpload: (file: File) => void
   availableTags: string[]
-  iconUploaded: boolean
 }) {
   const update = (field: keyof EditFormState, value: string) =>
     onChange({ ...form, [field]: value })
@@ -456,16 +437,10 @@ function EditForm({
     <div className="flex flex-col gap-3">
       {/* Icon upload */}
       <div className="flex items-center gap-3">
-        <div className="relative">
-          <ImageDropZone onUpload={onIconUpload} label="Upload icon" className="h-10 w-10 shrink-0 rounded-md">
-            <EditableIcon iconId={bookmark.icon_id} previewUrl={iconPreview} />
-          </ImageDropZone>
-          {/* Success ring */}
-          <div className={`pointer-events-none absolute inset-0 rounded-md ring-2 ring-green-500 transition-opacity duration-300 ${iconUploaded ? 'opacity-100' : 'opacity-0'}`} />
-        </div>
-        <span className={`text-xs transition-colors duration-300 ${iconUploaded ? 'text-green-400' : 'text-text-dim'}`}>
-          {iconUploaded ? 'Icon uploaded' : 'Click or drag to change icon'}
-        </span>
+        <ImageDropZone onUpload={onIconUpload} label="Upload icon" className="h-10 w-10 shrink-0 rounded-md">
+          <EditableIcon iconId={bookmark.icon_id} previewUrl={iconPreview} />
+        </ImageDropZone>
+        <span className="text-xs text-text-dim">Click or drag to change icon</span>
       </div>
 
       <label className="flex flex-col gap-1">
