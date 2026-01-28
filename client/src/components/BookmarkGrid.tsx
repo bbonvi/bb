@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect } from 'react'
+import { useRef, useMemo, useEffect, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { BookmarkCard } from './BookmarkCard'
@@ -111,7 +111,7 @@ export function BookmarkGrid() {
 // ─── Shared empty state renderer ───────────────────────────────────
 import type { EmptyReason } from '@/hooks/useDisplayBookmarks'
 
-export function ViewEmptyState({ reason }: { reason: EmptyReason }) {
+export const ViewEmptyState = memo(function ViewEmptyState({ reason }: { reason: EmptyReason }) {
   switch (reason) {
     case 'loading':
       return (
@@ -146,4 +146,4 @@ export function ViewEmptyState({ reason }: { reason: EmptyReason }) {
     default:
       return null
   }
-}
+})

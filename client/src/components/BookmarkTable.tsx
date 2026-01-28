@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
@@ -56,7 +56,7 @@ export function BookmarkTable() {
   )
 }
 
-function TableRow({ bookmark }: { bookmark: Bookmark }) {
+const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const hiddenTags = useHiddenTags()
   const visibleTags = useMemo(
@@ -117,4 +117,4 @@ function TableRow({ bookmark }: { bookmark: Bookmark }) {
       </div>
     </div>
   )
-}
+})

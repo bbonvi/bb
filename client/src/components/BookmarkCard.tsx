@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { Bookmark } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
@@ -7,7 +8,7 @@ interface BookmarkCardProps {
   bookmark: Bookmark
 }
 
-export function BookmarkCard({ bookmark }: BookmarkCardProps) {
+export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCardProps) {
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const hiddenTags = useHiddenTags()
 
@@ -36,4 +37,4 @@ export function BookmarkCard({ bookmark }: BookmarkCardProps) {
       </div>
     </article>
   )
-}
+})

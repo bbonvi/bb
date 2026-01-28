@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
@@ -52,7 +52,7 @@ export function BookmarkList() {
 }
 
 // ─── Horizontal card ───────────────────────────────────────────────
-function ListCard({ bookmark }: { bookmark: Bookmark }) {
+const ListCard = memo(function ListCard({ bookmark }: { bookmark: Bookmark }) {
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const hiddenTags = useHiddenTags()
 
@@ -89,4 +89,4 @@ function ListCard({ bookmark }: { bookmark: Bookmark }) {
       </div>
     </article>
   )
-}
+})

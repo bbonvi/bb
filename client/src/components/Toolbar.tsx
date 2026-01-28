@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { Plus, Pencil, Trash2, Settings, ChevronDown } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -102,7 +102,18 @@ export function Toolbar() {
     if (debouncedTitle) query.title = debouncedTitle
     if (debouncedUrl) query.url = debouncedUrl
     if (debouncedDescription) query.description = debouncedDescription
-    setSearchQuery(query)
+
+    // Guard: only update if query actually changed
+    const current = useStore.getState().searchQuery
+    const keys = new Set([...Object.keys(query), ...Object.keys(current)])
+    let changed = false
+    for (const k of keys) {
+      if (query[k as keyof SearchQuery] !== current[k as keyof SearchQuery]) {
+        changed = true
+        break
+      }
+    }
+    if (changed) setSearchQuery(query)
   }, [
     debouncedPrimary,
     debouncedKeywordAlt,
@@ -364,7 +375,7 @@ export function Toolbar() {
 }
 
 // ─── Tag filter field (with autocomplete) ─────────────────────────
-function TagFilterField({
+const TagFilterField = memo(function TagFilterField({
   label,
   value,
   onChange,
@@ -393,10 +404,10 @@ function TagFilterField({
       />
     </label>
   )
-}
+})
 
 // ─── Filter field ──────────────────────────────────────────────────
-function FilterField({
+const FilterField = memo(function FilterField({
   label,
   value,
   onChange,
@@ -422,10 +433,10 @@ function FilterField({
       />
     </label>
   )
-}
+})
 
 // ─── Pill toggle ───────────────────────────────────────────────────
-function PillToggle({
+const PillToggle = memo(function PillToggle({
   active,
   onClick,
   label,
@@ -447,9 +458,9 @@ function PillToggle({
       {label}
     </button>
   )
-}
+})
 
-function PillButton({ onClick, label }: { onClick: () => void; label: string }) {
+const PillButton = memo(function PillButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
       tabIndex={-1}
@@ -459,4 +470,4 @@ function PillButton({ onClick, label }: { onClick: () => void; label: string }) 
       {label}
     </button>
   )
-}
+})

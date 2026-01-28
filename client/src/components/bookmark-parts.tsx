@@ -340,8 +340,6 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
 function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
   const openDetailInEditMode = useStore((s) => s.openDetailInEditMode)
   const setBookmarks = useStore((s) => s.setBookmarks)
-  const bookmarks = useStore((s) => s.bookmarks)
-  const detailModalId = useStore((s) => s.detailModalId)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
 
   const handleEdit = useCallback(
@@ -354,9 +352,10 @@ function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
 
   const handleDelete = useCallback(async () => {
     await deleteBookmark(bookmarkId)
-    setBookmarks(bookmarks.filter((b) => b.id !== bookmarkId))
-    if (detailModalId === bookmarkId) setDetailModalId(null)
-  }, [bookmarkId, bookmarks, detailModalId, setBookmarks, setDetailModalId])
+    const current = useStore.getState().bookmarks
+    setBookmarks(current.filter((b) => b.id !== bookmarkId))
+    if (useStore.getState().detailModalId === bookmarkId) setDetailModalId(null)
+  }, [bookmarkId, setBookmarks, setDetailModalId])
 
   return (
     <>
