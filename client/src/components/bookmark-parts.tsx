@@ -125,18 +125,18 @@ export function Tags({
 
 export function TagChip({ tag }: { tag: string }) {
   const setSearchQuery = useStore((s) => s.setSearchQuery)
-  const searchQuery = useStore((s) => s.searchQuery)
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      const searchQuery = useStore.getState().searchQuery
       const current = searchQuery.tags ?? ''
       const tagList = current ? current.split(',').map((t) => t.trim()) : []
       if (!tagList.includes(tag)) {
         setSearchQuery({ ...searchQuery, tags: [...tagList, tag].join(',') })
       }
     },
-    [tag, searchQuery, setSearchQuery],
+    [tag, setSearchQuery],
   )
 
   return (
