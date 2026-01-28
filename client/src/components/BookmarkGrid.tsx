@@ -122,6 +122,12 @@ import type { EmptyReason } from '@/hooks/useDisplayBookmarks'
 
 export function ViewEmptyState({ reason }: { reason: EmptyReason }) {
   switch (reason) {
+    case 'loading':
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-surface-active border-t-hi" />
+        </div>
+      )
     case 'no-bookmarks':
       return (
         <EmptyState

@@ -147,8 +147,15 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // Search
   searchQuery: searchQueryFromUrl(),
-  setSearchQuery: (searchQuery) => set({ searchQuery, bookmarksFresh: false, isUserLoading: true }),
-  clearSearch: () => set({ searchQuery: emptySearchQuery, bookmarksFresh: false, isUserLoading: true }),
+  setSearchQuery: (searchQuery) => {
+    const current = get().searchQuery
+    const changed = JSON.stringify(current) !== JSON.stringify(searchQuery)
+    set({ searchQuery, bookmarksFresh: false, ...(changed && { isUserLoading: true }) })
+  },
+  clearSearch: () => {
+    const changed = JSON.stringify(get().searchQuery) !== JSON.stringify(emptySearchQuery)
+    set({ searchQuery: emptySearchQuery, bookmarksFresh: false, ...(changed && { isUserLoading: true }) })
+  },
 
   // UI
   viewMode: (localStorage.getItem('bb_view_mode') as 'grid' | 'cards' | 'table') || 'grid',
@@ -161,7 +168,10 @@ export const useStore = create<AppState>()((set, get) => ({
   },
   setColumns: (columns) => set({ columns }),
   setShuffle: (shuffle) => set({ shuffle }),
-  setShowAll: (showAll) => set({ showAll, bookmarksFresh: false, isUserLoading: true }),
+  setShowAll: (showAll) => {
+    const changed = get().showAll !== showAll
+    set({ showAll, bookmarksFresh: false, ...(changed && { isUserLoading: true }) })
+  },
   pinToUrl: () => {
     const { searchQuery, showAll, activeWorkspaceId, workspaces } = get()
     const url = new URL(window.location.href)
@@ -235,12 +245,13 @@ export const useStore = create<AppState>()((set, get) => ({
     set({ workspaces })
   },
   setActiveWorkspaceId: (activeWorkspaceId) => {
+    const changed = get().activeWorkspaceId !== activeWorkspaceId
     if (activeWorkspaceId) {
       localStorage.setItem('bb:activeWorkspaceId', activeWorkspaceId)
     } else {
       localStorage.removeItem('bb:activeWorkspaceId')
     }
-    set({ activeWorkspaceId, isUserLoading: true })
+    set({ activeWorkspaceId, ...(changed && { isUserLoading: true }) })
   },
   setWorkspacesAvailable: (workspacesAvailable) => set({ workspacesAvailable }),
 

@@ -14,7 +14,7 @@ function shuffleBookmarks(bookmarks: Bookmark[], seed: number): Bookmark[] {
   return arr
 }
 
-export type EmptyReason = 'no-bookmarks' | 'no-query' | 'no-matches' | null
+export type EmptyReason = 'loading' | 'no-bookmarks' | 'no-query' | 'no-matches' | null
 
 export function useDisplayBookmarks() {
   const bookmarks = useStore((s) => s.bookmarks)
@@ -24,6 +24,7 @@ export function useDisplayBookmarks() {
   const searchQuery = useStore((s) => s.searchQuery)
   const totalCount = useStore((s) => s.totalCount)
   const bookmarksFresh = useStore((s) => s.bookmarksFresh)
+  const initialLoadComplete = useStore((s) => s.initialLoadComplete)
   const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
   const workspaces = useStore((s) => s.workspaces)
 
@@ -39,11 +40,12 @@ export function useDisplayBookmarks() {
   const hasWorkspace = activeWorkspaceId !== null
 
   const emptyReason: EmptyReason = useMemo(() => {
+    if (!initialLoadComplete) return 'loading'
     if (totalCount === 0 && bookmarksFresh) return 'no-bookmarks'
     if (!showAll && !hasQuery && !hasWorkspace) return 'no-query'
     if (bookmarks.length === 0 && (hasQuery || hasWorkspace) && bookmarksFresh) return 'no-matches'
     return null
-  }, [totalCount, showAll, hasQuery, hasWorkspace, bookmarks.length, bookmarksFresh])
+  }, [initialLoadComplete, totalCount, showAll, hasQuery, hasWorkspace, bookmarks.length, bookmarksFresh])
 
   // Apply client-side workspace filters (glob patterns, regex, blacklist)
   const workspaceFiltered = useMemo(() => {

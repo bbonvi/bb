@@ -121,10 +121,11 @@ export function usePolling() {
         state.setWorkspaces(workspacesResult.workspaces)
 
         if (!state.initialLoadComplete) {
-          state.setInitialLoadComplete(true)
-          // Bookmarks were deferred until workspaces loaded — fetch now
+          // Bookmarks were deferred until workspaces loaded — fetch now, don't show UI yet
           if (awaitingWorkspaces) {
             poll()
+          } else {
+            state.setInitialLoadComplete(true)
           }
         }
         state.setIsLoading(false)

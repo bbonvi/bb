@@ -15,7 +15,6 @@ import { useStore } from '@/lib/store'
 function AppShell() {
   usePolling()
   useDocumentTitle()
-  const initialLoadComplete = useStore((s) => s.initialLoadComplete)
   const viewMode = useStore((s) => s.viewMode)
   const bulkEditOpen = useStore((s) => s.bulkEditOpen)
   const setBulkEditOpen = useStore((s) => s.setBulkEditOpen)
@@ -47,14 +46,6 @@ function AppShell() {
       window.history.replaceState({}, '', newUrl)
     }
   }, [openCreateWithUrlAndTitle])
-
-  if (!initialLoadComplete) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-bg">
-        <div className="text-text-muted animate-pulse text-lg">Loading…</div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex h-screen flex-col bg-bg">
