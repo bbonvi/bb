@@ -18,7 +18,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 }
 
 export function BookmarkGrid() {
-  const parentRef = useRef<HTMLDivElement>(null)
+  const parentRef = useRef<HTMLDivElement | null>(null)
   const columns = useStore((s) => s.columns)
   const setColumns = useStore((s) => s.setColumns)
   const isUserLoading = useStore((s) => s.isUserLoading)
