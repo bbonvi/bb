@@ -1,18 +1,19 @@
 import type { Bookmark } from '@/lib/api'
+import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { Thumbnail, Favicon, UrlDisplay, Tags, Description, CardActions } from './bookmark-parts'
 
 interface BookmarkCardProps {
   bookmark: Bookmark
-  onClick?: () => void
 }
 
-export function BookmarkCard({ bookmark, onClick }: BookmarkCardProps) {
+export function BookmarkCard({ bookmark }: BookmarkCardProps) {
+  const setDetailModalId = useStore((s) => s.setDetailModalId)
   const hiddenTags = useHiddenTags()
 
   return (
     <article
-      onClick={onClick}
+      onClick={() => setDetailModalId(bookmark.id)}
       className="group relative flex flex-col overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-[border-color] duration-150 hover:border-white/[0.15] cursor-default"
     >
       <CardActions bookmarkId={bookmark.id} />

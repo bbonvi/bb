@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react'
+import { useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
@@ -12,7 +12,6 @@ const ROW_GAP = 8
 
 export function BookmarkList() {
   const parentRef = useRef<HTMLDivElement>(null)
-  const setDetailModalId = useStore((s) => s.setDetailModalId)
   const isUserLoading = useStore((s) => s.isUserLoading)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
 
@@ -23,11 +22,6 @@ export function BookmarkList() {
     overscan: 5,
     gap: ROW_GAP,
   })
-
-  const handleClick = useCallback(
-    (id: number) => setDetailModalId(id),
-    [setDetailModalId],
-  )
 
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
@@ -47,10 +41,7 @@ export function BookmarkList() {
               className="absolute left-0 top-0 w-full"
               style={{ transform: `translateY(${virtualRow.start}px)` }}
             >
-              <ListCard
-                bookmark={bookmark}
-                onClick={() => handleClick(bookmark.id)}
-              />
+              <ListCard bookmark={bookmark} />
             </div>
           )
         })}
@@ -60,18 +51,13 @@ export function BookmarkList() {
 }
 
 // ─── Horizontal card ───────────────────────────────────────────────
-function ListCard({
-  bookmark,
-  onClick,
-}: {
-  bookmark: Bookmark
-  onClick: () => void
-}) {
+function ListCard({ bookmark }: { bookmark: Bookmark }) {
+  const setDetailModalId = useStore((s) => s.setDetailModalId)
   const hiddenTags = useHiddenTags()
 
   return (
     <article
-      onClick={onClick}
+      onClick={() => setDetailModalId(bookmark.id)}
       className="group relative flex overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-[border-color] duration-150 hover:border-white/[0.15] cursor-default"
     >
       <CardActions bookmarkId={bookmark.id} />

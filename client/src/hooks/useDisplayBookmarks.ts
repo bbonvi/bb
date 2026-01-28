@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import type { Bookmark, Workspace } from '@/lib/api'
 import { applyWorkspaceFilter } from '@/lib/workspaceFilters'
@@ -67,9 +67,12 @@ export function useDisplayBookmarks() {
   }, [workspaceFiltered, shuffle, shuffleSeed, searchQuery.semantic, bookmarksFresh])
 
   // Cache last fresh result to avoid flashing stale data with new ordering
-  const cachedRef = useRef<Bookmark[]>([])
-  if (freshDisplay !== null) cachedRef.current = freshDisplay
-  const displayBookmarks = cachedRef.current
+  // Uses "update state during render" pattern (React-supported for derived state)
+  const [cached, setCached] = useState<Bookmark[]>([])
+  if (freshDisplay !== null && freshDisplay !== cached) {
+    setCached(freshDisplay)
+  }
+  const displayBookmarks = freshDisplay ?? cached
 
   return { displayBookmarks, emptyReason, hasQuery }
 }

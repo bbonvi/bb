@@ -484,11 +484,11 @@ function EditForm({
 
 // Icon with proper fallback for edit mode — matches Favicon's plain square pattern
 function EditableIcon({ iconId, previewUrl }: { iconId: string | null; previewUrl: string | null }) {
-  const [failed, setFailed] = useState(false)
+  // Track which iconId/previewUrl combo failed, so changing either resets error
+  const [failedKey, setFailedKey] = useState<string | null>(null)
+  const currentKey = `${iconId}:${previewUrl}`
+  const failed = failedKey === currentKey
   const src = previewUrl ?? (iconId && !failed ? fileUrl(iconId) : null)
-
-  // Reset error state when icon changes
-  useEffect(() => { setFailed(false) }, [iconId, previewUrl])
 
   return (
     <div className="relative h-10 w-10 overflow-hidden rounded-md">
@@ -497,7 +497,7 @@ function EditableIcon({ iconId, previewUrl }: { iconId: string | null; previewUr
         <img
           src={src}
           alt=""
-          onError={() => setFailed(true)}
+          onError={() => setFailedKey(currentKey)}
           className="absolute inset-0 h-full w-full object-contain"
         />
       )}

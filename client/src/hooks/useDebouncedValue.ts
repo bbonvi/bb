@@ -33,13 +33,16 @@ export function useDebouncedValue(
     setDebounced(v)
   }, [])
 
-  // Sync from external when not actively typing
-  useEffect(() => {
+  // Sync from external when not actively typing (update-during-render pattern)
+  const [prevExternal, setPrevExternal] = useState(externalValue)
+  if (externalValue !== prevExternal) {
+    setPrevExternal(externalValue)
+    // eslint-disable-next-line react-hooks/refs -- dirty flag requires ref to avoid stale closure
     if (!dirtyRef.current) {
       setLocal(externalValue)
       setDebounced(externalValue)
     }
-  }, [externalValue])
+  }
 
   // Cleanup
   useEffect(() => {

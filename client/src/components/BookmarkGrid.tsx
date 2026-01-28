@@ -1,4 +1,4 @@
-import { useRef, useMemo, useCallback, useEffect } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { BookmarkCard } from './BookmarkCard'
@@ -21,7 +21,6 @@ export function BookmarkGrid() {
   const parentRef = useRef<HTMLDivElement>(null)
   const columns = useStore((s) => s.columns)
   const setColumns = useStore((s) => s.setColumns)
-  const setDetailModalId = useStore((s) => s.setDetailModalId)
   const isUserLoading = useStore((s) => s.isUserLoading)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
 
@@ -70,11 +69,6 @@ export function BookmarkGrid() {
     virtualizer.scrollToIndex(newRow, { align: 'start' })
   }, [columns, virtualizer])
 
-  const handleCardClick = useCallback(
-    (id: number) => setDetailModalId(id),
-    [setDetailModalId],
-  )
-
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
   return (
@@ -102,11 +96,7 @@ export function BookmarkGrid() {
                 }}
               >
                 {row.map((bookmark) => (
-                  <BookmarkCard
-                    key={bookmark.id}
-                    bookmark={bookmark}
-                    onClick={() => handleCardClick(bookmark.id)}
-                  />
+                  <BookmarkCard key={bookmark.id} bookmark={bookmark} />
                 ))}
               </div>
             </div>

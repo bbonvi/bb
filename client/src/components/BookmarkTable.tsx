@@ -1,4 +1,4 @@
-import { useRef, useCallback, useMemo } from 'react'
+import { useRef, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
@@ -11,7 +11,6 @@ const ROW_HEIGHT = 40
 
 export function BookmarkTable() {
   const parentRef = useRef<HTMLDivElement>(null)
-  const setDetailModalId = useStore((s) => s.setDetailModalId)
   const isUserLoading = useStore((s) => s.isUserLoading)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
 
@@ -21,11 +20,6 @@ export function BookmarkTable() {
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
   })
-
-  const handleClick = useCallback(
-    (id: number) => setDetailModalId(id),
-    [setDetailModalId],
-  )
 
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
@@ -52,10 +46,7 @@ export function BookmarkTable() {
               className="absolute left-0 top-0 w-full"
               style={{ transform: `translateY(${virtualRow.start}px)` }}
             >
-              <TableRow
-                bookmark={bookmark}
-                onClick={() => handleClick(bookmark.id)}
-              />
+              <TableRow bookmark={bookmark} />
             </div>
           )
         })}
@@ -64,13 +55,8 @@ export function BookmarkTable() {
   )
 }
 
-function TableRow({
-  bookmark,
-  onClick,
-}: {
-  bookmark: Bookmark
-  onClick: () => void
-}) {
+function TableRow({ bookmark }: { bookmark: Bookmark }) {
+  const setDetailModalId = useStore((s) => s.setDetailModalId)
   const hiddenTags = useHiddenTags()
   const visibleTags = useMemo(
     () => bookmark.tags.filter((t) => !hiddenTags.includes(t)),
@@ -79,7 +65,7 @@ function TableRow({
 
   return (
     <div
-      onClick={onClick}
+      onClick={() => setDetailModalId(bookmark.id)}
       className="group relative flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover"
     >
       <CardActions bookmarkId={bookmark.id} variant="row" />

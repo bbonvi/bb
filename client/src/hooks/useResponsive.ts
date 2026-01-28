@@ -1,4 +1,4 @@
-import { useState, useEffect, type RefObject } from 'react'
+import { useState, useEffect, useLayoutEffect, type RefObject } from 'react'
 
 export function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(() =>
@@ -33,26 +33,22 @@ export function columnsForWidth(width: number): number {
  * Uses ResizeObserver for accurate container-based measurement.
  */
 export function useAutoColumns(ref: RefObject<HTMLElement | null>): number {
-  const [cols, setCols] = useState(() => {
-    if (ref.current) return columnsForWidth(ref.current.clientWidth)
-    if (typeof window !== 'undefined') return columnsForWidth(window.innerWidth)
-    return 4
-  })
+  // Initialize with window width (refs cannot be read during render)
+  const [cols, setCols] = useState(() =>
+    typeof window !== 'undefined' ? columnsForWidth(window.innerWidth) : 4
+  )
 
   // Track the observed element so we re-attach when ref.current changes
   // (e.g. grid unmounts during empty state then remounts)
-  const [el, setEl] = useState<HTMLElement | null>(ref.current)
+  const [el, setEl] = useState<HTMLElement | null>(null)
 
-  // Poll for ref attachment changes — cheap check every animation frame
-  // only while disconnected. Stops once element is found.
-  useEffect(() => {
-    if (el === ref.current) return
+  // Sync ref.current to el state (runs after layout, can access refs)
+  useLayoutEffect(() => {
     setEl(ref.current)
-  })
+  }, [ref])
 
   useEffect(() => {
-    const target = el ?? ref.current
-    if (!target) return
+    if (!el) return
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -60,9 +56,9 @@ export function useAutoColumns(ref: RefObject<HTMLElement | null>): number {
         setCols(columnsForWidth(w))
       }
     })
-    ro.observe(target)
+    ro.observe(el)
     return () => ro.disconnect()
-  }, [el, ref])
+  }, [el])
 
   return cols
 }

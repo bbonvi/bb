@@ -21,6 +21,7 @@ export function TagAutocompleteInput({
   className?: string
   inputClassName?: string
 }) {
+  'use no memo' // Opt out of React Compiler - DOM measurements require refs in effects
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [highlightIdx, setHighlightIdx] = useState(-1)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
@@ -56,10 +57,10 @@ export function TagAutocompleteInput({
 
   const visible = showSuggestions && suggestions.length > 0
 
-  // Position the portal dropdown relative to the input
+  // Position the portal dropdown relative to the input (DOM measurement requires effect + state)
   useLayoutEffect(() => {
     if (!visible || !inputRef.current) {
-      setDropdownPos(null)
+      setDropdownPos(null) // eslint-disable-line react-hooks/set-state-in-effect
       return
     }
     const rect = inputRef.current.getBoundingClientRect()

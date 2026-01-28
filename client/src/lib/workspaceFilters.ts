@@ -41,7 +41,7 @@ function globToRegex(pattern: string): RegExp {
 }
 
 function hasGlobChars(s: string): boolean {
-  return /[*?\[]/.test(s)
+  return /[*?[]/.test(s)
 }
 
 function hasRegexChars(s: string): boolean {

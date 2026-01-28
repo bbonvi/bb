@@ -61,4 +61,5 @@ function Button({
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- buttonVariants used with cva
 export { Button, buttonVariants }
