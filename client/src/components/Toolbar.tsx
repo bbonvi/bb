@@ -48,7 +48,6 @@ export function Toolbar() {
   const searchQuery = useStore((s) => s.searchQuery)
   const setSearchQuery = useStore((s) => s.setSearchQuery)
   const bookmarks = useStore((s) => s.bookmarks)
-  const totalCount = useStore((s) => s.totalCount)
   const semanticEnabled = useStore((s) => s.semanticEnabled)
 
   const viewMode = useStore((s) => s.viewMode)
@@ -147,7 +146,7 @@ export function Toolbar() {
           <img
             src="/logo192.png"
             alt="bb"
-            className="h-7 w-7 opacity-70 grayscale-[30%] transition-all group-hover:opacity-100 group-hover:grayscale-0"
+            className="h-7 w-7 opacity-80 transition-all group-hover:opacity-100"
           />
         </button>
 
@@ -203,14 +202,6 @@ export function Toolbar() {
           </div>
         )}
 
-        {/* Counter */}
-        <div className="flex items-baseline gap-0.5 font-mono text-xs tabular-nums select-none shrink-0">
-          <span className={hasAnySearch || activeWorkspaceId ? 'text-hi' : 'text-text-muted'}>
-            {matchedCount}
-          </span>
-          <span className="text-text-dim">/</span>
-          <span className="text-text-dim">{totalCount}</span>
-        </div>
 
         {/* Clear all */}
         {hasAnySearch && (
