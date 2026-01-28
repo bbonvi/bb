@@ -494,11 +494,19 @@ async fn update(
         let image_data = base64::engine::general_purpose::STANDARD
             .decode(image_b64)
             .context("Failed to decode base64 image data")?;
-        let image_id = format!("{}.png", Eid::new());
-        state.storage_mgr.write(&image_id, &image_data);
+
+        // Compress preview image to WebP (same as create)
+        let config = app_service.get_config().context("Failed to get config")?;
+        let img_config = &config.read().unwrap().images;
+        let compressed = images::compress_image(&image_data, img_config.max_size, img_config.quality)
+            .context("Failed to compress image")?;
+
+        let image_id = format!("{}.webp", Eid::new());
+        state.storage_mgr.write(&image_id, &compressed.data);
         update.image_id = Some(image_id);
     }
 
+    // Icons stay as-is (favicons are typically small already)
     if let Some(icon_b64) = payload.icon_b64 {
         let icon_data = base64::engine::general_purpose::STANDARD
             .decode(icon_b64)
