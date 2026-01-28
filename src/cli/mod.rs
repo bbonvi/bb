@@ -18,12 +18,6 @@ pub struct Args {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// This is for internal use only!
-    /// I'm not sure if it still works.
-    /// Might delete later.
-    #[clap(hide = true)]
-    MigrateBuku {},
-
     /// Generate api docs in markdown format
     #[cfg(feature = "markdown-docs")]
     #[clap(hide = true)]

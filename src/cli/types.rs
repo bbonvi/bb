@@ -57,6 +57,14 @@ pub enum ActionArgs {
     },
 }
 
+impl ActionArgs {
+    /// Returns true if this action modifies data (write operation).
+    pub fn is_write(&self) -> bool {
+        // All action variants are writes (Update modifies, Delete removes)
+        matches!(self, ActionArgs::Update { .. } | ActionArgs::Delete { .. })
+    }
+}
+
 #[derive(Subcommand, Debug, Clone)]
 pub enum RuleAction {
     /// Perform an Update action.

@@ -5,7 +5,6 @@ mod app;
 mod auth;
 mod backup;
 mod bookmarks;
-mod buku_migrate;
 mod cli;
 mod config;
 mod editor;
@@ -23,6 +22,7 @@ mod web;
 mod workspaces;
 
 use cli::{Args, Command};
+use lock::{FileLock, LockGuard};
 
 pub fn parse_tags(tags: String) -> Vec<String> {
     tags.split(',')
@@ -48,6 +48,21 @@ fn setup_logger() {
         .init();
 }
 
+/// Acquire database lock for CLI operations in local mode.
+/// Skips if BB_ADDR is set (daemon handles locking).
+fn acquire_cli_lock() -> anyhow::Result<LockGuard> {
+    let paths = app::AppFactory::get_paths()?;
+    LockGuard::acquire_if_local(std::path::Path::new(&paths.base_path)).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::WouldBlock {
+            anyhow::anyhow!(
+                "Database locked. Set BB_ADDR to connect to running daemon, or stop the daemon."
+            )
+        } else {
+            anyhow::anyhow!("Failed to acquire lock: {}", e)
+        }
+    })
+}
+
 fn main() -> anyhow::Result<()> {
     if std::env::var("RUST_LOG").is_err() {
         unsafe { std::env::set_var("RUST_LOG", "error") }
@@ -65,12 +80,11 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
 
-        Command::MigrateBuku {} => {
-            buku_migrate::migrate();
-            Ok(())
-        }
-
         Command::Daemon { .. } => {
+            let paths = app::AppFactory::get_paths()?;
+            let _lock = FileLock::try_acquire(std::path::Path::new(&paths.base_path))
+                .map_err(|_| anyhow::anyhow!("Another instance is running"))?;
+
             log::debug!("Creating application manager...");
             let mut app_mgr = app::AppFactory::create_local_app()?;
 
@@ -100,6 +114,11 @@ fn main() -> anyhow::Result<()> {
             count,
             action,
         } => {
+            let _lock = if action.as_ref().map_or(false, |a| a.is_write()) {
+                Some(acquire_cli_lock()?)
+            } else {
+                None
+            };
             let app_service = app::AppFactory::create_app_service()?;
             let params = cli::SearchParams {
                 url,
@@ -126,6 +145,7 @@ fn main() -> anyhow::Result<()> {
             async_meta,
             meta_args,
         } => {
+            let _lock = acquire_cli_lock()?;
             let app_service = app::AppFactory::create_app_service()?;
             let params = cli::AddParams {
                 use_editor,
@@ -147,6 +167,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         Command::Rule { action } => {
+            let _lock = acquire_cli_lock()?;
             let app_service = app::AppFactory::create_app_service()?;
             let config = app_service.get_config()?;
             let mut conf = config.write().unwrap();
@@ -154,6 +175,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         Command::Compress { dry_run, yes } => {
+            let _lock = acquire_cli_lock()?;
             let paths = app::AppFactory::get_paths()?;
             let config = config::Config::load_with(&paths.base_path);
             let storage = storage::BackendLocal::new(&paths.uploads_path);
@@ -165,6 +187,9 @@ fn main() -> anyhow::Result<()> {
 
         Command::Backup { path } => backup::create_backup(path),
 
-        Command::Import { path, yes } => backup::import_backup(&path, yes),
+        Command::Import { path, yes } => {
+            let _lock = acquire_cli_lock()?;
+            backup::import_backup(&path, yes)
+        }
     }
 }
