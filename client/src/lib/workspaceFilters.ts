@@ -1,8 +1,8 @@
 // Workspace filter evaluation logic (§6.3)
 //
-// Hybrid strategy: plain tags/substrings are injected into the search query
-// (server-side), while glob patterns, regex, and blacklist are applied
-// client-side after fetch.
+// Workspace filters are applied client-side after fetch. Tag whitelist uses
+// OR logic (bookmark matches if it has ANY whitelisted tag). Blacklist uses
+// OR logic for exclusion (bookmark excluded if it has ANY blacklisted tag).
 
 import type { Bookmark, SearchQuery, Workspace } from './api'
 
@@ -58,14 +58,6 @@ export function injectWorkspaceFilters(
   const injected = { ...query }
   const f = workspace.filters
 
-  // Plain tags (no globs) → append to tags field
-  const plainTags = f.tag_whitelist.filter((t) => !hasGlobChars(t))
-  if (plainTags.length > 0) {
-    const existing = injected.tags ? injected.tags.split(',').map((t) => t.trim()).filter(Boolean) : []
-    const merged = [...new Set([...existing, ...plainTags])]
-    injected.tags = merged.join(',')
-  }
-
   // Simple substring patterns → inject into corresponding search fields
   if (f.title_pattern && !hasRegexChars(f.title_pattern) && !injected.title) {
     injected.title = f.title_pattern
@@ -88,7 +80,8 @@ export function applyWorkspaceFilter(
 ): Bookmark[] {
   const f = workspace.filters
 
-  // Glob tag whitelist (only patterns with glob chars — plain tags already sent server-side)
+  // Tag whitelist: plain tags (exact match) and glob patterns — both use OR logic
+  const plainWhitelist = f.tag_whitelist.filter((t) => !hasGlobChars(t)).map((t) => t.toLowerCase())
   const globWhitelist = f.tag_whitelist.filter(hasGlobChars).map(globToRegex)
 
   // Regex patterns (only when they contain regex metacharacters — simple strings already sent server-side)
@@ -100,7 +93,7 @@ export function applyWorkspaceFilter(
   // Blacklist glob patterns
   const blacklistPatterns = f.tag_blacklist.map(globToRegex)
 
-  const needsClientInclusion = globWhitelist.length > 0 || titleRe || urlRe || descRe || anyRe
+  const needsClientInclusion = plainWhitelist.length > 0 || globWhitelist.length > 0 || titleRe || urlRe || descRe || anyRe
   const needsBlacklist = blacklistPatterns.length > 0
 
   if (!needsClientInclusion && !needsBlacklist) return bookmarks
@@ -108,6 +101,7 @@ export function applyWorkspaceFilter(
   return bookmarks.filter((bm) => {
     // Inclusion: if there are client-side inclusion filters, bookmark must match at least one
     if (needsClientInclusion) {
+      const matchesPlain = plainWhitelist.length > 0 && bm.tags.some((t) => plainWhitelist.includes(t.toLowerCase()))
       const matchesGlob = globWhitelist.length > 0 && bm.tags.some((t) => globWhitelist.some((re) => re.test(t)))
       const matchesTitle = titleRe ? titleRe.test(bm.title) : false
       const matchesUrl = urlRe ? urlRe.test(bm.url) : false
@@ -116,7 +110,7 @@ export function applyWorkspaceFilter(
         ? anyRe.test(bm.title) || anyRe.test(bm.url) || anyRe.test(bm.description) || bm.tags.some((t) => anyRe.test(t))
         : false
 
-      if (!matchesGlob && !matchesTitle && !matchesUrl && !matchesDesc && !matchesAny) {
+      if (!matchesPlain && !matchesGlob && !matchesTitle && !matchesUrl && !matchesDesc && !matchesAny) {
         return false
       }
     }
