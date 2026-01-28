@@ -8,10 +8,12 @@ import { CreateBookmarkModal } from '@/components/CreateBookmarkModal'
 import { BulkEditModal, BulkDeleteModal } from '@/components/BulkOperationsModal'
 import { SettingsPanel } from '@/components/SettingsPanel'
 import { usePolling } from '@/hooks/usePolling'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useStore } from '@/lib/store'
 
 function AppShell() {
   usePolling()
+  useDocumentTitle()
   const initialLoadComplete = useStore((s) => s.initialLoadComplete)
   const viewMode = useStore((s) => s.viewMode)
   const bulkEditOpen = useStore((s) => s.bulkEditOpen)
