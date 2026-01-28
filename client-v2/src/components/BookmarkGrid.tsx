@@ -84,16 +84,14 @@ export function BookmarkGrid() {
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const row = rows[virtualRow.index]
-          const measured = virtualRow.size !== ESTIMATED_ROW_HEIGHT
           return (
             <div
               key={virtualRow.index}
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
-              className="absolute left-0 top-0 w-full transition-opacity duration-100"
+              className="absolute left-0 top-0 w-full"
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
-                opacity: measured ? 1 : 0,
               }}
             >
               <div

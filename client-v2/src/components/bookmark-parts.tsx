@@ -162,9 +162,12 @@ export function Description({
   const [clamped, setClamped] = useState(false)
   const ref = useRef<HTMLParagraphElement>(null)
 
+  // Defer layout read to avoid forced reflow during scroll-driven mounts
   useEffect(() => {
     const el = ref.current
-    if (el) setClamped(el.scrollHeight > el.clientHeight)
+    if (!el) return
+    const id = setTimeout(() => setClamped(el.scrollHeight > el.clientHeight), 0)
+    return () => clearTimeout(id)
   }, [text])
 
   if (!text) return null
@@ -311,7 +314,30 @@ export function DeleteButton({
 }
 
 // ─── Card action buttons (hover overlay) ──────────────────────────
+// Lazy: mounts inner content only on first hover to avoid per-row
+// store subscriptions and backdrop-blur compositing during scroll.
 export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: number; variant?: 'card' | 'row' }) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <div
+      className={`absolute right-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 ${variant === 'card' ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}
+      onPointerEnter={() => setHovered(true)}
+    >
+      {hovered ? (
+        <CardActionsInner bookmarkId={bookmarkId} />
+      ) : (
+        // Placeholder keeps the same layout size so first hover doesn't shift
+        <>
+          <span className="inline-block h-[30px] w-[30px]" />
+          <span className="inline-block h-[30px] w-[30px]" />
+        </>
+      )}
+    </div>
+  )
+}
+
+function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
   const openDetailInEditMode = useStore((s) => s.openDetailInEditMode)
   const setBookmarks = useStore((s) => s.setBookmarks)
   const bookmarks = useStore((s) => s.bookmarks)
@@ -333,11 +359,11 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
   }, [bookmarkId, bookmarks, detailModalId, setBookmarks, setDetailModalId])
 
   return (
-    <div className={`absolute right-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 ${variant === 'card' ? 'top-2' : 'top-1/2 -translate-y-1/2'}`}>
+    <>
       <button
         tabIndex={-1}
         onClick={handleEdit}
-        className="rounded bg-bg/80 p-1.5 text-text-muted backdrop-blur-sm transition-colors hover:bg-surface-hover hover:text-text"
+        className="rounded bg-bg/80 p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
         title="Edit"
       >
         <Pencil className="h-3.5 w-3.5" />
@@ -345,9 +371,9 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
       <DeleteButton
         onDelete={handleDelete}
         stopPropagation
-        className="bg-bg/80 backdrop-blur-sm"
+        className="bg-bg/80"
       />
-    </div>
+    </>
   )
 }
 

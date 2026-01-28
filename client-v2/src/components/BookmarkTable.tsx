@@ -31,7 +31,7 @@ export function BookmarkTable() {
   return (
     <div ref={parentRef} className="h-full overflow-auto">
       {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.06] bg-bg/95 px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-text-dim backdrop-blur-sm">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.06] bg-bg px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-text-dim">
         <span className="min-w-0 flex-[3]">Title</span>
         <span className="hidden min-w-0 flex-[2] sm:block">URL</span>
         <span className="hidden min-w-0 flex-[2] md:block">Tags</span>
@@ -47,7 +47,6 @@ export function BookmarkTable() {
           return (
             <div
               key={bookmark.id}
-              ref={virtualizer.measureElement}
               data-index={virtualRow.index}
               className="absolute left-0 top-0 w-full"
               style={{ transform: `translateY(${virtualRow.start}px)` }}
