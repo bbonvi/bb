@@ -67,16 +67,18 @@ export function usePolling() {
         ? injectWorkspaceFilters(searchQuery, activeWorkspace)
         : searchQuery
 
-      // On first load with a stored workspace or URL workspace param, defer bookmark
-      // fetch until workspaces are loaded so filters can be applied correctly
-      const awaitingWorkspaces = !store.initialLoadComplete
-        && workspaces.length === 0
-        && (activeWorkspaceId !== null || store.urlWorkspaceName !== null)
+      // On first load, defer bookmark fetch until:
+      // 1. URL workspace param is resolved (urlWorkspaceName becomes null after setWorkspaces)
+      // 2. Stored workspace has workspaces list loaded (so filters can be applied)
+      const awaitingWorkspaceResolution = !store.initialLoadComplete && (
+        store.urlWorkspaceName !== null ||
+        (activeWorkspaceId !== null && workspaces.length === 0)
+      )
 
       // When a workspace is active, always fetch bookmarks (workspace implies filtering)
       const hasWorkspace = activeWorkspaceId !== null
       // Skip bookmark fetch when show-all OFF + no query + no workspace
-      const shouldFetchBookmarks = !awaitingWorkspaces && (showAll || !isQueryEmpty(searchQuery) || hasWorkspace)
+      const shouldFetchBookmarks = !awaitingWorkspaceResolution && (showAll || !isQueryEmpty(searchQuery) || hasWorkspace)
 
       store.setIsLoading(true)
       try {
@@ -122,7 +124,7 @@ export function usePolling() {
 
         if (!state.initialLoadComplete) {
           // Bookmarks were deferred until workspaces loaded — fetch now, don't show UI yet
-          if (awaitingWorkspaces) {
+          if (awaitingWorkspaceResolution) {
             poll()
           } else {
             state.setInitialLoadComplete(true)
