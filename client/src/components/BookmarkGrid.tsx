@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect, memo } from 'react'
+import { useRef, useMemo, useEffect, useCallback, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { BookmarkCard } from './BookmarkCard'
@@ -25,7 +25,13 @@ export function BookmarkGrid() {
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
 
   // Auto-compute columns from container width, with scroll preservation
-  const autoCols = useAutoColumns(parentRef)
+  const [autoCols, colsRef] = useAutoColumns()
+
+  // Merge callback ref with parentRef so both track the same element
+  const setRefs = useCallback((node: HTMLDivElement | null) => {
+    parentRef.current = node
+    colsRef(node)
+  }, [colsRef])
   const scrollTargetRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -73,7 +79,7 @@ export function BookmarkGrid() {
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
   return (
-    <div ref={parentRef} className="h-full overflow-auto p-4">
+    <div ref={setRefs} className="h-full overflow-auto p-4">
       <div
         className={`relative mx-auto w-full transition-opacity duration-150 ${isUserLoading ? 'opacity-40' : ''}`}
         style={{ height: virtualizer.getTotalSize(), maxWidth: MAX_GRID_WIDTH }}

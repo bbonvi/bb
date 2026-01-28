@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, type RefObject } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 export function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(() =>
@@ -31,21 +31,22 @@ export function columnsForWidth(width: number): number {
 /**
  * Observe a container's width and return the ideal column count.
  * Uses ResizeObserver for accurate container-based measurement.
+ *
+ * Returns [cols, callbackRef] — attach callbackRef to the container element.
+ * The callback ref ensures the observer re-attaches whenever the element
+ * mounts/unmounts (e.g. grid hidden behind an empty-state early return).
  */
-export function useAutoColumns(ref: RefObject<HTMLElement | null>): number {
-  // Initialize with window width (refs cannot be read during render)
+export function useAutoColumns(): [number, (node: HTMLElement | null) => void] {
   const [cols, setCols] = useState(() =>
     typeof window !== 'undefined' ? columnsForWidth(window.innerWidth) : 4
   )
 
-  // Track the observed element so we re-attach when ref.current changes
-  // (e.g. grid unmounts during empty state then remounts)
   const [el, setEl] = useState<HTMLElement | null>(null)
 
-  // Sync ref.current to el state (runs after layout, can access refs)
-  useLayoutEffect(() => {
-    setEl(ref.current)
-  }, [ref])
+  // Callback ref: called by React whenever the element mounts or unmounts
+  const callbackRef = useCallback((node: HTMLElement | null) => {
+    setEl(node)
+  }, [])
 
   useEffect(() => {
     if (!el) return
@@ -60,7 +61,7 @@ export function useAutoColumns(ref: RefObject<HTMLElement | null>): number {
     return () => ro.disconnect()
   }, [el])
 
-  return cols
+  return [cols, callbackRef]
 }
 
 // Keep legacy export for fallback/init
