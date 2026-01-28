@@ -10,6 +10,8 @@ use crate::{
         validate_tags, validate_url, validate_rule_input,
     }},
 };
+use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use std::collections::HashMap;
 
 /// Command for searching bookmarks
@@ -515,16 +517,21 @@ pub struct CompressionStats {
     pub already_optimal: usize,
     pub to_compress: usize,
     pub failed_to_read: usize,
-    pub current_size_bytes: u64,
-    pub estimated_size_bytes: u64,
 }
 
-/// Single image compression result
+/// Image pending compression
 #[derive(Debug)]
 struct ImageToCompress {
     image_id: String,
     bookmark_ids: Vec<u64>,
     data: Vec<u8>,
+}
+
+/// Result of parallel compression phase
+struct CompressedImage {
+    image_id: String,
+    bookmark_ids: Vec<u64>,
+    result: anyhow::Result<images::CompressionResult>,
 }
 
 /// Command for batch image compression
@@ -582,31 +589,18 @@ impl CompressCommand {
                 continue;
             }
 
-            stats.current_size_bytes += data.len() as u64;
-
-            // Check if needs processing
+            // Check if needs processing (fast - no compression)
             if !images::should_process(&data, max_size) {
                 stats.already_optimal += 1;
-                stats.estimated_size_bytes += data.len() as u64;
                 continue;
             }
 
-            // Try compression to estimate size
-            match images::compress_image(&data, max_size, quality) {
-                Ok(result) => {
-                    stats.to_compress += 1;
-                    stats.estimated_size_bytes += result.data.len() as u64;
-                    to_compress.push(ImageToCompress {
-                        image_id: image_id.clone(),
-                        bookmark_ids: bookmark_ids.clone(),
-                        data,
-                    });
-                }
-                Err(_) => {
-                    stats.failed_to_read += 1;
-                    stats.estimated_size_bytes += data.len() as u64;
-                }
-            }
+            stats.to_compress += 1;
+            to_compress.push(ImageToCompress {
+                image_id: image_id.clone(),
+                bookmark_ids: bookmark_ids.clone(),
+                data,
+            });
         }
 
         // Display preview
@@ -634,19 +628,45 @@ impl CompressCommand {
             }
         }
 
-        // Execute compression
+        // Phase 1: Compress images in parallel with progress bar
+        let pb = ProgressBar::new(to_compress.len() as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+
+        let compressed: Vec<CompressedImage> = to_compress
+            .into_par_iter()
+            .map(|img| {
+                let result = images::compress_image(&img.data, max_size, quality);
+                pb.inc(1);
+                CompressedImage {
+                    image_id: img.image_id,
+                    bookmark_ids: img.bookmark_ids,
+                    result,
+                }
+            })
+            .collect();
+
+        pb.finish_and_clear();
+
+        // Phase 2: Apply results sequentially (I/O + bookmark updates)
         let mut success_count = 0;
         let mut error_count = 0;
 
-        for img in to_compress {
-            match self.compress_single_image(
-                &img,
-                storage,
-                max_size,
-                quality,
-                &update_bookmark,
-            ) {
-                Ok(()) => success_count += 1,
+        for img in compressed {
+            match img.result {
+                Ok(result) => {
+                    match self.apply_compression(&img.image_id, &img.bookmark_ids, result, storage, &update_bookmark) {
+                        Ok(()) => success_count += 1,
+                        Err(e) => {
+                            eprintln!("Failed to save {}: {}", img.image_id, e);
+                            error_count += 1;
+                        }
+                    }
+                }
                 Err(e) => {
                     eprintln!("Failed to compress {}: {}", img.image_id, e);
                     error_count += 1;
@@ -663,22 +683,20 @@ impl CompressCommand {
         Ok(())
     }
 
-    fn compress_single_image<S: StorageManager>(
+    /// Apply a pre-computed compression result: write file, update bookmarks, cleanup
+    fn apply_compression<S: StorageManager>(
         &self,
-        img: &ImageToCompress,
+        image_id: &str,
+        bookmark_ids: &[u64],
+        result: images::CompressionResult,
         storage: &S,
-        max_size: u32,
-        quality: u8,
         update_bookmark: &impl Fn(u64, crate::bookmarks::BookmarkUpdate) -> anyhow::Result<crate::bookmarks::Bookmark>,
     ) -> anyhow::Result<()> {
-        // Compress
-        let result = images::compress_image(&img.data, max_size, quality)?;
-
         // Generate new filename with .webp extension
-        let new_id = if img.image_id.ends_with(".webp") {
-            img.image_id.clone()
+        let new_id = if image_id.ends_with(".webp") {
+            image_id.to_string()
         } else {
-            let base = img.image_id.rsplit_once('.').map(|(b, _)| b).unwrap_or(&img.image_id);
+            let base = image_id.rsplit_once('.').map(|(b, _)| b).unwrap_or(image_id);
             format!("{}.webp", base)
         };
 
@@ -686,7 +704,7 @@ impl CompressCommand {
         storage.write(&new_id, &result.data);
 
         // Update bookmark references
-        for &bookmark_id in &img.bookmark_ids {
+        for &bookmark_id in bookmark_ids {
             let update = crate::bookmarks::BookmarkUpdate {
                 image_id: Some(new_id.clone()),
                 ..Default::default()
@@ -695,8 +713,8 @@ impl CompressCommand {
         }
 
         // Delete old file if different
-        if new_id != img.image_id {
-            let _ = storage.delete(&img.image_id);
+        if new_id != image_id {
+            let _ = storage.delete(image_id);
         }
 
         Ok(())
@@ -710,34 +728,6 @@ impl CompressCommand {
         println!("To compress:      {}", stats.to_compress);
         if stats.failed_to_read > 0 {
             println!("Failed to read:   {}", stats.failed_to_read);
-        }
-        println!();
-
-        let reduction = if stats.current_size_bytes > 0 {
-            let saved = stats.current_size_bytes.saturating_sub(stats.estimated_size_bytes);
-            (saved as f64 / stats.current_size_bytes as f64) * 100.0
-        } else {
-            0.0
-        };
-
-        println!(
-            "Estimated savings: {} → {} ({:.0}% reduction)",
-            Self::format_bytes(stats.current_size_bytes),
-            Self::format_bytes(stats.estimated_size_bytes),
-            reduction
-        );
-    }
-
-    fn format_bytes(bytes: u64) -> String {
-        const KB: u64 = 1024;
-        const MB: u64 = 1024 * KB;
-
-        if bytes >= MB {
-            format!("{:.1} MB", bytes as f64 / MB as f64)
-        } else if bytes >= KB {
-            format!("{:.1} KB", bytes as f64 / KB as f64)
-        } else {
-            format!("{} B", bytes)
         }
     }
 }
