@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
+import { useShallow } from 'zustand/react/shallow'
 import type { Bookmark, Workspace } from '@/lib/api'
 import { applyWorkspaceFilter } from '@/lib/workspaceFilters'
 
@@ -17,16 +18,32 @@ function shuffleBookmarks(bookmarks: Bookmark[], seed: number): Bookmark[] {
 export type EmptyReason = 'loading' | 'no-bookmarks' | 'no-query' | 'no-matches' | null
 
 export function useDisplayBookmarks() {
-  const bookmarks = useStore((s) => s.bookmarks)
-  const shuffle = useStore((s) => s.shuffle)
-  const shuffleSeed = useStore((s) => s.shuffleSeed)
-  const showAll = useStore((s) => s.showAll)
-  const searchQuery = useStore((s) => s.searchQuery)
-  const totalCount = useStore((s) => s.totalCount)
-  const bookmarksFresh = useStore((s) => s.bookmarksFresh)
-  const initialLoadComplete = useStore((s) => s.initialLoadComplete)
-  const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
-  const workspaces = useStore((s) => s.workspaces)
+  // Single subscription with shallow equality — avoids 9 separate subscriptions
+  const {
+    bookmarks,
+    shuffle,
+    shuffleSeed,
+    showAll,
+    searchQuery,
+    totalCount,
+    bookmarksFresh,
+    initialLoadComplete,
+    activeWorkspaceId,
+    workspaces,
+  } = useStore(
+    useShallow((s) => ({
+      bookmarks: s.bookmarks,
+      shuffle: s.shuffle,
+      shuffleSeed: s.shuffleSeed,
+      showAll: s.showAll,
+      searchQuery: s.searchQuery,
+      totalCount: s.totalCount,
+      bookmarksFresh: s.bookmarksFresh,
+      initialLoadComplete: s.initialLoadComplete,
+      activeWorkspaceId: s.activeWorkspaceId,
+      workspaces: s.workspaces,
+    })),
+  )
 
   const hasQuery = !!(
     searchQuery.semantic ||
