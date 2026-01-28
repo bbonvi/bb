@@ -43,6 +43,7 @@ export function CreateBookmarkModal() {
   const open = useStore((s) => s.createModalOpen)
   const setOpen = useStore((s) => s.setCreateModalOpen)
   const initialUrl = useStore((s) => s.createModalInitialUrl)
+  const initialTitle = useStore((s) => s.createModalInitialTitle)
   const openCreateWithUrl = useStore((s) => s.openCreateWithUrl)
   const bookmarks = useStore((s) => s.bookmarks)
   const setBookmarks = useStore((s) => s.setBookmarks)
@@ -51,13 +52,17 @@ export function CreateBookmarkModal() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Reset form when modal opens, pre-fill URL if provided
+  // Reset form when modal opens, pre-fill URL and title if provided
   useEffect(() => {
     if (open) {
-      setForm(initialUrl ? { ...emptyForm, url: initialUrl } : emptyForm)
+      setForm({
+        ...emptyForm,
+        url: initialUrl || '',
+        title: initialTitle || '',
+      })
       setError(null)
     }
-  }, [open, initialUrl])
+  }, [open, initialUrl, initialTitle])
 
   // Ctrl+N global shortcut
   useEffect(() => {

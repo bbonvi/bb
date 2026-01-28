@@ -21,21 +21,32 @@ function AppShell() {
   const setBulkEditOpen = useStore((s) => s.setBulkEditOpen)
   const bulkDeleteOpen = useStore((s) => s.bulkDeleteOpen)
   const setBulkDeleteOpen = useStore((s) => s.setBulkDeleteOpen)
-  const setCreateModalOpen = useStore((s) => s.setCreateModalOpen)
+  const openCreateWithUrlAndTitle = useStore((s) => s.openCreateWithUrlAndTitle)
 
-  // Handle ?action=create URL parameter
+  // Handle ?action=create and share target URL parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get('action') === 'create') {
-      setCreateModalOpen(true)
-      // Clean up URL
+    const action = params.get('action')
+    const sharedUrl = params.get('url')
+    const sharedTitle = params.get('title')
+    const sharedText = params.get('text')
+
+    if (action === 'create' || sharedUrl) {
+      // Use sharedText as fallback URL if no explicit url param
+      const url = sharedUrl || (sharedText?.match(/https?:\/\/\S+/)?.[0] ?? '')
+      openCreateWithUrlAndTitle(url, sharedTitle || '')
+
+      // Clean URL
       params.delete('action')
+      params.delete('url')
+      params.delete('title')
+      params.delete('text')
       const newUrl = params.toString()
         ? `${window.location.pathname}?${params}`
         : window.location.pathname
       window.history.replaceState({}, '', newUrl)
     }
-  }, [setCreateModalOpen])
+  }, [openCreateWithUrlAndTitle])
 
   if (!initialLoadComplete) {
     return (

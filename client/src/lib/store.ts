@@ -50,8 +50,10 @@ export interface AppState {
   // Create modal
   createModalOpen: boolean
   createModalInitialUrl: string
+  createModalInitialTitle: string
   setCreateModalOpen: (open: boolean) => void
   openCreateWithUrl: (url: string) => void
+  openCreateWithUrlAndTitle: (url: string, title: string) => void
 
   // Bulk operations
   bulkEditOpen: boolean
@@ -189,8 +191,13 @@ export const useStore = create<AppState>()((set, get) => ({
   // Create modal
   createModalOpen: false,
   createModalInitialUrl: '',
-  setCreateModalOpen: (createModalOpen) => set({ createModalOpen, createModalInitialUrl: '' }),
-  openCreateWithUrl: (url) => set({ createModalOpen: true, createModalInitialUrl: url }),
+  createModalInitialTitle: '',
+  setCreateModalOpen: (createModalOpen) =>
+    set({ createModalOpen, createModalInitialUrl: '', createModalInitialTitle: '' }),
+  openCreateWithUrl: (url) =>
+    set({ createModalOpen: true, createModalInitialUrl: url, createModalInitialTitle: '' }),
+  openCreateWithUrlAndTitle: (url, title) =>
+    set({ createModalOpen: true, createModalInitialUrl: url, createModalInitialTitle: title }),
 
   // Bulk operations
   bulkEditOpen: false,

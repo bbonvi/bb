@@ -59,5 +59,29 @@
       "description": "Create a new bookmark",
       "url": "/?action=create"
     }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "url": "url",
+      "title": "title",
+      "text": "text"
+    }
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+bb",
+      "url": "/?action=create&url=%s"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "text/html": [".html"],
+        "application/json": [".json"]
+      }
+    }
   ]
 }
