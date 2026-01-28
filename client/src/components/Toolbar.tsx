@@ -137,7 +137,20 @@ export function Toolbar() {
   return (
     <header className="sticky top-0 z-40 bg-bg">
       {/* ── Search row ── */}
-      <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
+      <div className="flex items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
+        {/* Logo */}
+        <button
+          onClick={clearAll}
+          className="hidden sm:flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-all hover:scale-105 active:scale-95 group -translate-y-0.5"
+          title="bb — clear search"
+        >
+          <img
+            src="/logo192.png"
+            alt="bb"
+            className="h-7 w-7 opacity-70 grayscale-[30%] transition-all group-hover:opacity-100 group-hover:grayscale-0"
+          />
+        </button>
+
         {/* Search bar */}
         <div className="relative flex min-w-0 flex-1 items-center sm:max-w-2xl">
           <SearchIcon className="pointer-events-none absolute left-3 text-text-dim" />

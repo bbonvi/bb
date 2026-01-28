@@ -1,12 +1,16 @@
 {
-  "short_name": "bb",
+  "id": "/",
   "name": "bb - Bookmark Manager",
+  "short_name": "bb",
+  "description": "Fast, semantic bookmark manager with tags and workspaces",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1a1a2e",
+  "background_color": "#0f0f1a",
+  "categories": ["productivity", "utilities"],
   "icons": [
-    {
-      "src": "favicon.ico",
-      "sizes": "48x48 32x32 16x16",
-      "type": "image/x-icon"
-    },
     {
       "src": "favicon-16x16.png",
       "sizes": "16x16",
@@ -40,10 +44,20 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#1a1a2e",
-  "background_color": "#0f0f1a"
+  "shortcuts": [
+    {
+      "name": "Add Bookmark",
+      "short_name": "Add",
+      "description": "Create a new bookmark",
+      "url": "/?action=create"
+    }
+  ]
 }
