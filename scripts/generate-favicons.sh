@@ -23,6 +23,9 @@ CLIENT_PUBLIC="${PROJECT_ROOT}/client/public"
 # Alpha threshold for trimming (pixels below this % alpha are considered transparent)
 ALPHA_THRESHOLD="15%"
 
+# PWA background color (from manifest.json background_color)
+PWA_BG_COLOR="#0f0f1a"
+
 # ─── Usage ──────────────────────────────────────────────────────────
 usage() {
   cat <<EOF
@@ -129,10 +132,22 @@ main() {
   magick "$tmp_dir/square.png" -resize 180x180 "$OUTPUT_DIR/apple-touch-icon.png"
   echo "  ✓ apple-touch-icon.png (180px)"
 
-  # PWA icons
+  # PWA icons (transparent)
   magick "$tmp_dir/square.png" -resize 192x192 "$OUTPUT_DIR/logo192.png"
   magick "$tmp_dir/square.png" -resize 512x512 "$OUTPUT_DIR/logo512.png"
-  echo "  ✓ logo192.png, logo512.png (PWA)"
+  echo "  ✓ logo192.png, logo512.png (PWA transparent)"
+
+  # PWA icons with solid background (for install dialogs)
+  # Logo is scaled to 80% with padding, placed on solid background
+  magick -size 192x192 "xc:$PWA_BG_COLOR" \
+    \( "$tmp_dir/square.png" -resize 154x154 \) \
+    -gravity center -composite \
+    "$OUTPUT_DIR/pwa-192.png"
+  magick -size 512x512 "xc:$PWA_BG_COLOR" \
+    \( "$tmp_dir/square.png" -resize 410x410 \) \
+    -gravity center -composite \
+    "$OUTPUT_DIR/pwa-512.png"
+  echo "  ✓ pwa-192.png, pwa-512.png (PWA with background)"
 
   # Android Chrome (maskable)
   magick "$tmp_dir/square.png" -resize 192x192 "$OUTPUT_DIR/android-chrome-192x192.png"
