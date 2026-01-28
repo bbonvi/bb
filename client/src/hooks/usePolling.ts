@@ -67,10 +67,10 @@ export function usePolling() {
         ? injectWorkspaceFilters(searchQuery, activeWorkspace)
         : searchQuery
 
-      // On first load with a stored workspace, defer bookmark fetch until
-      // workspaces are loaded so filters can be applied correctly
+      // On first load with a stored workspace OR pending URL workspace param,
+      // defer bookmark fetch until workspaces are loaded so filters can be applied correctly
       const awaitingWorkspaces = !store.initialLoadComplete
-        && activeWorkspaceId !== null
+        && (activeWorkspaceId !== null || store.urlWorkspaceName !== null)
         && workspaces.length === 0
 
       // When a workspace is active, always fetch bookmarks (workspace implies filtering)
