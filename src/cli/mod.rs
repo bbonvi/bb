@@ -135,4 +135,13 @@ pub enum Command {
         /// Output path for the archive (default: ./bb-backup-{timestamp}.tar.gz)
         path: Option<std::path::PathBuf>,
     },
+    /// Import data from a backup archive
+    Import {
+        /// Path to the backup archive
+        path: std::path::PathBuf,
+
+        /// Skip confirmation prompt
+        #[clap(short, long)]
+        yes: bool,
+    },
 }

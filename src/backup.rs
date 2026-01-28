@@ -1,12 +1,13 @@
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use chrono::Local;
+use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use tar::Builder;
+use tar::{Archive, Builder};
 
 use crate::app::AppFactory;
 
@@ -95,4 +96,112 @@ fn append_dir_recursive<W: Write>(
         }
     }
     Ok(())
+}
+
+pub fn import_backup(archive_path: &Path, skip_confirm: bool) -> Result<()> {
+    let paths = AppFactory::get_paths()?;
+    let base_path = Path::new(&paths.base_path);
+
+    // Open and validate archive
+    let file = File::open(archive_path)
+        .with_context(|| format!("Failed to open archive at {}", archive_path.display()))?;
+    let decoder = GzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+
+    // First pass: validate archive contains expected files
+    let entries = archive
+        .entries()
+        .context("Failed to read archive entries")?;
+
+    let mut valid_entries: Vec<String> = Vec::new();
+    for entry in entries {
+        let entry = entry.context("Failed to read archive entry")?;
+        let entry_path = entry.path().context("Failed to get entry path")?;
+        let entry_str = entry_path.to_string_lossy().to_string();
+
+        if is_whitelisted(&entry_str) {
+            valid_entries.push(entry_str);
+        }
+    }
+
+    if valid_entries.is_empty() {
+        anyhow::bail!(
+            "Archive does not contain any recognized backup files.\n\
+             Expected: {:?} or files under {:?}",
+            BACKUP_FILES,
+            BACKUP_DIRS
+        );
+    }
+
+    println!("Found {} files to import:", valid_entries.len());
+    for entry in &valid_entries {
+        println!("  {entry}");
+    }
+    println!("\nDestination: {}", base_path.display());
+
+    // Confirm unless --yes
+    if !skip_confirm {
+        println!("\nThis will overwrite existing files. Continue? [y/N] ");
+        let stdin = std::io::stdin();
+        let mut line = String::new();
+        BufReader::new(stdin.lock())
+            .read_line(&mut line)
+            .context("Failed to read user input")?;
+
+        let response = line.trim().to_lowercase();
+        if response != "y" && response != "yes" {
+            println!("Import cancelled.");
+            return Ok(());
+        }
+    }
+
+    // Second pass: extract whitelisted entries
+    let file = File::open(archive_path)?;
+    let decoder = GzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+
+    let mut imported_count = 0;
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let entry_path = entry.path()?.to_string_lossy().to_string();
+
+        if !is_whitelisted(&entry_path) {
+            continue;
+        }
+
+        let dest_path = base_path.join(&entry_path);
+
+        // Ensure parent directory exists
+        if let Some(parent) = dest_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+        }
+
+        entry
+            .unpack(&dest_path)
+            .with_context(|| format!("Failed to extract {entry_path}"))?;
+
+        println!("  + {entry_path}");
+        imported_count += 1;
+    }
+
+    println!("\nImported {imported_count} files to {}", base_path.display());
+
+    Ok(())
+}
+
+fn is_whitelisted(path: &str) -> bool {
+    // Check if it's a known file
+    if BACKUP_FILES.contains(&path) {
+        return true;
+    }
+
+    // Check if it's under a known directory
+    for dir in BACKUP_DIRS {
+        if path.starts_with(&format!("{dir}/")) {
+            return true;
+        }
+    }
+
+    false
 }

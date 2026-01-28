@@ -164,5 +164,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         Command::Backup { path } => backup::create_backup(path),
+
+        Command::Import { path, yes } => backup::import_backup(&path, yes),
     }
 }
