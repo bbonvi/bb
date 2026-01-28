@@ -66,6 +66,7 @@ export interface AppState {
   // Workspace
   workspaces: Workspace[]
   activeWorkspaceId: string | null
+  urlWorkspaceName: string | null // from ?workspace= URL param; resolved to ID when workspaces load
   workspacesAvailable: boolean // feature detection: false if 404 from /api/workspaces
   setWorkspaces: (workspaces: Workspace[]) => void
   setActiveWorkspaceId: (id: string | null) => void
@@ -156,7 +157,7 @@ export const useStore = create<AppState>()((set, get) => ({
   setShuffle: (shuffle) => set({ shuffle }),
   setShowAll: (showAll) => set({ showAll, bookmarksFresh: false }),
   pinToUrl: () => {
-    const { searchQuery, showAll } = get()
+    const { searchQuery, showAll, activeWorkspaceId, workspaces } = get()
     const url = new URL(window.location.href)
     const fields: Record<string, string | undefined> = {
       tags: searchQuery.tags,
@@ -172,6 +173,10 @@ export const useStore = create<AppState>()((set, get) => ({
     }
     if (showAll) url.searchParams.set('all', '1')
     else url.searchParams.delete('all')
+    // Include workspace name in URL
+    const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
+    if (activeWorkspace) url.searchParams.set('workspace', activeWorkspace.name)
+    else url.searchParams.delete('workspace')
     window.history.replaceState({}, '', url)
   },
 
@@ -200,8 +205,24 @@ export const useStore = create<AppState>()((set, get) => ({
   // Workspace
   workspaces: [],
   activeWorkspaceId: localStorage.getItem('bb:activeWorkspaceId') ?? null,
+  urlWorkspaceName: new URLSearchParams(window.location.search).get('workspace'),
   workspacesAvailable: false,
-  setWorkspaces: (workspaces) => set({ workspaces }),
+  setWorkspaces: (workspaces) => {
+    const { urlWorkspaceName } = get()
+    // URL workspace param takes precedence over localStorage (applied once, then cleared)
+    if (urlWorkspaceName) {
+      const match = workspaces.find((w) => w.name === urlWorkspaceName)
+      if (match) {
+        localStorage.setItem('bb:activeWorkspaceId', match.id)
+        set({ workspaces, activeWorkspaceId: match.id, urlWorkspaceName: null })
+        return
+      }
+      // No match found — clear anyway so we don't keep trying
+      set({ workspaces, urlWorkspaceName: null })
+      return
+    }
+    set({ workspaces })
+  },
   setActiveWorkspaceId: (activeWorkspaceId) => {
     if (activeWorkspaceId) {
       localStorage.setItem('bb:activeWorkspaceId', activeWorkspaceId)
