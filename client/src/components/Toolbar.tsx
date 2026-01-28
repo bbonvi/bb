@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useIsMobile } from '@/hooks/useResponsive'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
+import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useSettings } from '@/hooks/useSettings'
 import { TagAutocompleteInput } from '@/components/TagAutocompleteInput'
 import type { SearchQuery } from '@/lib/api'
@@ -48,7 +49,6 @@ export function Toolbar() {
 
   const searchQuery = useStore((s) => s.searchQuery)
   const setSearchQuery = useStore((s) => s.setSearchQuery)
-  const bookmarks = useStore((s) => s.bookmarks)
   const totalCount = useStore((s) => s.totalCount)
   const semanticEnabled = useStore((s) => s.semanticEnabled)
 
@@ -142,7 +142,8 @@ export function Toolbar() {
     searchInputRef.current?.focus()
   }, [flushPrimary, flushTags, flushTitle, flushUrl, flushDescription, flushKeywordAlt, semanticEnabled, setSearchQuery])
 
-  const matchedCount = bookmarks.length
+  const { displayBookmarks } = useDisplayBookmarks()
+  const matchedCount = displayBookmarks.length
 
   // Filters panel is shown if user toggled it open OR if advanced filters have values
   const showFilters = filtersOpen || hasAdvancedFilters
