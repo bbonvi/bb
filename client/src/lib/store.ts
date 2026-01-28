@@ -229,7 +229,9 @@ export const useStore = create<AppState>()((set, get) => ({
   urlWorkspaceName: new URLSearchParams(window.location.search).get('workspace'),
   workspacesAvailable: false,
   setWorkspaces: (workspaces) => {
-    const { urlWorkspaceName } = get()
+    const { urlWorkspaceName, activeWorkspaceId } = get()
+    const updates: Partial<AppState> = { workspaces }
+
     // URL workspace param takes precedence over localStorage (applied once, then cleared)
     if (urlWorkspaceName) {
       const match = workspaces.find((w) => w.name === urlWorkspaceName)
@@ -238,11 +240,17 @@ export const useStore = create<AppState>()((set, get) => ({
         set({ workspaces, activeWorkspaceId: match.id, urlWorkspaceName: null })
         return
       }
-      // No match found — clear anyway so we don't keep trying
-      set({ workspaces, urlWorkspaceName: null })
-      return
+      // No match found — clear URL param
+      updates.urlWorkspaceName = null
     }
-    set({ workspaces })
+
+    // Clear activeWorkspaceId if it no longer exists in workspaces
+    if (activeWorkspaceId && !workspaces.some((w) => w.id === activeWorkspaceId)) {
+      localStorage.removeItem('bb:activeWorkspaceId')
+      updates.activeWorkspaceId = null
+    }
+
+    set(updates)
   },
   setActiveWorkspaceId: (activeWorkspaceId) => {
     const changed = get().activeWorkspaceId !== activeWorkspaceId
