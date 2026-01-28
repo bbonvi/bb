@@ -20,6 +20,7 @@ import {
   RefreshCw,
   X,
   Check,
+  Clock,
   ExternalLink,
 } from 'lucide-react'
 
@@ -44,6 +45,7 @@ export default function BookmarkDetailModal() {
   const [editForm, setEditForm] = useState({ title: '', description: '', url: '', tags: '' })
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshSuccess, setRefreshSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Pending image files (uploaded on save, not immediately)
   const [pendingCover, setPendingCover] = useState<File | null>(null)
@@ -191,9 +193,12 @@ export default function BookmarkDetailModal() {
   const handleRefreshMetadata = useCallback(async () => {
     if (!bookmark) return
     setRefreshing(true)
+    setRefreshSuccess(false)
     setError(null)
     try {
       await refreshMetadata(bookmark.id, { async_meta: true })
+      setRefreshSuccess(true)
+      setTimeout(() => setRefreshSuccess(false), 1500)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to refresh metadata')
     } finally {
@@ -334,10 +339,14 @@ export default function BookmarkDetailModal() {
                       tabIndex={-1}
                       onClick={handleRefreshMetadata}
                       disabled={refreshing}
-                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+                      className={`rounded p-1.5 transition-colors hover:bg-surface-hover disabled:opacity-50 ${refreshSuccess ? 'text-hi' : 'text-text-muted hover:text-text'}`}
                       title="Refresh metadata"
                     >
-                      <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      {refreshSuccess ? (
+                        <Clock className="h-4 w-4" />
+                      ) : (
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                      )}
                     </button>
                     <button
                       tabIndex={-1}
