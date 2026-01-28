@@ -46,14 +46,21 @@ async fn start_app(app_service: AppService, base_path: &str) {
     let webui = Router::new()
         .nest_service("/", ServeFile::new("client/dist/index.html"))
         .nest_service("/assets/", ServeDir::new("client/dist/assets/"))
+        // Favicons
         .nest_service("/favicon.ico", ServeFile::new("client/dist/favicon.ico"))
         .nest_service("/favicon.png", ServeFile::new("client/dist/favicon.png"))
+        .nest_service("/favicon-16x16.png", ServeFile::new("client/dist/favicon-16x16.png"))
+        .nest_service("/favicon-32x32.png", ServeFile::new("client/dist/favicon-32x32.png"))
+        // PWA icons
         .nest_service("/logo192.png", ServeFile::new("client/dist/logo192.png"))
         .nest_service("/logo512.png", ServeFile::new("client/dist/logo512.png"))
-        .nest_service(
-            "/manifest.json",
-            ServeFile::new("client/dist/manifest.json"),
-        )
+        .nest_service("/logo.png", ServeFile::new("client/dist/logo.png"))
+        .nest_service("/apple-touch-icon.png", ServeFile::new("client/dist/apple-touch-icon.png"))
+        .nest_service("/android-chrome-192x192.png", ServeFile::new("client/dist/android-chrome-192x192.png"))
+        .nest_service("/android-chrome-512x512.png", ServeFile::new("client/dist/android-chrome-512x512.png"))
+        .nest_service("/mstile-150x150.png", ServeFile::new("client/dist/mstile-150x150.png"))
+        // Manifest and robots
+        .nest_service("/manifest.json", ServeFile::new("client/dist/manifest.json"))
         .nest_service("/robots.txt", ServeFile::new("client/dist/robots.txt"));
 
     let uploads_path = format!("{base_path}/uploads");
