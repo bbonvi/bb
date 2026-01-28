@@ -120,4 +120,14 @@ pub enum Command {
         #[clap(subcommand)]
         action: RulesArgs,
     },
+    /// Compress existing images to WebP format
+    Compress {
+        /// Show what would be done without making changes
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompt
+        #[clap(short, long)]
+        yes: bool,
+    },
 }

@@ -209,11 +209,13 @@ impl Task {
 
                     let meta = AppLocal::fetch_metadata(&bmark.url, opts.clone())?;
 
-                                          let bmark = AppLocal::merge_metadata(
+                    let img_config = &config.read().unwrap().images;
+                    let bmark = AppLocal::merge_metadata(
                         bmark.clone(),
                         meta,
                         storage_mgr.clone(),
                         bmark_mgr.clone(),
+                        img_config,
                     )?;
 
                     Ok(bmark) as anyhow::Result<bookmarks::Bookmark>

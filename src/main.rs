@@ -151,5 +151,15 @@ fn main() -> anyhow::Result<()> {
             let mut conf = config.write().unwrap();
             cli::handle_rule(action, &mut conf)
         }
+
+        Command::Compress { dry_run, yes } => {
+            let paths = app::AppFactory::get_paths()?;
+            let config = config::Config::load_with(&paths.base_path);
+            let storage = storage::BackendLocal::new(&paths.uploads_path);
+            let bmark_mgr = std::sync::Arc::new(
+                bookmarks::BackendCsv::load(&paths.bookmarks_path)?
+            );
+            cli::handle_compress(dry_run, yes, &storage, bmark_mgr, &config)
+        }
     }
 }

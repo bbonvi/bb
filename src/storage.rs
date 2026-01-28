@@ -6,6 +6,8 @@ pub trait StorageManager: Send + Sync {
     fn write(&self, ident: &str, data: &[u8]);
     fn read(&self, ident: &str) -> Vec<u8>;
     fn exists(&self, ident: &str) -> bool;
+    fn delete(&self, ident: &str) -> std::io::Result<()>;
+    fn list(&self) -> Vec<String>;
 }
 
 #[derive(Clone)]
@@ -45,5 +47,30 @@ impl StorageManager for BackendLocal {
         std::fs::write(&temp_path, data).unwrap();
 
         std::fs::rename(&temp_path, &path).unwrap();
+    }
+
+    fn delete(&self, ident: &str) -> std::io::Result<()> {
+        let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
+        std::fs::remove_file(&path)
+    }
+
+    fn list(&self) -> Vec<String> {
+        std::fs::read_dir(&self.base_dir)
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| entry.ok())
+                    .filter_map(|entry| {
+                        let path = entry.path();
+                        if path.is_file() {
+                            path.file_name()
+                                .and_then(|name| name.to_str())
+                                .map(|s| s.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }

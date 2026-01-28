@@ -1,7 +1,8 @@
 use crate::{
     bookmarks,
-    config::Config,
+    config::{Config, ImageConfig},
     eid::Eid,
+    images,
     metadata::{fetch_meta, Metadata},
     rules::{self, Rule},
     storage::{self, BackendLocal},
@@ -123,11 +124,13 @@ impl AppBackend for AppLocal {
                     },
                 )?;
 
+                let img_config = &self.config.read().unwrap().images;
                 Self::merge_metadata(
                     bmark.clone(),
                     meta,
                     self.storage_mgr.clone(),
                     self.bmark_mgr.clone(),
+                    img_config,
                 )?;
             };
 
@@ -193,11 +196,13 @@ impl AppBackend for AppLocal {
                         },
                     )?;
 
+                    let img_config = &self.config.read().unwrap().images;
                     let bmark = Self::merge_metadata(
                         bmark.clone(),
                         meta,
                         self.storage_mgr.clone(),
                         self.bmark_mgr.clone(),
+                        img_config,
                     )?;
 
                     Ok(bmark) as anyhow::Result<bookmarks::Bookmark>
@@ -412,6 +417,7 @@ impl AppLocal {
         meta: Metadata,
         storage_mgr: Arc<dyn storage::StorageManager>,
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
+        img_config: &ImageConfig,
     ) -> anyhow::Result<bookmarks::Bookmark> {
         let mut bmark_update = bookmarks::BookmarkUpdate {
             ..Default::default()
@@ -425,18 +431,29 @@ impl AppLocal {
             bmark_update.description = meta.description;
         }
 
+        // Compress preview image to WebP
         if let Some(ref image) = meta.image {
-            let filetype = infer::get(image)
-                .map(|ftype| ftype.extension())
-                .unwrap_or("png")
-                .to_string();
-
-            let image_id = format!("{}.{}", Eid::new(), filetype);
-
-            storage_mgr.write(&image_id, image);
-            bmark_update.image_id = Some(image_id.to_string());
+            match images::compress_image(image, img_config.max_size, img_config.quality) {
+                Ok(compressed) => {
+                    let image_id = format!("{}.webp", Eid::new());
+                    storage_mgr.write(&image_id, &compressed.data);
+                    bmark_update.image_id = Some(image_id);
+                }
+                Err(e) => {
+                    // Fall back to original format if compression fails
+                    log::warn!("Image compression failed, storing original: {}", e);
+                    let filetype = infer::get(image)
+                        .map(|ftype| ftype.extension())
+                        .unwrap_or("png")
+                        .to_string();
+                    let image_id = format!("{}.{}", Eid::new(), filetype);
+                    storage_mgr.write(&image_id, image);
+                    bmark_update.image_id = Some(image_id);
+                }
+            }
         };
 
+        // Icons stay as-is (favicons are typically small already)
         if let Some(ref icon) = meta.icon {
             let filetype = infer::get(icon)
                 .map(|ftype| ftype.extension())

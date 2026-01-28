@@ -1,13 +1,16 @@
 use crate::{
     app::service::AppService,
     bookmarks::{BookmarkCreate, BookmarkUpdate, SearchQuery},
+    images,
     metadata::MetaOptions,
     parse_tags,
+    storage::StorageManager,
     cli::{errors::CliResult, validation::{
         validate_search_query, validate_semantic_params, validate_bookmark_create,
         validate_tags, validate_url, validate_rule_input,
     }},
 };
+use std::collections::HashMap;
 
 /// Command for searching bookmarks
 #[derive(Debug, Clone)]
@@ -501,6 +504,240 @@ impl ActionCommand {
                 println!("{} items removed", count);
                 Ok(())
             }
+        }
+    }
+}
+
+/// Statistics for image compression preview
+#[derive(Debug, Default)]
+pub struct CompressionStats {
+    pub total_images: usize,
+    pub already_optimal: usize,
+    pub to_compress: usize,
+    pub failed_to_read: usize,
+    pub current_size_bytes: u64,
+    pub estimated_size_bytes: u64,
+}
+
+/// Single image compression result
+#[derive(Debug)]
+struct ImageToCompress {
+    image_id: String,
+    bookmark_ids: Vec<u64>,
+    data: Vec<u8>,
+}
+
+/// Command for batch image compression
+#[derive(Debug)]
+pub struct CompressCommand {
+    pub dry_run: bool,
+    pub skip_confirm: bool,
+}
+
+impl CompressCommand {
+    pub fn new(dry_run: bool, skip_confirm: bool) -> Self {
+        Self { dry_run, skip_confirm }
+    }
+
+    pub fn execute<S: StorageManager>(
+        self,
+        storage: &S,
+        bookmarks: &[crate::bookmarks::Bookmark],
+        max_size: u32,
+        quality: u8,
+        update_bookmark: impl Fn(u64, crate::bookmarks::BookmarkUpdate) -> anyhow::Result<crate::bookmarks::Bookmark>,
+    ) -> CliResult<()> {
+        // Build map of image_id -> bookmark IDs that reference it
+        let mut image_to_bookmarks: HashMap<String, Vec<u64>> = HashMap::new();
+        for bmark in bookmarks {
+            if let Some(ref image_id) = bmark.image_id {
+                image_to_bookmarks
+                    .entry(image_id.clone())
+                    .or_default()
+                    .push(bmark.id);
+            }
+        }
+
+        if image_to_bookmarks.is_empty() {
+            println!("No images found in bookmarks.");
+            return Ok(());
+        }
+
+        // Analyze images
+        let mut stats = CompressionStats::default();
+        let mut to_compress: Vec<ImageToCompress> = Vec::new();
+
+        for (image_id, bookmark_ids) in &image_to_bookmarks {
+            stats.total_images += 1;
+
+            // Try to read the image
+            if !storage.exists(image_id) {
+                stats.failed_to_read += 1;
+                continue;
+            }
+
+            let data = storage.read(image_id);
+            if data.is_empty() {
+                stats.failed_to_read += 1;
+                continue;
+            }
+
+            stats.current_size_bytes += data.len() as u64;
+
+            // Check if needs processing
+            if !images::should_process(&data, max_size) {
+                stats.already_optimal += 1;
+                stats.estimated_size_bytes += data.len() as u64;
+                continue;
+            }
+
+            // Try compression to estimate size
+            match images::compress_image(&data, max_size, quality) {
+                Ok(result) => {
+                    stats.to_compress += 1;
+                    stats.estimated_size_bytes += result.data.len() as u64;
+                    to_compress.push(ImageToCompress {
+                        image_id: image_id.clone(),
+                        bookmark_ids: bookmark_ids.clone(),
+                        data,
+                    });
+                }
+                Err(_) => {
+                    stats.failed_to_read += 1;
+                    stats.estimated_size_bytes += data.len() as u64;
+                }
+            }
+        }
+
+        // Display preview
+        self.print_preview(&stats);
+
+        if stats.to_compress == 0 {
+            println!("\nNo images need compression.");
+            return Ok(());
+        }
+
+        if self.dry_run {
+            println!("\nDry run - no changes made.");
+            return Ok(());
+        }
+
+        // Confirm
+        if !self.skip_confirm {
+            match inquire::prompt_confirmation("Proceed with compression?") {
+                Ok(true) => {}
+                Ok(false) => {
+                    println!("Aborted.");
+                    return Ok(());
+                }
+                Err(e) => return Err(crate::cli::errors::CliError::invalid_input(e.to_string())),
+            }
+        }
+
+        // Execute compression
+        let mut success_count = 0;
+        let mut error_count = 0;
+
+        for img in to_compress {
+            match self.compress_single_image(
+                &img,
+                storage,
+                max_size,
+                quality,
+                &update_bookmark,
+            ) {
+                Ok(()) => success_count += 1,
+                Err(e) => {
+                    eprintln!("Failed to compress {}: {}", img.image_id, e);
+                    error_count += 1;
+                }
+            }
+        }
+
+        println!("\nCompression complete:");
+        println!("  Successful: {}", success_count);
+        if error_count > 0 {
+            println!("  Failed: {}", error_count);
+        }
+
+        Ok(())
+    }
+
+    fn compress_single_image<S: StorageManager>(
+        &self,
+        img: &ImageToCompress,
+        storage: &S,
+        max_size: u32,
+        quality: u8,
+        update_bookmark: &impl Fn(u64, crate::bookmarks::BookmarkUpdate) -> anyhow::Result<crate::bookmarks::Bookmark>,
+    ) -> anyhow::Result<()> {
+        // Compress
+        let result = images::compress_image(&img.data, max_size, quality)?;
+
+        // Generate new filename with .webp extension
+        let new_id = if img.image_id.ends_with(".webp") {
+            img.image_id.clone()
+        } else {
+            let base = img.image_id.rsplit_once('.').map(|(b, _)| b).unwrap_or(&img.image_id);
+            format!("{}.webp", base)
+        };
+
+        // Write new file
+        storage.write(&new_id, &result.data);
+
+        // Update bookmark references
+        for &bookmark_id in &img.bookmark_ids {
+            let update = crate::bookmarks::BookmarkUpdate {
+                image_id: Some(new_id.clone()),
+                ..Default::default()
+            };
+            update_bookmark(bookmark_id, update)?;
+        }
+
+        // Delete old file if different
+        if new_id != img.image_id {
+            let _ = storage.delete(&img.image_id);
+        }
+
+        Ok(())
+    }
+
+    fn print_preview(&self, stats: &CompressionStats) {
+        println!("Image Compression Preview");
+        println!("=========================");
+        println!("Total images:     {}", stats.total_images);
+        println!("Already optimal:  {} (skipped)", stats.already_optimal);
+        println!("To compress:      {}", stats.to_compress);
+        if stats.failed_to_read > 0 {
+            println!("Failed to read:   {}", stats.failed_to_read);
+        }
+        println!();
+
+        let reduction = if stats.current_size_bytes > 0 {
+            let saved = stats.current_size_bytes.saturating_sub(stats.estimated_size_bytes);
+            (saved as f64 / stats.current_size_bytes as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        println!(
+            "Estimated savings: {} → {} ({:.0}% reduction)",
+            Self::format_bytes(stats.current_size_bytes),
+            Self::format_bytes(stats.estimated_size_bytes),
+            reduction
+        );
+    }
+
+    fn format_bytes(bytes: u64) -> String {
+        const KB: u64 = 1024;
+        const MB: u64 = 1024 * KB;
+
+        if bytes >= MB {
+            format!("{:.1} MB", bytes as f64 / MB as f64)
+        } else if bytes >= KB {
+            format!("{:.1} KB", bytes as f64 / KB as f64)
+        } else {
+            format!("{} B", bytes)
         }
     }
 }

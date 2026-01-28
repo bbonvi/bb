@@ -8,6 +8,7 @@ use crate::{
     bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery},
     config::Config,
     eid::Eid,
+    images,
     metadata::MetaOptions,
     storage::{self, StorageManager},
     workspaces::{WorkspaceError, WorkspaceStore},
@@ -377,11 +378,19 @@ async fn create(
         let image_data = base64::engine::general_purpose::STANDARD
             .decode(image_b64)
             .context("Failed to decode base64 image data")?;
-        let image_id = format!("{}.png", Eid::new());
-        state.storage_mgr.write(&image_id, &image_data);
+
+        // Compress preview image to WebP
+        let config = app_service.get_config().context("Failed to get config")?;
+        let img_config = &config.read().unwrap().images;
+        let compressed = images::compress_image(&image_data, img_config.max_size, img_config.quality)
+            .context("Failed to compress image")?;
+
+        let image_id = format!("{}.webp", Eid::new());
+        state.storage_mgr.write(&image_id, &compressed.data);
         create.image_id = Some(image_id);
     }
 
+    // Icons stay as-is (favicons are typically small already)
     if let Some(icon_b64) = payload.icon_b64 {
         let icon_data = base64::engine::general_purpose::STANDARD
             .decode(icon_b64)
@@ -913,6 +922,8 @@ mod tests {
             fn write(&self, _: &str, _: &[u8]) {}
             fn read(&self, _: &str) -> Vec<u8> { vec![] }
             fn exists(&self, _: &str) -> bool { false }
+            fn delete(&self, _: &str) -> std::io::Result<()> { Ok(()) }
+            fn list(&self) -> Vec<String> { vec![] }
         }
 
         /// Mock backend that supports search and returns configurable results

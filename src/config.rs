@@ -15,6 +15,11 @@ const DEFAULT_DOWNLOAD_TIMEOUT_SECS: u64 = 300;
 /// Default semantic weight in hybrid search (0.0-1.0, higher = favor semantic over lexical)
 const DEFAULT_SEMANTIC_WEIGHT: f32 = 0.6;
 
+/// Default max dimension for image compression
+const DEFAULT_IMAGE_MAX_SIZE: u32 = 600;
+/// Default WebP quality for image compression
+const DEFAULT_IMAGE_QUALITY: u8 = 85;
+
 /// Configuration for semantic search functionality
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SemanticSearchConfig {
@@ -78,6 +83,35 @@ fn default_semantic_weight() -> f32 {
     DEFAULT_SEMANTIC_WEIGHT
 }
 
+/// Configuration for image compression
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ImageConfig {
+    /// Maximum dimension (width or height) for preview images
+    #[serde(default = "default_image_max_size")]
+    pub max_size: u32,
+
+    /// WebP quality for lossy compression (1-100)
+    #[serde(default = "default_image_quality")]
+    pub quality: u8,
+}
+
+impl Default for ImageConfig {
+    fn default() -> Self {
+        Self {
+            max_size: DEFAULT_IMAGE_MAX_SIZE,
+            quality: DEFAULT_IMAGE_QUALITY,
+        }
+    }
+}
+
+fn default_image_max_size() -> u32 {
+    DEFAULT_IMAGE_MAX_SIZE
+}
+
+fn default_image_quality() -> u8 {
+    DEFAULT_IMAGE_QUALITY
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default = "task_queue_max_threads")]
@@ -88,6 +122,8 @@ pub struct Config {
     pub rules: Vec<Rule>,
     #[serde(default)]
     pub semantic_search: SemanticSearchConfig,
+    #[serde(default)]
+    pub images: ImageConfig,
 
     #[serde(skip_serializing, skip_deserializing)]
     base_path: String,
@@ -148,6 +184,21 @@ impl Config {
             panic!(
                 "semantic_search.semantic_weight must be between 0.0 and 1.0, got {}",
                 sem.semantic_weight
+            );
+        }
+
+        // validate images config
+        let img = &self.images;
+        if img.max_size == 0 || img.max_size > 4096 {
+            panic!(
+                "images.max_size must be between 1 and 4096, got {}",
+                img.max_size
+            );
+        }
+        if img.quality == 0 || img.quality > 100 {
+            panic!(
+                "images.quality must be between 1 and 100, got {}",
+                img.quality
             );
         }
     }

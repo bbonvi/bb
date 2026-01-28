@@ -1,9 +1,12 @@
 use crate::{
     app::service::AppService,
+    bookmarks::{BookmarkManager, SearchQuery},
     config::Config,
-    cli::commands::{SearchCommand, AddCommand, MetaCommand, RuleCommand, AddOptions, RuleAction, RuleUpdateAction, SearchCommandParams},
+    storage::StorageManager,
+    cli::commands::{SearchCommand, AddCommand, MetaCommand, RuleCommand, CompressCommand, AddOptions, RuleAction, RuleUpdateAction, SearchCommandParams},
 };
 use anyhow::Result;
+use std::sync::Arc;
 
 use super::types::ActionArgs;
 
@@ -121,4 +124,26 @@ pub fn handle_rule(action: super::types::RulesArgs, config: &mut Config) -> Resu
 
     let rule_command = RuleCommand::new(rule_action)?;
     rule_command.execute(config).map_err(|e| anyhow::anyhow!(e))
+}
+
+pub fn handle_compress<S: StorageManager>(
+    dry_run: bool,
+    yes: bool,
+    storage: &S,
+    bmark_mgr: Arc<dyn BookmarkManager>,
+    config: &Config,
+) -> Result<()> {
+    // Get all bookmarks
+    let bookmarks = bmark_mgr.search(SearchQuery::default())?;
+
+    let img_config = &config.images;
+
+    let cmd = CompressCommand::new(dry_run, yes);
+    cmd.execute(
+        storage,
+        &bookmarks,
+        img_config.max_size,
+        img_config.quality,
+        |id, update| bmark_mgr.update(id, update),
+    ).map_err(|e| anyhow::anyhow!(e))
 }
