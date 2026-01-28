@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useStore } from '@/lib/store'
 import type { Bookmark, Workspace } from '@/lib/api'
-import { applyWorkspaceFilter, filterUncategorized } from '@/lib/workspaceFilters'
+import { applyWorkspaceFilter } from '@/lib/workspaceFilters'
 
 // Deterministic shuffle using seed + bookmark ID (Knuth multiplicative hash)
 function shuffleBookmarks(bookmarks: Bookmark[], seed: number): Bookmark[] {
@@ -49,10 +49,6 @@ export function useDisplayBookmarks() {
   const workspaceFiltered = useMemo(() => {
     if (!bookmarksFresh) return null
     if (!activeWorkspaceId) return bookmarks
-
-    if (activeWorkspaceId === '__uncategorized__') {
-      return filterUncategorized(bookmarks, workspaces)
-    }
 
     const ws = workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
     if (!ws) return bookmarks

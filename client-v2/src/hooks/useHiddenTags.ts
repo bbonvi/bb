@@ -14,7 +14,7 @@ export function useHiddenTags(): string[] {
   return useMemo(() => {
     const globalHidden = config?.hidden_by_default ?? []
 
-    if (!activeWorkspaceId || activeWorkspaceId === '__uncategorized__') {
+    if (!activeWorkspaceId) {
       return globalHidden
     }
 

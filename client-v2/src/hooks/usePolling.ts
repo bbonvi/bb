@@ -60,7 +60,7 @@ export function usePolling() {
       const { searchQuery, showAll, activeWorkspaceId, workspaces } = store
 
       // Inject workspace filters into the search query for server-side filtering
-      const activeWorkspace = activeWorkspaceId && activeWorkspaceId !== '__uncategorized__'
+      const activeWorkspace = activeWorkspaceId
         ? workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
         : null
       const effectiveQuery = activeWorkspace

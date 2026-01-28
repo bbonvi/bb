@@ -132,24 +132,6 @@ export function applyWorkspaceFilter(
   })
 }
 
-// --- Uncategorized filter ---
-// Returns bookmarks whose tags don't match ANY workspace's whitelist.
-export function filterUncategorized(
-  bookmarks: Bookmark[],
-  allWorkspaces: Workspace[],
-): Bookmark[] {
-  // Collect all whitelist patterns from all workspaces
-  const allPatterns = allWorkspaces.flatMap((ws) =>
-    ws.filters.tag_whitelist.map((p) => (hasGlobChars(p) ? globToRegex(p) : new RegExp(`^${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'))),
-  )
-
-  if (allPatterns.length === 0) return bookmarks
-
-  return bookmarks.filter(
-    (bm) => !bm.tags.some((t) => allPatterns.some((re) => re.test(t))),
-  )
-}
-
 // Safe regex construction — returns null on invalid pattern
 function safeRegex(pattern: string): RegExp | null {
   try {
