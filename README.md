@@ -78,6 +78,47 @@ semantic_search:
 - Combine with other filters: `bb search --sem "tutorials" --tags dev`
 - Web UI shows semantic input when feature is enabled
 
+## Data Management
+
+### Backup & Restore
+
+Create portable backups of your bb data:
+
+```bash
+# Create backup archive (default: ./bb-backup-{timestamp}.tar.gz)
+bb backup
+
+# Create backup at specific path
+bb backup /path/to/backup.tar.gz
+
+# Restore from backup (prompts for confirmation)
+bb import /path/to/backup.tar.gz
+
+# Restore without confirmation
+bb import /path/to/backup.tar.gz --yes
+```
+
+**Included in backups:**
+- `bookmarks.csv` — All bookmark data
+- `config.yaml` — Configuration
+- `workspaces.yaml` — Workspace definitions
+- `uploads/` — Preview images and favicons
+
+### Image Compression
+
+Convert existing preview images to WebP format for reduced storage:
+
+```bash
+# Preview what would be compressed
+bb compress --dry-run
+
+# Compress images (prompts for confirmation)
+bb compress
+
+# Compress without confirmation
+bb compress --yes
+```
+
 ## Installation
 
 *There are no precompiled binaries for now.*
