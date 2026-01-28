@@ -12,6 +12,7 @@ const ROW_HEIGHT = 40
 export function BookmarkTable() {
   const parentRef = useRef<HTMLDivElement>(null)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
+  const isUserLoading = useStore((s) => s.isUserLoading)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
 
   const virtualizer = useVirtualizer({
@@ -39,7 +40,7 @@ export function BookmarkTable() {
       </div>
 
       <div
-        className="relative w-full"
+        className={`relative w-full transition-opacity duration-150 ${isUserLoading ? 'opacity-40' : ''}`}
         style={{ height: virtualizer.getTotalSize() }}
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {

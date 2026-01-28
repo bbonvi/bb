@@ -78,6 +78,7 @@ export function usePolling() {
       // Skip bookmark fetch when show-all OFF + no query + no workspace
       const shouldFetchBookmarks = !awaitingWorkspaces && (showAll || !isQueryEmpty(searchQuery) || hasWorkspace)
 
+      store.setIsLoading(true)
       try {
         const [bookmarks, totalResp, tags, config, taskQueue, semanticStatus, workspacesResult] =
           await Promise.all([
@@ -126,7 +127,12 @@ export function usePolling() {
             poll()
           }
         }
+        state.setIsLoading(false)
+        state.setIsUserLoading(false)
       } catch (err) {
+        const s = useStore.getState()
+        s.setIsLoading(false)
+        s.setIsUserLoading(false)
         if (err instanceof ApiError && err.status === 401) return
         // Silently continue polling on other errors
       }

@@ -22,6 +22,7 @@ export function BookmarkGrid() {
   const columns = useStore((s) => s.columns)
   const setColumns = useStore((s) => s.setColumns)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
+  const isUserLoading = useStore((s) => s.isUserLoading)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
 
   // Auto-compute columns from container width, with scroll preservation
@@ -79,7 +80,7 @@ export function BookmarkGrid() {
   return (
     <div ref={parentRef} className="h-full overflow-auto p-4">
       <div
-        className="relative mx-auto w-full"
+        className={`relative mx-auto w-full transition-opacity duration-150 ${isUserLoading ? 'opacity-40' : ''}`}
         style={{ height: virtualizer.getTotalSize(), maxWidth: MAX_GRID_WIDTH }}
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {

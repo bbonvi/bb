@@ -98,6 +98,10 @@ export interface AppState {
   initialLoadComplete: boolean
   setInitialLoadComplete: (done: boolean) => void
   bookmarksFresh: boolean
+  isLoading: boolean
+  setIsLoading: (loading: boolean) => void
+  isUserLoading: boolean
+  setIsUserLoading: (loading: boolean) => void
 }
 
 // Re-export Workspace from api for consumers that import from store
@@ -143,8 +147,8 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // Search
   searchQuery: searchQueryFromUrl(),
-  setSearchQuery: (searchQuery) => set({ searchQuery, bookmarksFresh: false }),
-  clearSearch: () => set({ searchQuery: emptySearchQuery, bookmarksFresh: false }),
+  setSearchQuery: (searchQuery) => set({ searchQuery, bookmarksFresh: false, isUserLoading: true }),
+  clearSearch: () => set({ searchQuery: emptySearchQuery, bookmarksFresh: false, isUserLoading: true }),
 
   // UI
   viewMode: (localStorage.getItem('bb_view_mode') as 'grid' | 'cards' | 'table') || 'grid',
@@ -157,7 +161,7 @@ export const useStore = create<AppState>()((set, get) => ({
   },
   setColumns: (columns) => set({ columns }),
   setShuffle: (shuffle) => set({ shuffle }),
-  setShowAll: (showAll) => set({ showAll, bookmarksFresh: false }),
+  setShowAll: (showAll) => set({ showAll, bookmarksFresh: false, isUserLoading: true }),
   pinToUrl: () => {
     const { searchQuery, showAll, activeWorkspaceId, workspaces } = get()
     const url = new URL(window.location.href)
@@ -236,7 +240,7 @@ export const useStore = create<AppState>()((set, get) => ({
     } else {
       localStorage.removeItem('bb:activeWorkspaceId')
     }
-    set({ activeWorkspaceId })
+    set({ activeWorkspaceId, isUserLoading: true })
   },
   setWorkspacesAvailable: (workspacesAvailable) => set({ workspacesAvailable }),
 
@@ -278,4 +282,8 @@ export const useStore = create<AppState>()((set, get) => ({
   initialLoadComplete: false,
   setInitialLoadComplete: (initialLoadComplete) => set({ initialLoadComplete }),
   bookmarksFresh: true,
+  isLoading: false,
+  setIsLoading: (isLoading) => set({ isLoading }),
+  isUserLoading: false,
+  setIsUserLoading: (isUserLoading) => set({ isUserLoading }),
 }))
