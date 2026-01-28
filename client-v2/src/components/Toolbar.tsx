@@ -36,7 +36,13 @@ function XIcon({ className = '' }: { className?: string }) {
 // ─── Main component ────────────────────────────────────────────────
 export function Toolbar() {
   const isMobile = useIsMobile()
-  const [filtersOpen, setFiltersOpen] = useState(!isMobile)
+  // Compute initial filtersOpen: true if desktop OR URL has advanced filters
+  const [filtersOpen, setFiltersOpen] = useState(() => {
+    if (!isMobile) return true
+    if (typeof window === 'undefined') return false
+    const p = new URLSearchParams(window.location.search)
+    return !!(p.get('tags') || p.get('title') || p.get('url') || p.get('description'))
+  })
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const searchQuery = useStore((s) => s.searchQuery)
@@ -109,15 +115,6 @@ export function Toolbar() {
     setSearchQuery,
   ])
 
-  // Open filters panel if URL had advanced filters (values already in store from init)
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search)
-    if (p.get('tags') || p.get('title') || p.get('url') || p.get('description')) {
-      setFiltersOpen(true)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-
   const hasAdvancedFilters = !!debouncedTags || !!debouncedTitle || !!debouncedUrl || !!debouncedDescription || (semanticEnabled && !!debouncedKeywordAlt)
   const hasAnySearch = !!debouncedPrimary || hasAdvancedFilters
 
@@ -134,13 +131,11 @@ export function Toolbar() {
 
   const matchedCount = bookmarks.length
 
-  // Auto-open filters if advanced filters have values
-  useEffect(() => {
-    if (hasAdvancedFilters && !filtersOpen) setFiltersOpen(true)
-  }, [hasAdvancedFilters]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Filters panel is shown if user toggled it open OR if advanced filters have values
+  const showFilters = filtersOpen || hasAdvancedFilters
 
   return (
-    <header className="sticky top-0 z-40 bg-bg/95 backdrop-blur-md">
+    <header className="sticky top-0 z-40 bg-bg">
       {/* ── Search row ── */}
       <div className="flex items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
         {/* Search bar */}
@@ -158,9 +153,9 @@ export function Toolbar() {
           {/* Filter toggle inside search bar */}
           <button
             tabIndex={-1}
-            onClick={() => setFiltersOpen(!filtersOpen)}
+            onClick={() => setFiltersOpen(!showFilters)}
             className={`absolute right-1.5 flex h-6 items-center gap-1 rounded-md px-1.5 text-xs transition-colors ${
-              filtersOpen || hasAdvancedFilters
+              showFilters
                 ? 'bg-hi-dim text-text'
                 : 'text-text-muted hover:text-text'
             }`}
@@ -187,7 +182,6 @@ export function Toolbar() {
               className="h-7 appearance-none rounded-md border border-white/[0.06] bg-surface pl-2 pr-7 text-xs text-text outline-none transition-colors hover:bg-surface-hover focus:border-hi-dim cursor-pointer"
             >
               <option value="">All</option>
-              <option value="__uncategorized__">Uncategorized</option>
               {workspaces.map((ws) => (
                 <option key={ws.id} value={ws.id}>{ws.name}</option>
               ))}
@@ -326,7 +320,7 @@ export function Toolbar() {
       {/* ── Expandable filters ── */}
       <div
         className={`grid transition-[grid-template-rows] duration-200 ease-out ${
-          filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+          showFilters ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}
       >
         <div className="overflow-hidden">

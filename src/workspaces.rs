@@ -50,6 +50,8 @@ pub enum WorkspaceError {
     },
     #[error("workspace not found: {0}")]
     NotFound(String),
+    #[error("invalid reorder: {0}")]
+    InvalidReorder(String),
     #[error("storage error: {0}")]
     Storage(String),
 }
@@ -159,6 +161,31 @@ impl WorkspaceStore {
         self.workspaces.remove(idx);
         self.save()?;
         Ok(())
+    }
+
+    pub fn reorder(&mut self, ids: &[String]) -> Result<(), WorkspaceError> {
+        use std::collections::{HashMap, HashSet};
+
+        let existing: HashSet<_> = self.workspaces.iter().map(|w| &w.id).collect();
+        let incoming: HashSet<_> = ids.iter().collect();
+
+        if existing.len() != ids.len() || existing != incoming {
+            return Err(WorkspaceError::InvalidReorder(
+                "IDs must match existing workspaces exactly".into(),
+            ));
+        }
+
+        let id_to_ws: HashMap<_, _> = self
+            .workspaces
+            .drain(..)
+            .map(|w| (w.id.clone(), w))
+            .collect();
+
+        for id in ids {
+            self.workspaces.push(id_to_ws.get(id).unwrap().clone());
+        }
+
+        self.save()
     }
 
     fn check_duplicate_name(
@@ -397,5 +424,74 @@ mod tests {
         // updating the same workspace with the same name should work
         let updated = store.update(&ws.id, Some("Keep".into()), None, None).unwrap();
         assert_eq!(updated.name, "Keep");
+    }
+
+    // -- Reorder tests --
+
+    #[test]
+    fn reorder_valid_ids() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let ws1 = store.create("First".into(), None, None).unwrap();
+        let ws2 = store.create("Second".into(), None, None).unwrap();
+        let ws3 = store.create("Third".into(), None, None).unwrap();
+
+        // Verify initial order
+        assert_eq!(store.list()[0].id, ws1.id);
+        assert_eq!(store.list()[1].id, ws2.id);
+        assert_eq!(store.list()[2].id, ws3.id);
+
+        // Reorder: 3, 1, 2
+        store
+            .reorder(&[ws3.id.clone(), ws1.id.clone(), ws2.id.clone()])
+            .unwrap();
+
+        assert_eq!(store.list()[0].id, ws3.id);
+        assert_eq!(store.list()[1].id, ws1.id);
+        assert_eq!(store.list()[2].id, ws2.id);
+
+        // Verify persisted by reloading
+        let store2 = WorkspaceStore::load(&dir).unwrap();
+        assert_eq!(store2.list()[0].id, ws3.id);
+        assert_eq!(store2.list()[1].id, ws1.id);
+        assert_eq!(store2.list()[2].id, ws2.id);
+    }
+
+    #[test]
+    fn reorder_missing_id_fails() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let ws1 = store.create("First".into(), None, None).unwrap();
+        store.create("Second".into(), None, None).unwrap();
+
+        // Try to reorder with a non-existent ID
+        let err = store
+            .reorder(&[ws1.id.clone(), "nonexistent".into()])
+            .unwrap_err();
+        assert!(matches!(err, WorkspaceError::InvalidReorder(_)));
+    }
+
+    #[test]
+    fn reorder_duplicate_id_fails() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let ws1 = store.create("First".into(), None, None).unwrap();
+        store.create("Second".into(), None, None).unwrap();
+
+        // Try to reorder with duplicate ID
+        let err = store
+            .reorder(&[ws1.id.clone(), ws1.id.clone()])
+            .unwrap_err();
+        assert!(matches!(err, WorkspaceError::InvalidReorder(_)));
+    }
+
+    #[test]
+    fn reorder_empty_list_on_empty_store() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+
+        // Empty reorder on empty store should succeed
+        store.reorder(&[]).unwrap();
+        assert!(store.list().is_empty());
     }
 }

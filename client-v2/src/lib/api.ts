@@ -342,3 +342,7 @@ export function updateWorkspace(id: string, data: WorkspaceUpdate): Promise<Work
 export function deleteWorkspace(id: string): Promise<void> {
   return fetchApi(`/api/workspaces/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
+
+export function reorderWorkspaces(ids: string[]): Promise<void> {
+  return fetchApi('/api/workspaces/reorder', { method: 'POST', body: { ids } })
+}

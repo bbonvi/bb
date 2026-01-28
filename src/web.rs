@@ -84,6 +84,7 @@ async fn start_app(app_service: AppService, base_path: &str) {
         .route("/api/semantic/status", get(semantic_status))
         .route("/api/workspaces", get(list_workspaces))
         .route("/api/workspaces", post(create_workspace))
+        .route("/api/workspaces/reorder", post(reorder_workspaces))
         .route("/api/workspaces/:id", put(update_workspace))
         .route("/api/workspaces/:id", delete_method(delete_workspace))
         .layer(auth_layer);
@@ -202,7 +203,8 @@ impl IntoResponse for AppError {
                     WorkspaceError::NotFound(_) => StatusCode::NOT_FOUND,
                     WorkspaceError::InvalidName
                     | WorkspaceError::DuplicateName(_)
-                    | WorkspaceError::InvalidPattern { .. } => StatusCode::BAD_REQUEST,
+                    | WorkspaceError::InvalidPattern { .. }
+                    | WorkspaceError::InvalidReorder(_) => StatusCode::BAD_REQUEST,
                     WorkspaceError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 };
                 (status, "WORKSPACE_ERROR", self.to_string())
@@ -750,6 +752,21 @@ async fn delete_workspace(
     let state = state.read().unwrap();
     let mut store = state.workspace_store.write().unwrap();
     store.delete(&id)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct WorkspaceReorderRequest {
+    ids: Vec<String>,
+}
+
+async fn reorder_workspaces(
+    State(state): State<Arc<RwLock<SharedState>>>,
+    Json(payload): Json<WorkspaceReorderRequest>,
+) -> Result<StatusCode, AppError> {
+    let state = state.read().unwrap();
+    let mut store = state.workspace_store.write().unwrap();
+    store.reorder(&payload.ids)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

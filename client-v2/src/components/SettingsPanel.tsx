@@ -1,16 +1,33 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { X, Plus, RefreshCw, LogOut } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { X, Plus, RefreshCw, LogOut, GripVertical } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import {
   createWorkspace as apiCreateWorkspace,
   updateWorkspace as apiUpdateWorkspace,
   deleteWorkspace as apiDeleteWorkspace,
+  reorderWorkspaces as apiReorderWorkspaces,
   fetchWorkspaces,
   searchBookmarks,
 } from '@/lib/api'
 import type { Workspace } from '@/lib/api'
 import { DeleteButton } from './bookmark-parts'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 // ─── Settings Panel (Modal) ──────────────────────────────────────
 
@@ -22,19 +39,51 @@ export function SettingsPanel() {
   const workspacesAvailable = useStore((s) => s.workspacesAvailable)
   const token = useStore((s) => s.token)
   const setToken = useStore((s) => s.setToken)
+  const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
   const tags = useStore((s) => s.tags)
   const hiddenTags = useHiddenTags()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const prevWorkspacesRef = useRef<Workspace[]>([])
 
-  // Select first workspace by default
+  // Drag-and-drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  )
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = workspaces.findIndex((ws) => ws.id === active.id)
+    const newIndex = workspaces.findIndex((ws) => ws.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    // Optimistic update
+    prevWorkspacesRef.current = workspaces
+    const reordered = arrayMove(workspaces, oldIndex, newIndex)
+    setWorkspaces(reordered)
+
+    // Persist to backend
+    try {
+      await apiReorderWorkspaces(reordered.map((ws) => ws.id))
+    } catch (err) {
+      // Rollback on error
+      setWorkspaces(prevWorkspacesRef.current)
+      setError(err instanceof Error ? err.message : 'Failed to reorder workspaces')
+    }
+  }
+
+  // Select active workspace when opening, or first workspace if none active
   useEffect(() => {
     if (open && workspaces.length > 0 && !selectedId) {
-      setSelectedId(workspaces[0].id)
+      const validActive = activeWorkspaceId && workspaces.some((ws) => ws.id === activeWorkspaceId)
+      setSelectedId(validActive ? activeWorkspaceId : workspaces[0].id)
     }
-  }, [open, workspaces, selectedId])
+  }, [open, workspaces, selectedId, activeWorkspaceId])
 
   // Reset on close
   useEffect(() => {
@@ -128,19 +177,22 @@ export function SettingsPanel() {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto">
-                {workspaces.map((ws) => (
-                  <button
-                    key={ws.id}
-                    onClick={() => setSelectedId(ws.id)}
-                    className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition-colors ${
-                      selectedId === ws.id
-                        ? 'bg-hi-dim text-text'
-                        : 'text-text-muted hover:bg-surface-hover hover:text-text'
-                    }`}
-                  >
-                    <span className="truncate">{ws.name}</span>
-                  </button>
-                ))}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={workspaces.map((ws) => ws.id)} strategy={verticalListSortingStrategy}>
+                    {workspaces.map((ws) => (
+                      <SortableWorkspaceItem
+                        key={ws.id}
+                        workspace={ws}
+                        isSelected={selectedId === ws.id}
+                        onSelect={() => setSelectedId(ws.id)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
                 {workspaces.length === 0 && (
                   <div className="px-3 py-4 text-xs text-text-dim">No workspaces yet</div>
                 )}
@@ -208,6 +260,60 @@ export function SettingsPanel() {
   )
 }
 
+// ─── Sortable Workspace Item ─────────────────────────────────────
+
+function SortableWorkspaceItem({
+  workspace,
+  isSelected,
+  onSelect,
+}: {
+  workspace: Workspace
+  isSelected: boolean
+  onSelect: () => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: workspace.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex w-full items-center text-xs transition-colors ${
+        isSelected
+          ? 'bg-hi-dim text-text'
+          : 'text-text-muted hover:bg-surface-hover hover:text-text'
+      }`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="flex h-7 w-6 shrink-0 cursor-grab items-center justify-center text-text-dim hover:text-text-muted active:cursor-grabbing"
+        title="Drag to reorder"
+      >
+        <GripVertical className="h-3 w-3" />
+      </button>
+      <button
+        onClick={onSelect}
+        className="flex-1 truncate py-1.5 pr-3 text-left"
+      >
+        {workspace.name}
+      </button>
+    </div>
+  )
+}
+
 // ─── Workspace Editor ────────────────────────────────────────────
 
 function WorkspaceEditor({
@@ -249,8 +355,8 @@ function WorkspaceEditor({
   }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered autocomplete suggestions (exclude already-added tags)
-  const whitelist = workspace.filters.tag_whitelist ?? []
-  const blacklist = workspace.filters.tag_blacklist ?? []
+  const whitelist = useMemo(() => workspace.filters.tag_whitelist ?? [], [workspace.filters.tag_whitelist])
+  const blacklist = useMemo(() => workspace.filters.tag_blacklist ?? [], [workspace.filters.tag_blacklist])
 
   const existingTags = useMemo(
     () => new Set([...whitelist, ...blacklist]),
