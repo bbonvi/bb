@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { X, Plus, RefreshCw, LogOut, GripVertical } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
+import { useSettings } from '@/hooks/useSettings'
 import {
   createWorkspace as apiCreateWorkspace,
   updateWorkspace as apiUpdateWorkspace,
@@ -31,6 +32,8 @@ import { CSS } from '@dnd-kit/utilities'
 
 // ─── Settings Panel (Modal) ──────────────────────────────────────
 
+type SettingsView = 'preferences' | 'workspaces'
+
 export default function SettingsPanel() {
   const open = useStore((s) => s.settingsOpen)
   const setOpen = useStore((s) => s.setSettingsOpen)
@@ -39,11 +42,10 @@ export default function SettingsPanel() {
   const workspacesAvailable = useStore((s) => s.workspacesAvailable)
   const token = useStore((s) => s.token)
   const setToken = useStore((s) => s.setToken)
-  const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
   const tags = useStore((s) => s.tags)
   const hiddenTags = useHiddenTags()
 
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedView, setSelectedView] = useState<SettingsView>('preferences')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const prevWorkspacesRef = useRef<Workspace[]>([])
@@ -77,18 +79,10 @@ export default function SettingsPanel() {
     }
   }
 
-  // Select active workspace when opening, or first workspace if none active
-  useEffect(() => {
-    if (open && workspaces.length > 0 && !selectedId) {
-      const validActive = activeWorkspaceId && workspaces.some((ws) => ws.id === activeWorkspaceId)
-      setSelectedId(validActive ? activeWorkspaceId : workspaces[0].id)
-    }
-  }, [open, workspaces, selectedId, activeWorkspaceId])
-
-  // Reset on close
+  // Reset to preferences on close
   useEffect(() => {
     if (!open) {
-      setSelectedId(null)
+      setSelectedView('preferences')
       setError(null)
     }
   }, [open])
@@ -111,9 +105,8 @@ export default function SettingsPanel() {
     setSaving(true)
     setError(null)
     try {
-      const ws = await apiCreateWorkspace({ name: 'New workspace' })
+      await apiCreateWorkspace({ name: 'New workspace' })
       await refreshWorkspaces()
-      setSelectedId(ws.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create workspace')
     } finally {
@@ -127,7 +120,6 @@ export default function SettingsPanel() {
     try {
       await apiDeleteWorkspace(id)
       await refreshWorkspaces()
-      if (selectedId === id) setSelectedId(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete workspace')
     } finally {
@@ -140,12 +132,10 @@ export default function SettingsPanel() {
     window.location.reload()
   }
 
-  const selected = workspaces.find((ws) => ws.id === selectedId)
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)}>
       <div
-        className="flex w-full max-w-3xl flex-col rounded-xl border border-white/[0.08] bg-bg shadow-2xl"
+        className="flex w-full max-w-4xl flex-col rounded-xl border border-white/[0.08] bg-bg shadow-2xl"
         style={{ height: 'min(80vh, 680px)' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -162,54 +152,49 @@ export default function SettingsPanel() {
 
         {/* Body */}
         <div className="flex min-h-0 flex-1">
-          {/* Sidebar: workspace list */}
-          {workspacesAvailable && (
-            <div className="flex w-48 shrink-0 flex-col border-r border-white/[0.06]">
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim">Workspaces</span>
-                <button
-                  onClick={handleCreate}
-                  disabled={saving}
-                  className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
-                  title="Create workspace"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <SortableContext items={workspaces.map((ws) => ws.id)} strategy={verticalListSortingStrategy}>
-                    {workspaces.map((ws) => (
-                      <SortableWorkspaceItem
-                        key={ws.id}
-                        workspace={ws}
-                        isSelected={selectedId === ws.id}
-                        onSelect={() => setSelectedId(ws.id)}
-                      />
-                    ))}
-                  </SortableContext>
-                </DndContext>
-                {workspaces.length === 0 && (
-                  <div className="px-3 py-4 text-xs text-text-dim">No workspaces yet</div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Sidebar — simple navigation */}
+          <div className="flex w-40 shrink-0 flex-col border-r border-white/[0.06] py-2">
+            <button
+              onClick={() => setSelectedView('preferences')}
+              className={`mx-2 mb-1 flex items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                selectedView === 'preferences'
+                  ? 'bg-hi-dim text-text'
+                  : 'text-text-muted hover:bg-surface-hover hover:text-text'
+              }`}
+            >
+              Preferences
+            </button>
+            {workspacesAvailable && (
+              <button
+                onClick={() => setSelectedView('workspaces')}
+                className={`mx-2 flex items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                  selectedView === 'workspaces'
+                    ? 'bg-hi-dim text-text'
+                    : 'text-text-muted hover:bg-surface-hover hover:text-text'
+                }`}
+              >
+                Workspaces
+              </button>
+            )}
+          </div>
 
-          {/* Main: workspace editor */}
+          {/* Main content */}
           <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-5 py-4">
             {error && (
               <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">{error}</div>
             )}
 
-            {workspacesAvailable && selected ? (
-              <WorkspaceEditor
-                workspace={selected}
+            {selectedView === 'preferences' ? (
+              <GeneralSettings visibleTags={visibleTags} />
+            ) : selectedView === 'workspaces' && workspacesAvailable ? (
+              <WorkspaceManager
+                workspaces={workspaces}
                 visibleTags={visibleTags}
+                sensors={sensors}
+                saving={saving}
+                onDragEnd={handleDragEnd}
+                onCreate={handleCreate}
+                onDelete={handleDelete}
                 onSave={async (updated) => {
                   setSaving(true)
                   setError(null)
@@ -226,19 +211,8 @@ export default function SettingsPanel() {
                     setSaving(false)
                   }
                 }}
-                onDelete={() => handleDelete(selected.id)}
               />
-            ) : workspacesAvailable ? (
-              <div className="flex flex-1 items-center justify-center text-sm text-text-dim">
-                Select or create a workspace
-              </div>
             ) : null}
-
-            {!workspacesAvailable && (
-              <div className="text-sm text-text-dim">
-                Workspace management is unavailable (backend does not support workspaces).
-              </div>
-            )}
           </div>
         </div>
 
@@ -255,6 +229,93 @@ export default function SettingsPanel() {
           )}
           <div className="flex-1" />
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Workspace Manager ────────────────────────────────────────────
+
+function WorkspaceManager({
+  workspaces,
+  visibleTags,
+  sensors,
+  saving,
+  onDragEnd,
+  onCreate,
+  onDelete,
+  onSave,
+}: {
+  workspaces: Workspace[]
+  visibleTags: string[]
+  sensors: ReturnType<typeof useSensors>
+  saving: boolean
+  onDragEnd: (event: DragEndEvent) => void
+  onCreate: () => void
+  onDelete: (id: string) => void
+  onSave: (ws: Workspace) => Promise<void>
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // Derive the effective selected workspace, falling back to first if selection invalid
+  const selectedWorkspace = useMemo(() => {
+    if (workspaces.length === 0) return null
+    const found = selectedId ? workspaces.find((ws) => ws.id === selectedId) : null
+    return found ?? workspaces[0]
+  }, [workspaces, selectedId])
+
+  return (
+    <div className="flex min-h-0 flex-1 gap-4">
+      {/* Workspace list */}
+      <div className="flex w-44 shrink-0 flex-col rounded-lg border border-white/[0.06] bg-surface/30">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim">Workspaces</span>
+          <button
+            onClick={onCreate}
+            disabled={saving}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+            title="Create workspace"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto py-1">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onDragEnd}
+          >
+            <SortableContext items={workspaces.map((ws) => ws.id)} strategy={verticalListSortingStrategy}>
+              {workspaces.map((ws) => (
+                <SortableWorkspaceItem
+                  key={ws.id}
+                  workspace={ws}
+                  isSelected={selectedWorkspace?.id === ws.id}
+                  onSelect={() => setSelectedId(ws.id)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+          {workspaces.length === 0 && (
+            <div className="px-3 py-4 text-xs text-text-dim">No workspaces yet</div>
+          )}
+        </div>
+      </div>
+
+      {/* Workspace editor */}
+      <div className="min-w-0 flex-1">
+        {selectedWorkspace ? (
+          <WorkspaceEditor
+            workspace={selectedWorkspace}
+            visibleTags={visibleTags}
+            onSave={onSave}
+            onDelete={() => onDelete(selectedWorkspace.id)}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-text-dim">
+            Create a workspace to get started
+          </div>
+        )}
       </div>
     </div>
   )
@@ -299,7 +360,9 @@ function SortableWorkspaceItem({
       <button
         {...attributes}
         {...listeners}
-        className="flex h-7 w-6 shrink-0 cursor-grab items-center justify-center text-text-dim hover:text-text-muted active:cursor-grabbing"
+        className={`flex h-7 w-6 shrink-0 cursor-grab items-center justify-center active:cursor-grabbing ${
+          isSelected ? 'text-text' : 'text-text-dim hover:text-text-muted'
+        }`}
         title="Drag to reorder"
       >
         <GripVertical className="h-3 w-3" />
@@ -327,6 +390,10 @@ function WorkspaceEditor({
   onSave: (ws: Workspace) => Promise<void>
   onDelete: () => void
 }) {
+  const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
+  const setActiveWorkspaceId = useStore((s) => s.setActiveWorkspaceId)
+  const isActive = workspace.id === activeWorkspaceId
+
   const [name, setName] = useState(workspace.name)
   const [whitelistInput, setWhitelistInput] = useState('')
   const [blacklistInput, setBlacklistInput] = useState('')
@@ -473,7 +540,7 @@ function WorkspaceEditor({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Name + delete */}
+      {/* Name + activate + delete */}
       <div className="flex items-center gap-2">
         <input
           type="text"
@@ -486,6 +553,16 @@ function WorkspaceEditor({
           className="h-8 flex-1 rounded-md border border-white/[0.06] bg-surface px-2.5 text-sm text-text outline-none transition-colors focus:border-hi-dim"
           placeholder="Workspace name"
         />
+        {isActive ? (
+          <span className="flex h-8 items-center px-2 text-xs text-text-dim">Active</span>
+        ) : (
+          <button
+            onClick={() => setActiveWorkspaceId(workspace.id)}
+            className="h-8 rounded-md border border-hi/30 px-2.5 text-xs font-medium text-hi hover:bg-hi/10"
+          >
+            Activate
+          </button>
+        )}
         <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-8 w-8" />
       </div>
 
@@ -711,5 +788,102 @@ function PatternInput({
         placeholder={placeholder}
       />
     </div>
+  )
+}
+
+// ─── General Settings ─────────────────────────────────────────────
+
+function GeneralSettings({ visibleTags }: { visibleTags: string[] }) {
+  const [settings, updateSettings] = useSettings()
+  const [ignoredInput, setIgnoredInput] = useState('')
+
+  const existingIgnored = useMemo(
+    () => new Set(settings.globalIgnoredTags),
+    [settings.globalIgnoredTags],
+  )
+
+  const suggestions = useMemo(() => {
+    if (!ignoredInput) return []
+    const lower = ignoredInput.toLowerCase()
+    return visibleTags
+      .filter((t) => !existingIgnored.has(t) && t.toLowerCase().includes(lower))
+      .slice(0, 8)
+  }, [ignoredInput, visibleTags, existingIgnored])
+
+  function addIgnoredTag(tag: string) {
+    const trimmed = tag.trim()
+    if (!trimmed || existingIgnored.has(trimmed)) return
+    updateSettings({
+      globalIgnoredTags: [...settings.globalIgnoredTags, trimmed],
+    })
+    setIgnoredInput('')
+  }
+
+  function removeIgnoredTag(tag: string) {
+    updateSettings({
+      globalIgnoredTags: settings.globalIgnoredTags.filter((t) => t !== tag),
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h3 className="text-sm font-semibold text-text">Preferences</h3>
+
+      {/* Toggle: Show catch-all workspace */}
+      <ToggleSetting
+        label="Show catch-all workspace"
+        description="Display '---' option in workspace selector to view all bookmarks"
+        checked={settings.showCatchAllWorkspace}
+        onChange={(v) => updateSettings({ showCatchAllWorkspace: v })}
+      />
+
+      {/* Global ignored tags */}
+      <div>
+        <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-dim">
+          Globally ignored tags
+        </label>
+        <p className="mb-2 text-xs text-text-muted">
+          Bookmarks with these tags are completely hidden everywhere
+        </p>
+        <TagListEditor
+          tags={settings.globalIgnoredTags}
+          input={ignoredInput}
+          setInput={setIgnoredInput}
+          suggestions={suggestions}
+          onAdd={addIgnoredTag}
+          onRemove={removeIgnoredTag}
+          placeholder="Add tag to ignore globally"
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Toggle Setting ───────────────────────────────────────────────
+
+function ToggleSetting({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 rounded border-white/20 bg-surface accent-hi"
+      />
+      <div>
+        <div className="text-sm text-text">{label}</div>
+        <div className="text-xs text-text-muted">{description}</div>
+      </div>
+    </label>
   )
 }

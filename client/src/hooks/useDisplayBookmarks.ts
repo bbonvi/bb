@@ -3,6 +3,7 @@ import { useStore } from '@/lib/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { Bookmark, Workspace } from '@/lib/api'
 import { applyWorkspaceFilter } from '@/lib/workspaceFilters'
+import { useSettings } from '@/hooks/useSettings'
 
 // Deterministic shuffle using seed + bookmark ID (Knuth multiplicative hash)
 function shuffleBookmarks(bookmarks: Bookmark[], seed: number): Bookmark[] {
@@ -45,6 +46,8 @@ export function useDisplayBookmarks() {
     })),
   )
 
+  const [settings] = useSettings()
+
   const hasQuery = !!(
     searchQuery.semantic ||
     searchQuery.keyword ||
@@ -64,16 +67,25 @@ export function useDisplayBookmarks() {
     return null
   }, [initialLoadComplete, totalCount, showAll, hasQuery, hasWorkspace, bookmarks.length, bookmarksFresh])
 
+  // Filter out bookmarks with globally ignored tags (before workspace filter)
+  const globalFiltered = useMemo(() => {
+    if (!bookmarksFresh) return null
+    if (settings.globalIgnoredTags.length === 0) return bookmarks
+
+    const ignoreSet = new Set(settings.globalIgnoredTags)
+    return bookmarks.filter((b) => !b.tags.some((t) => ignoreSet.has(t)))
+  }, [bookmarks, settings.globalIgnoredTags, bookmarksFresh])
+
   // Apply client-side workspace filters (glob patterns, regex, blacklist)
   const workspaceFiltered = useMemo(() => {
-    if (!bookmarksFresh) return null
-    if (!activeWorkspaceId) return bookmarks
+    if (!bookmarksFresh || globalFiltered === null) return null
+    if (!activeWorkspaceId) return globalFiltered
 
     const ws = workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
-    if (!ws) return bookmarks
+    if (!ws) return globalFiltered
 
-    return applyWorkspaceFilter(bookmarks, ws)
-  }, [bookmarks, activeWorkspaceId, workspaces, bookmarksFresh])
+    return applyWorkspaceFilter(globalFiltered, ws)
+  }, [globalFiltered, activeWorkspaceId, workspaces, bookmarksFresh])
 
   const freshDisplay = useMemo(() => {
     if (!bookmarksFresh || workspaceFiltered === null) return null

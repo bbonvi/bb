@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useIsMobile } from '@/hooks/useResponsive'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
+import { useSettings } from '@/hooks/useSettings'
 import { TagAutocompleteInput } from '@/components/TagAutocompleteInput'
 import type { SearchQuery } from '@/lib/api'
 
@@ -68,6 +69,7 @@ export function Toolbar() {
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const tags = useStore((s) => s.tags)
   const hiddenTags = useHiddenTags()
+  const [settings] = useSettings()
   const autocompleteTags = useMemo(() => {
     const hidden = new Set(hiddenTags)
     return tags.filter((t) => !hidden.has(t))
@@ -205,7 +207,9 @@ export function Toolbar() {
               }}
               className="h-7 appearance-none rounded-md border border-white/[0.06] bg-surface pl-2 pr-7 text-xs text-text outline-none transition-colors hover:bg-surface-hover focus:border-hi-dim cursor-pointer"
             >
-              <option value="">All</option>
+              {(settings.showCatchAllWorkspace || workspaces.length === 0) && (
+                <option value="">---</option>
+              )}
               {workspaces.map((ws) => (
                 <option key={ws.id} value={ws.id}>{ws.name}</option>
               ))}

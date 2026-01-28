@@ -1,11 +1,13 @@
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { useShallow } from 'zustand/react/shallow'
+import { useSettings } from '@/hooks/useSettings'
 
 /**
- * Returns the merged set of hidden tags: global `hidden_by_default` from config
- * plus the active workspace's blacklist tags.
- * §6.5: visible tags = all_tags - global_hidden - workspace_blacklist
+ * Returns the merged set of hidden tags:
+ * - global `hidden_by_default` from server config
+ * - user's global ignored tags from localStorage settings
+ * - active workspace's blacklist tags
  */
 export function useHiddenTags(): string[] {
   const { globalHidden, activeWorkspaceId, workspaces } = useStore(
@@ -15,20 +17,22 @@ export function useHiddenTags(): string[] {
       workspaces: s.workspaces,
     })),
   )
+  const [settings] = useSettings()
 
   return useMemo(() => {
-    if (!activeWorkspaceId) {
-      return globalHidden
-    }
-
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!ws || ws.filters.tag_blacklist.length === 0) {
-      return globalHidden
-    }
-
-    // Merge, dedup
     const set = new Set(globalHidden)
-    for (const t of ws.filters.tag_blacklist) set.add(t)
+
+    // Add user's global ignored tags
+    for (const t of settings.globalIgnoredTags) set.add(t)
+
+    // Add workspace blacklist if active
+    if (activeWorkspaceId) {
+      const ws = workspaces.find((w) => w.id === activeWorkspaceId)
+      if (ws) {
+        for (const t of ws.filters.tag_blacklist) set.add(t)
+      }
+    }
+
     return Array.from(set)
-  }, [globalHidden, activeWorkspaceId, workspaces])
+  }, [globalHidden, activeWorkspaceId, workspaces, settings.globalIgnoredTags])
 }
