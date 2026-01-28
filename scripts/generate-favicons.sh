@@ -125,34 +125,53 @@ main() {
   # Standard favicons
   magick "$tmp_dir/square.png" -resize 16x16   "$OUTPUT_DIR/favicon-16x16.png"
   magick "$tmp_dir/square.png" -resize 32x32   "$OUTPUT_DIR/favicon-32x32.png"
+  magick "$tmp_dir/square.png" -resize 48x48   "$OUTPUT_DIR/favicon-48x48.png"
   magick "$tmp_dir/square.png" -resize 32x32   "$OUTPUT_DIR/favicon.png"
-  echo "  ✓ favicon-16x16.png, favicon-32x32.png, favicon.png"
+  echo "  ✓ favicon-16x16.png, favicon-32x32.png, favicon-48x48.png, favicon.png"
 
-  # Apple touch icon (180x180 is standard)
-  magick "$tmp_dir/square.png" -resize 180x180 "$OUTPUT_DIR/apple-touch-icon.png"
-  echo "  ✓ apple-touch-icon.png (180px)"
+  # Apple touch icon (180x180) — with ~12% padding so content sits inside iOS squircle mask
+  # Logo scaled to 76% (137px) centered on 180x180 transparent canvas
+  magick -size 180x180 "xc:none" \
+    \( "$tmp_dir/square.png" -resize 137x137 \) \
+    -gravity center -composite \
+    "$OUTPUT_DIR/apple-touch-icon.png"
+  echo "  ✓ apple-touch-icon.png (180px, padded for iOS mask)"
 
-  # PWA icons (transparent)
-  magick "$tmp_dir/square.png" -resize 192x192 "$OUTPUT_DIR/logo192.png"
-  magick "$tmp_dir/square.png" -resize 512x512 "$OUTPUT_DIR/logo512.png"
-  echo "  ✓ logo192.png, logo512.png (PWA transparent)"
+  # PWA icons (transparent, with padding for comfortable display)
+  # ~85% content scale leaves breathing room
+  magick -size 192x192 "xc:none" \
+    \( "$tmp_dir/square.png" -resize 163x163 \) \
+    -gravity center -composite \
+    "$OUTPUT_DIR/logo192.png"
+  magick -size 512x512 "xc:none" \
+    \( "$tmp_dir/square.png" -resize 435x435 \) \
+    -gravity center -composite \
+    "$OUTPUT_DIR/logo512.png"
+  echo "  ✓ logo192.png, logo512.png (PWA transparent, padded)"
 
   # PWA icons with solid background (for install dialogs)
-  # Logo is scaled to 80% with padding, placed on solid background
+  # Logo scaled to 75% with padding, placed on solid background
   magick -size 192x192 "xc:$PWA_BG_COLOR" \
-    \( "$tmp_dir/square.png" -resize 154x154 \) \
+    \( "$tmp_dir/square.png" -resize 144x144 \) \
     -gravity center -composite \
     "$OUTPUT_DIR/pwa-192.png"
   magick -size 512x512 "xc:$PWA_BG_COLOR" \
-    \( "$tmp_dir/square.png" -resize 410x410 \) \
+    \( "$tmp_dir/square.png" -resize 384x384 \) \
     -gravity center -composite \
     "$OUTPUT_DIR/pwa-512.png"
   echo "  ✓ pwa-192.png, pwa-512.png (PWA with background)"
 
-  # Android Chrome (maskable)
-  magick "$tmp_dir/square.png" -resize 192x192 "$OUTPUT_DIR/android-chrome-192x192.png"
-  magick "$tmp_dir/square.png" -resize 512x512 "$OUTPUT_DIR/android-chrome-512x512.png"
-  echo "  ✓ android-chrome-192x192.png, android-chrome-512x512.png"
+  # Android Chrome (maskable) — content within 80% safe zone circle
+  # Logo at ~65% leaves comfortable margin inside the maskable safe area
+  magick -size 192x192 "xc:$PWA_BG_COLOR" \
+    \( "$tmp_dir/square.png" -resize 125x125 \) \
+    -gravity center -composite \
+    "$OUTPUT_DIR/android-chrome-192x192.png"
+  magick -size 512x512 "xc:$PWA_BG_COLOR" \
+    \( "$tmp_dir/square.png" -resize 333x333 \) \
+    -gravity center -composite \
+    "$OUTPUT_DIR/android-chrome-512x512.png"
+  echo "  ✓ android-chrome-192x192.png, android-chrome-512x512.png (maskable, safe zone)"
 
   # Windows tile
   magick "$tmp_dir/square.png" -resize 150x150 "$OUTPUT_DIR/mstile-150x150.png"
@@ -164,6 +183,15 @@ main() {
   magick "$tmp_dir/square.png" -resize 48x48 "$tmp_dir/ico-48.png"
   magick "$tmp_dir/ico-16.png" "$tmp_dir/ico-32.png" "$tmp_dir/ico-48.png" "$OUTPUT_DIR/favicon.ico"
   echo "  ✓ favicon.ico (16/32/48px multi-resolution)"
+
+  # Safari SVG favicon (scalable, supports dark mode)
+  # Note: Only generated if source is SVG; otherwise skip
+  if [[ "$input" == *.svg ]]; then
+    cp "$input" "$OUTPUT_DIR/favicon.svg"
+    echo "  ✓ favicon.svg (scalable, dark mode capable)"
+  else
+    echo "  ⊘ favicon.svg skipped (source is not SVG; provide SVG for best Safari quality)"
+  fi
 
   # Full resolution logo
   cp "$tmp_dir/square.png" "$OUTPUT_DIR/logo.png"
