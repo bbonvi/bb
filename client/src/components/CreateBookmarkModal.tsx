@@ -39,7 +39,7 @@ function isUrl(text: string): boolean {
   }
 }
 
-export function CreateBookmarkModal() {
+export default function CreateBookmarkModal() {
   const open = useStore((s) => s.createModalOpen)
   const setOpen = useStore((s) => s.setCreateModalOpen)
   const initialUrl = useStore((s) => s.createModalInitialUrl)

@@ -23,7 +23,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 
-export function BookmarkDetailModal() {
+export default function BookmarkDetailModal() {
   const detailModalId = useStore((s) => s.detailModalId)
   const detailModalEdit = useStore((s) => s.detailModalEdit)
   const setDetailModalId = useStore((s) => s.setDetailModalId)

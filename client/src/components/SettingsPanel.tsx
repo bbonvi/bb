@@ -31,7 +31,7 @@ import { CSS } from '@dnd-kit/utilities'
 
 // ─── Settings Panel (Modal) ──────────────────────────────────────
 
-export function SettingsPanel() {
+export default function SettingsPanel() {
   const open = useStore((s) => s.settingsOpen)
   const setOpen = useStore((s) => s.setSettingsOpen)
   const workspaces = useStore((s) => s.workspaces)

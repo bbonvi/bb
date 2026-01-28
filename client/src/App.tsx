@@ -1,26 +1,46 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { AuthGate } from '@/components/AuthGate'
 import { Toolbar } from '@/components/Toolbar'
 import { BookmarkGrid } from '@/components/BookmarkGrid'
 import { BookmarkList } from '@/components/BookmarkList'
 import { BookmarkTable } from '@/components/BookmarkTable'
-import { BookmarkDetailModal } from '@/components/BookmarkDetailModal'
-import { CreateBookmarkModal } from '@/components/CreateBookmarkModal'
-import { BulkEditModal, BulkDeleteModal } from '@/components/BulkOperationsModal'
-import { SettingsPanel } from '@/components/SettingsPanel'
 import { usePolling } from '@/hooks/usePolling'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useStore } from '@/lib/store'
+import { useShallow } from 'zustand/react/shallow'
+
+// Lazy load modals — not needed on initial render
+const BookmarkDetailModal = lazy(() => import('@/components/BookmarkDetailModal'))
+const CreateBookmarkModal = lazy(() => import('@/components/CreateBookmarkModal'))
+const BulkOperationsModals = lazy(() =>
+  import('@/components/BulkOperationsModal').then((m) => ({
+    default: m.BulkOperationsModals,
+  })),
+)
+const SettingsPanel = lazy(() => import('@/components/SettingsPanel'))
 
 function AppShell() {
   usePolling()
   useDocumentTitle()
-  const viewMode = useStore((s) => s.viewMode)
-  const bulkEditOpen = useStore((s) => s.bulkEditOpen)
-  const setBulkEditOpen = useStore((s) => s.setBulkEditOpen)
-  const bulkDeleteOpen = useStore((s) => s.bulkDeleteOpen)
-  const setBulkDeleteOpen = useStore((s) => s.setBulkDeleteOpen)
-  const openCreateWithUrlAndTitle = useStore((s) => s.openCreateWithUrlAndTitle)
+
+  // Single subscription for all needed state
+  const {
+    viewMode,
+    bulkEditOpen,
+    setBulkEditOpen,
+    bulkDeleteOpen,
+    setBulkDeleteOpen,
+    openCreateWithUrlAndTitle,
+  } = useStore(
+    useShallow((s) => ({
+      viewMode: s.viewMode,
+      bulkEditOpen: s.bulkEditOpen,
+      setBulkEditOpen: s.setBulkEditOpen,
+      bulkDeleteOpen: s.bulkDeleteOpen,
+      setBulkDeleteOpen: s.setBulkDeleteOpen,
+      openCreateWithUrlAndTitle: s.openCreateWithUrlAndTitle,
+    })),
+  )
 
   // Handle ?action=create and share target URL parameters
   useEffect(() => {
@@ -55,11 +75,18 @@ function AppShell() {
         {viewMode === 'cards' && <BookmarkList />}
         {viewMode === 'table' && <BookmarkTable />}
       </main>
-      <BookmarkDetailModal />
-      <CreateBookmarkModal />
-      <BulkEditModal open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
-      <BulkDeleteModal open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
-      <SettingsPanel />
+      {/* Lazy-loaded modals with Suspense — no fallback needed, they render nothing when closed */}
+      <Suspense fallback={null}>
+        <BookmarkDetailModal />
+        <CreateBookmarkModal />
+        <BulkOperationsModals
+          bulkEditOpen={bulkEditOpen}
+          setBulkEditOpen={setBulkEditOpen}
+          bulkDeleteOpen={bulkDeleteOpen}
+          setBulkDeleteOpen={setBulkDeleteOpen}
+        />
+        <SettingsPanel />
+      </Suspense>
     </div>
   )
 }

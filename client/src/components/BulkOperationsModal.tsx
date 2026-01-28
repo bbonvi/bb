@@ -418,3 +418,23 @@ export function BulkDeleteModal({
     </Dialog>
   )
 }
+
+// ─── Combined wrapper for lazy loading ────────────────────────────
+export function BulkOperationsModals({
+  bulkEditOpen,
+  setBulkEditOpen,
+  bulkDeleteOpen,
+  setBulkDeleteOpen,
+}: {
+  bulkEditOpen: boolean
+  setBulkEditOpen: (open: boolean) => void
+  bulkDeleteOpen: boolean
+  setBulkDeleteOpen: (open: boolean) => void
+}) {
+  return (
+    <>
+      <BulkEditModal open={bulkEditOpen} onOpenChange={setBulkEditOpen} />
+      <BulkDeleteModal open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} />
+    </>
+  )
+}
