@@ -26,8 +26,10 @@ function mergeWithDirty(
     if (dirtyIds.has(bm.id)) dirtyMap.set(bm.id, bm)
   }
   const merged = incoming.map((bm) => dirtyMap.get(bm.id) ?? bm)
+  // O(n) set lookup instead of O(n²) array scan
+  const incomingIds = new Set(incoming.map((b) => b.id))
   for (const [id, bm] of dirtyMap) {
-    if (!incoming.some((b) => b.id === id)) merged.push(bm)
+    if (!incomingIds.has(id)) merged.push(bm)
   }
   return merged
 }
