@@ -13,6 +13,7 @@ use crate::{
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::collections::HashMap;
+use tracing::{debug, info, warn};
 
 /// Command for searching bookmarks
 #[derive(Debug, Clone)]
@@ -570,31 +571,45 @@ impl CompressCommand {
             return Ok(());
         }
 
-        // Analyze images
+        // Analyze images with progress bar
+        info!(count = image_to_bookmarks.len(), "scanning images");
         let mut stats = CompressionStats::default();
         let mut to_compress: Vec<ImageToCompress> = Vec::new();
 
+        let scan_pb = ProgressBar::new(image_to_bookmarks.len() as u64);
+        scan_pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} Scanning [{bar:40.cyan/blue}] {pos}/{len}")
+                .unwrap()
+                .progress_chars("#>-"),
+        );
+
         for (image_id, bookmark_ids) in &image_to_bookmarks {
             stats.total_images += 1;
+            scan_pb.inc(1);
 
             // Try to read the image
             if !storage.exists(image_id) {
+                debug!(image_id, "image file not found");
                 stats.failed_to_read += 1;
                 continue;
             }
 
             let data = storage.read(image_id);
             if data.is_empty() {
+                warn!(image_id, "image file empty");
                 stats.failed_to_read += 1;
                 continue;
             }
 
             // Check if needs processing (fast - no compression)
             if !images::should_process(&data, max_size) {
+                debug!(image_id, "already optimal");
                 stats.already_optimal += 1;
                 continue;
             }
 
+            debug!(image_id, size = data.len(), "needs compression");
             stats.to_compress += 1;
             to_compress.push(ImageToCompress {
                 image_id: image_id.clone(),
@@ -602,6 +617,8 @@ impl CompressCommand {
                 data,
             });
         }
+
+        scan_pb.finish_and_clear();
 
         // Display preview
         self.print_preview(&stats);
@@ -629,10 +646,11 @@ impl CompressCommand {
         }
 
         // Phase 1: Compress images in parallel with progress bar
+        info!(count = to_compress.len(), max_size, quality, "compressing images");
         let pb = ProgressBar::new(to_compress.len() as u64);
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                .template("{spinner:.green} Compressing [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
                 .unwrap()
                 .progress_chars("#>-"),
         );
@@ -653,27 +671,33 @@ impl CompressCommand {
         pb.finish_and_clear();
 
         // Phase 2: Apply results sequentially (I/O + bookmark updates)
+        info!("writing compressed images to storage");
         let mut success_count = 0;
         let mut error_count = 0;
 
         for img in compressed {
             match img.result {
                 Ok(result) => {
+                    let compressed_size = result.data.len();
                     match self.apply_compression(&img.image_id, &img.bookmark_ids, result, storage, &update_bookmark) {
-                        Ok(()) => success_count += 1,
+                        Ok(()) => {
+                            debug!(image_id = img.image_id, compressed_size, "saved");
+                            success_count += 1;
+                        }
                         Err(e) => {
-                            eprintln!("Failed to save {}: {}", img.image_id, e);
+                            warn!(image_id = img.image_id, error = %e, "failed to save");
                             error_count += 1;
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to compress {}: {}", img.image_id, e);
+                    warn!(image_id = img.image_id, error = %e, "compression failed");
                     error_count += 1;
                 }
             }
         }
 
+        info!(success_count, error_count, "compression complete");
         println!("\nCompression complete:");
         println!("  Successful: {}", success_count);
         if error_count > 0 {
