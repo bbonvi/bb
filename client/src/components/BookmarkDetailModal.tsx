@@ -280,13 +280,20 @@ export default function BookmarkDetailModal() {
             <div className="flex-1 overflow-y-auto">
               {/* Thumbnail — wraps in drop zone during edit mode */}
               {editing ? (
-                <ImageDropZone onUpload={handleCoverUpload} label="Upload cover image" className="h-48 w-full sm:h-64">
-                  {coverPreview ? (
-                    <img src={coverPreview} alt="" className="h-48 w-full object-cover sm:h-64" />
-                  ) : (
-                    <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
+                <div className="relative">
+                  <ImageDropZone onUpload={handleCoverUpload} label="Upload cover image" className="h-48 w-full sm:h-64">
+                    {coverPreview ? (
+                      <img src={coverPreview} alt="" className="h-48 w-full object-cover sm:h-64" />
+                    ) : (
+                      <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
+                    )}
+                  </ImageDropZone>
+                  {pendingCover && (
+                    <div className="absolute bottom-2 right-2 rounded bg-amber-600/90 px-2 py-1 text-xs font-medium text-white shadow">
+                      New image
+                    </div>
                   )}
-                </ImageDropZone>
+                </div>
               ) : (
                 <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
               )}
@@ -307,6 +314,7 @@ export default function BookmarkDetailModal() {
                     iconPreview={iconPreview}
                     onIconUpload={handleIconUpload}
                     availableTags={visibleTags}
+                    iconPending={!!pendingIcon}
                   />
                 ) : (
                   <ViewContent
@@ -431,6 +439,7 @@ function EditForm({
   iconPreview,
   onIconUpload,
   availableTags,
+  iconPending,
 }: {
   form: EditFormState
   onChange: (form: EditFormState) => void
@@ -438,6 +447,7 @@ function EditForm({
   iconPreview: string | null
   onIconUpload: (file: File) => void
   availableTags: string[]
+  iconPending: boolean
 }) {
   const update = (field: keyof EditFormState, value: string) =>
     onChange({ ...form, [field]: value })
@@ -449,7 +459,9 @@ function EditForm({
         <ImageDropZone onUpload={onIconUpload} label="Upload icon" className="h-10 w-10 shrink-0 rounded-md">
           <EditableIcon iconId={bookmark.icon_id} previewUrl={iconPreview} />
         </ImageDropZone>
-        <span className="text-xs text-text-dim">Click or drag to change icon</span>
+        <span className={`text-xs ${iconPending ? 'text-amber-400' : 'text-text-dim'}`}>
+          {iconPending ? 'New icon' : 'Click or drag to change icon'}
+        </span>
       </div>
 
       <label className="flex flex-col gap-1">
