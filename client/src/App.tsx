@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { AuthGate } from '@/components/AuthGate'
 import { Toolbar } from '@/components/Toolbar'
 import { BookmarkGrid } from '@/components/BookmarkGrid'
@@ -20,6 +21,21 @@ function AppShell() {
   const setBulkEditOpen = useStore((s) => s.setBulkEditOpen)
   const bulkDeleteOpen = useStore((s) => s.bulkDeleteOpen)
   const setBulkDeleteOpen = useStore((s) => s.setBulkDeleteOpen)
+  const setCreateModalOpen = useStore((s) => s.setCreateModalOpen)
+
+  // Handle ?action=create URL parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('action') === 'create') {
+      setCreateModalOpen(true)
+      // Clean up URL
+      params.delete('action')
+      const newUrl = params.toString()
+        ? `${window.location.pathname}?${params}`
+        : window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    }
+  }, [setCreateModalOpen])
 
   if (!initialLoadComplete) {
     return (
