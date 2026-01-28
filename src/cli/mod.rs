@@ -130,4 +130,9 @@ pub enum Command {
         #[clap(short, long)]
         yes: bool,
     },
+    /// Create a backup archive of bb data
+    Backup {
+        /// Output path for the archive (default: ./bb-backup-{timestamp}.tar.gz)
+        path: Option<std::path::PathBuf>,
+    },
 }

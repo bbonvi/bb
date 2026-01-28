@@ -3,6 +3,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod app;
 mod auth;
+mod backup;
 mod bookmarks;
 mod buku_migrate;
 mod cli;
@@ -161,5 +162,7 @@ fn main() -> anyhow::Result<()> {
             );
             cli::handle_compress(dry_run, yes, &storage, bmark_mgr, &config)
         }
+
+        Command::Backup { path } => backup::create_backup(path),
     }
 }
