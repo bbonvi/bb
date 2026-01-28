@@ -44,20 +44,17 @@ async fn start_app(app_service: AppService, base_path: &str) {
     }));
 
     let webui = Router::new()
-        .nest_service("/", ServeFile::new("client/build/index.html"))
-        .nest_service("/static/", ServeDir::new("client/build/static/"))
-        .nest_service(
-            "/asset-manifest.json",
-            ServeFile::new("client/build/asset-manifest.json"),
-        )
-        .nest_service("/favicon.png", ServeFile::new("client/build/favicon.png"))
-        .nest_service("/logo192.png", ServeFile::new("client/build/logo192.png"))
-        .nest_service("/logo512.png", ServeFile::new("client/build/logo512.png"))
+        .nest_service("/", ServeFile::new("client/dist/index.html"))
+        .nest_service("/assets/", ServeDir::new("client/dist/assets/"))
+        .nest_service("/favicon.ico", ServeFile::new("client/dist/favicon.ico"))
+        .nest_service("/favicon.png", ServeFile::new("client/dist/favicon.png"))
+        .nest_service("/logo192.png", ServeFile::new("client/dist/logo192.png"))
+        .nest_service("/logo512.png", ServeFile::new("client/dist/logo512.png"))
         .nest_service(
             "/manifest.json",
-            ServeFile::new("client/build/manifest.json"),
+            ServeFile::new("client/dist/manifest.json"),
         )
-        .nest_service("/robots.txt", ServeFile::new("client/build/robots.txt"));
+        .nest_service("/robots.txt", ServeFile::new("client/dist/robots.txt"));
 
     let uploads_path = format!("{base_path}/uploads");
 

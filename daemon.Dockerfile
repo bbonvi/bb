@@ -54,7 +54,7 @@ RUN apt-get update && \
     fi && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=node_builder /app/build /client/build
+COPY --from=node_builder /app/dist /client/dist
 COPY --from=rust_builder /usr/local/bin/bb /usr/local/bin/bb
 
 ENV RUST_LOG="info,bb=info,tower_http::trace::on_response=warn"

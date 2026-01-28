@@ -35,10 +35,6 @@ services:
     volumes:
       - ./client:/app:cached
       - node-modules:/app/node_modules
-    environment:
-      WATCHPACK_POLLING: "true"
-      CHOKIDAR_USEPOLLING: "true"
-      REACT_APP_API_URL: "http://backend:8080"
     ports:
       - "3000:3000"
     depends_on:
@@ -46,27 +42,10 @@ services:
     command: >
       bash -c "
         yarn install &&
-        yarn start
-      "
-
-  frontend-v2:
-    image: node:20-bookworm
-    working_dir: /app
-    volumes:
-      - ./client-v2:/app:cached
-      - node-modules-v2:/app/node_modules
-    ports:
-      - "3001:3001"
-    depends_on:
-      - backend
-    command: >
-      bash -c "
-        yarn install &&
-        yarn dev --host 0.0.0.0 --port 3001
+        yarn dev --host 0.0.0.0 --port 3000
       "
 
 volumes:
   cargo-cache:
   target-cache:
   node-modules:
-  node-modules-v2:
