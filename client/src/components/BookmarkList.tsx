@@ -19,8 +19,9 @@ export function BookmarkList() {
     count: displayBookmarks.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
-    overscan: 5,
+    overscan: 15,
     gap: ROW_GAP,
+    getItemKey: (index) => displayBookmarks[index]?.id ?? index,
   })
 
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />

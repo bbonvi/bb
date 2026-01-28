@@ -18,7 +18,8 @@ export function BookmarkTable() {
     count: displayBookmarks.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: 10,
+    overscan: 30,
+    getItemKey: (index) => displayBookmarks[index]?.id ?? index,
   })
 
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
