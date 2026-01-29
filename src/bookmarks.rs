@@ -354,7 +354,7 @@ impl BookmarkManager for BackendCsv {
         if let Some(delete_tags) = bmark_update.remove_tags {
             bmark
                 .tags
-                .retain(|item| !delete_tags.iter().any(|t| t == item));
+                .retain(|item| !delete_tags.iter().any(|t| t.to_lowercase() == item.to_lowercase()));
         }
 
         if let Some(mut tags) = bmark_update.append_tags {
@@ -430,7 +430,7 @@ impl BookmarkManager for BackendCsv {
             if let Some(ref delete_tags) = bmark_update.remove_tags {
                 bmark
                     .tags
-                    .retain(|item| !delete_tags.iter().any(|t| t == item));
+                    .retain(|item| !delete_tags.iter().any(|t| t.to_lowercase() == item.to_lowercase()));
             }
 
             if let Some(ref tags) = bmark_update.append_tags {
