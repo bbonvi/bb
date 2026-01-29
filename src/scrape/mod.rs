@@ -335,7 +335,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         if !img.starts_with("http") {
             if let Ok(mut url_parsed) = reqwest::Url::parse(url) {
                 url_parsed.set_path(&img);
-                icon_url = Some(url_parsed.to_string());
+                image_url = Some(url_parsed.to_string());
             }
         }
     }
