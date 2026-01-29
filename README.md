@@ -14,22 +14,20 @@
 ## Features
 
 - **Tags**: Categorize bookmarks with tags. Tags are hierarchical — use `/` to create nested categories (e.g. `dev/rust`, `dev/python`). Searching for a parent tag matches all children: filtering by `dev` also matches `dev/rust` and `dev/python`. This applies to both tag filters and the `#` keyword prefix.
-
 - **Rules**: Create custom rules using YAML configuration. Define matching queries for titles, URLs, or descriptions, and apply actions based on those matches. For example, bb can automatically assign tag "dev" for every url containing "github.com".
-
 - **Scrape Metadata**: When you create a bookmark, bb attempts to fetch metadata from the page via a simple GET request. It extracts the title, description, and URL for page thumbnails (og:image metadata). If the request fails, bb will launch a headless chromium instance to retrieve the same information and take a screenshot of the page as well as favicon. Additionally, the chrome instance will attempt to bypass captchas. You can also upload custom cover images and favicons per bookmark via the Web UI.
-
 - **Web UI**: Manage your bookmarks through a user-friendly web interface built with Vite, React, and shadcn/ui. Stores screenshots and favicons for quick reference. Installable as a PWA with share target and protocol handler support — share URLs directly from your browser or OS into bb.
-
 - **Workspaces**: Organize bookmarks into filtered views. Each workspace defines tag whitelist/blacklist and an optional keyword filter query. Bookmarks matching the workspace filters appear automatically. Workspaces are persisted in `workspaces.yaml` and managed via the Web UI settings panel or the REST API. Drag-and-drop reordering is supported.
-
 - **Bulk Operations**: Edit or delete multiple bookmarks at once. Bulk actions apply to all bookmarks matching the current search query — add, remove, or overwrite tags, and update fields in batch. Available from the toolbar in the Web UI.
-
 - **Editor Mode**: Use `bb add --editor` to open your `$EDITOR` with a structured template for filling in URL, title, tags, and description. Leave a field as `-` to skip auto-fill for that field. Works with any editor — vim, nvim, nano, etc.
-
 - **Standalone CLI Tool or Daemon**: Run bb as a standalone CLI tool or deploy it as a daemon on a remote server. Use the bb-cli as a lightweight client to connect to the server over HTTP.
-
 - **Semantic Search** *(experimental)*: Find bookmarks by meaning rather than exact keywords. Currently inaccurate for most workloads — prefer keyword search for reliable results. Disabled by default.
+
+![List view](https://github.com/user-attachments/assets/5d92eea4-d097-49c5-af8d-4bd25a7c6069)
+![Bookmark detail](https://github.com/user-attachments/assets/7ab2c129-1922-4360-97c7-fedb77c2cb04)
+![Settings](https://github.com/user-attachments/assets/b76abb51-62b2-49f8-946e-6e8dcec12b7d)
+![Create bookmark](https://github.com/user-attachments/assets/b1b7325a-e9aa-4198-9eec-f3ca490ba963)
+![CLI](https://github.com/bbonvi/bb/blob/main/screenshots/shot1.png?raw=true)
 
 ### Web UI Tips
 
@@ -59,12 +57,6 @@ The Web UI settings panel (gear icon) has two sections:
   - **Globally ignored tags** — bookmarks with these tags are completely hidden everywhere in the UI. Useful for archiving or soft-deleting without removing data.
 
 - **Workspaces** — create, edit, reorder, and delete workspaces. Each workspace defines tag whitelists/blacklists and an optional keyword filter.
-
-![List view](https://github.com/user-attachments/assets/5d92eea4-d097-49c5-af8d-4bd25a7c6069)
-![Bookmark detail](https://github.com/user-attachments/assets/7ab2c129-1922-4360-97c7-fedb77c2cb04)
-![Settings](https://github.com/user-attachments/assets/b76abb51-62b2-49f8-946e-6e8dcec12b7d)
-![Create bookmark](https://github.com/user-attachments/assets/b1b7325a-e9aa-4198-9eec-f3ca490ba963)
-![CLI](https://github.com/bbonvi/bb/blob/main/screenshots/shot1.png?raw=true)
 
 ## Keyword Search Query Language
 
