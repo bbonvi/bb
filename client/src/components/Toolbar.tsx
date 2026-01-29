@@ -175,8 +175,18 @@ export function Toolbar() {
             onChange={(e) => setLocalPrimary(e.target.value)}
             autoFocus
             placeholder={semanticEnabled ? 'Search semantically…' : 'Search bookmarks…'}
-            className="h-9 w-full rounded-lg border border-white/[0.06] bg-surface pl-9 pr-10 text-sm text-text placeholder:text-text-dim outline-none transition-colors focus:border-hi-dim focus:bg-surface-hover"
+            className="h-9 w-full rounded-lg border border-white/[0.06] bg-surface pl-9 pr-[4.25rem] text-sm text-text placeholder:text-text-dim outline-none transition-colors focus:border-hi-dim focus:bg-surface-hover"
           />
+          {localPrimary && (
+            <button
+              tabIndex={-1}
+              onClick={() => { setLocalPrimary(''); searchInputRef.current?.focus() }}
+              className="absolute right-9 flex h-6 w-6 items-center justify-center rounded-md text-text-muted hover:text-text transition-colors"
+              aria-label="Clear search"
+            >
+              <XIcon />
+            </button>
+          )}
           {/* Filter toggle inside search bar */}
           <button
             tabIndex={-1}
