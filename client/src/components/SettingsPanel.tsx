@@ -812,7 +812,7 @@ function GeneralSettings({ visibleTags }: { visibleTags: string[] }) {
           Polling intervals (seconds)
         </label>
         <p className="mb-2 text-xs text-text-muted">
-          How often auxiliary data (tags, totals, tasks) is fetched
+          How often all data is refreshed in the background
         </p>
         <div className="flex gap-3">
           <div className="flex-1">

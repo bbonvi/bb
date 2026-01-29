@@ -20,7 +20,7 @@ function hasActiveTasks(): boolean {
   return queue.some((t) => t.status === 'Pending' || t.status === 'InProgress')
 }
 
-function getAuxInterval(visible: boolean): number {
+function getPollInterval(visible: boolean): number {
   const s = getSettings()
   if (!visible) return s.pollIntervalHidden
   return hasActiveTasks() ? s.pollIntervalBusy : s.pollIntervalNormal
@@ -49,7 +49,7 @@ function isQueryEmpty(q: SearchQuery): boolean {
 }
 
 export function usePolling() {
-  const auxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const visibleRef = useRef(true)
   const lastAppliedSeq = useRef(0)
 
@@ -102,8 +102,8 @@ export function usePolling() {
     }
   }, [])
 
-  // Fetch auxiliary data (tags, total, config, task queue, semantic status, workspaces)
-  const fetchAuxiliary = useCallback(async () => {
+  // Fetch metadata (tags, total, config, task queue, semantic status, workspaces)
+  const fetchMetadata = useCallback(async () => {
     if (!visibleRef.current) return
 
     try {
@@ -138,46 +138,44 @@ export function usePolling() {
     }
   }, [])
 
-  const lastAuxFetchRef = useRef(0)
+  const lastPollRef = useRef(0)
 
   useEffect(() => {
     // --- Visibility change: refetch on tab refocus with debounce ---
     function handleVisibility() {
       visibleRef.current = document.visibilityState === 'visible'
       if (visibleRef.current) {
-        const elapsed = Date.now() - lastAuxFetchRef.current
+        const elapsed = Date.now() - lastPollRef.current
         const minGap = getSettings().pollIntervalNormal
         if (elapsed >= minGap) {
           fetchBookmarks()
-          fetchAuxiliary()
+          fetchMetadata()
         }
         // Always restart polling when tab regains focus
-        scheduleAuxPoll()
+        schedulePoll()
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
 
     // --- Initial load ---
-    // Fetch auxiliary first (to get workspaces), then bookmarks
-    fetchAuxiliary().then(() => fetchBookmarks())
+    // Fetch metadata first (to get workspaces), then bookmarks
+    fetchMetadata().then(() => fetchBookmarks())
 
-    // --- Auxiliary poll on dynamic interval ---
-    function scheduleAuxPoll() {
-      if (auxTimerRef.current) clearTimeout(auxTimerRef.current)
-      const interval = getAuxInterval(visibleRef.current)
-      auxTimerRef.current = setTimeout(async () => {
-        await fetchAuxiliary()
-        lastAuxFetchRef.current = Date.now()
+    // --- Poll on dynamic interval ---
+    function schedulePoll() {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+      const interval = getPollInterval(visibleRef.current)
+      pollTimerRef.current = setTimeout(async () => {
+        await fetchMetadata()
+        lastPollRef.current = Date.now()
 
-        // Always refetch bookmarks on each cycle — ETags make this
-        // cheap (304 when unchanged), and it keeps data fresh when
-        // external changes occur (task completions, other clients).
+        // ETags make this cheap (304 when unchanged)
         fetchBookmarks()
 
-        scheduleAuxPoll()
+        schedulePoll()
       }, interval)
     }
-    scheduleAuxPoll()
+    schedulePoll()
 
     // --- Subscribe to store changes for event-driven bookmark fetch ---
     let prevQuery = useStore.getState().searchQuery
@@ -207,9 +205,9 @@ export function usePolling() {
     })
 
     return () => {
-      if (auxTimerRef.current) clearTimeout(auxTimerRef.current)
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
       document.removeEventListener('visibilitychange', handleVisibility)
       unsub()
     }
-  }, [fetchBookmarks, fetchAuxiliary])
+  }, [fetchBookmarks, fetchMetadata])
 }
