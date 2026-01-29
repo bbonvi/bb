@@ -35,15 +35,9 @@
 - **Ctrl+N** opens the create bookmark modal.
 - **Ctrl+Enter** saves edits in the detail modal.
 - **Left/Right arrow keys** navigate between bookmarks in the detail view.
-- **Escape** in the search bar selects all text for quick replacement; in edit mode it cancels without closing the modal.
-- **Enter** in the search bar flushes the debounce and searches immediately.
 - **Click any tag** to add it as a search filter.
-- **Click the logo** to clear all search filters.
 - **Double-click the delete button** to confirm deletion (first click arms, second executes).
-- **Drag & drop or paste images** onto the cover or favicon area in edit mode to upload custom artwork.
-- **Share URLs** from other apps directly into bb via the PWA share target.
-- **`web+bb://` protocol** — registered as a URL handler for quick bookmark creation.
-- **PWA app shortcut** — long-press the app icon for an "Add Bookmark" shortcut.
+- **Drag & drop or paste images** onto the cover or favicon area in edit mode to upload custom images.
 - **URL parameters are persisted** — any query parameters in the URL are applied on load. Supported params: `workspace`, `keyword`, `tags`, `title`, `url`, `description`, `semantic`, `all`. For example, `/?workspace=Dev&keyword=rust&tags=lang` opens the Dev workspace with "rust" in the keyword field and "lang" as a tag filter. Bookmark this URL to always start with a specific view.
 - **`?action=create`** — opens the create bookmark modal on page load. Combine with other params to pre-fill fields: `/?action=create&url=https://example.com&title=Example&tags=reading` opens the modal with those values already populated.
 
