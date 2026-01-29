@@ -477,10 +477,6 @@ impl MetadataFetcher for OembedFetcher {
     fn name(&self) -> &'static str {
         "oEmbed"
     }
-
-    fn priority(&self) -> u8 {
-        1 // Highest priority
-    }
 }
 
 #[cfg(test)]

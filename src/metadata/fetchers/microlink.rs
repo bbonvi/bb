@@ -139,8 +139,4 @@ impl MetadataFetcher for MicrolinkFetcher {
     fn name(&self) -> &'static str {
         "Microlink"
     }
-
-    fn priority(&self) -> u8 {
-        3 // Third priority
-    }
 }

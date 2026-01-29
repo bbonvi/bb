@@ -36,10 +36,6 @@ impl MetadataFetcher for PlainFetcher {
     fn name(&self) -> &'static str {
         "Plain"
     }
-
-    fn priority(&self) -> u8 {
-        2 // Second priority after oEmbed
-    }
 }
 
 /// Headless fetcher that runs in parallel with other fetchers.
@@ -62,10 +58,6 @@ impl MetadataFetcher for HeadlessParallelFetcher {
 
     fn name(&self) -> &'static str {
         "Headless"
-    }
-
-    fn priority(&self) -> u8 {
-        5 // After Plain (2), before DDG (10)
     }
 }
 

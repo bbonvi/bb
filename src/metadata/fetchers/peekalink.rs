@@ -208,8 +208,4 @@ impl MetadataFetcher for PeekalinkFetcher {
     fn name(&self) -> &'static str {
         "Peekalink"
     }
-
-    fn priority(&self) -> u8 {
-        4 // Fourth priority
-    }
 }

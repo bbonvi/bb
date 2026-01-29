@@ -40,6 +40,11 @@ pub struct ScrapeConfig {
     /// When false, headless only runs as a fallback when metadata is incomplete.
     #[serde(default)]
     pub always_headless: bool,
+
+    /// Fetcher priority order. Position = priority (first = highest).
+    /// Absent or empty = default order.
+    #[serde(default = "default_fetcher_order")]
+    pub fetcher_order: Vec<String>,
 }
 
 impl Default for ScrapeConfig {
@@ -50,8 +55,16 @@ impl Default for ScrapeConfig {
             blocked_hosts: Vec::new(),
             block_private_ips: true,
             always_headless: false,
+            fetcher_order: default_fetcher_order(),
         }
     }
+}
+
+pub fn default_fetcher_order() -> Vec<String> {
+    ["oEmbed", "Wayback", "Plain", "Microlink", "Peekalink", "DDG"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
 }
 
 fn default_allowed_schemes() -> Vec<String> {

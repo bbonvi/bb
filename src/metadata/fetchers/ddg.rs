@@ -22,8 +22,4 @@ impl MetadataFetcher for DdgFetcher {
     fn name(&self) -> &'static str {
         "DDG"
     }
-
-    fn priority(&self) -> u8 {
-        10
-    }
 }

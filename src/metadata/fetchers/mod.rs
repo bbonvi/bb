@@ -3,6 +3,7 @@ pub mod microlink;
 pub mod oembed;
 pub mod peekalink;
 pub mod plain;
+pub mod wayback;
 
 use crate::config::ScrapeConfig;
 use crate::metadata::image_validation::validate_image;
@@ -27,9 +28,6 @@ pub trait MetadataFetcher: Send + Sync {
 
     /// Get the name of this fetcher for logging/debugging
     fn name(&self) -> &'static str;
-
-    /// Priority for merge ordering. Lower = higher priority (picked first).
-    fn priority(&self) -> u8;
 }
 
 /// Collection of all available fetchers
@@ -38,27 +36,38 @@ pub struct FetcherRegistry {
 }
 
 // Guard: switch to semaphore-bounded pool if >6 fetchers
-const MAX_UNBOUNDED_FETCHERS: usize = 6;
+const MAX_UNBOUNDED_FETCHERS: usize = 7;
 
 impl FetcherRegistry {
     pub fn new(opts: &MetaOptions) -> Self {
         let mut registry = Self { fetchers: Vec::new() };
 
-        // Add fetchers — all run in parallel, priority determines merge order
-        registry.fetchers.push(Box::new(oembed::OembedFetcher::new()));
-        registry.fetchers.push(Box::new(plain::PlainFetcher::new()));
-        registry.fetchers.push(Box::new(microlink::MicrolinkFetcher::new()));
-        registry.fetchers.push(Box::new(peekalink::PeekalinkFetcher::new()));
+        // Build fetcher order from config, falling back to defaults
+        let order = opts.scrape_config.as_ref()
+            .map(|c| &c.fetcher_order)
+            .filter(|o| !o.is_empty())
+            .cloned()
+            .unwrap_or_else(crate::config::default_fetcher_order);
 
-        // When always_headless is enabled, run Chrome in parallel with other fetchers
+        for name in &order {
+            match name.as_str() {
+                "oEmbed" => registry.fetchers.push(Box::new(oembed::OembedFetcher::new())),
+                "Wayback" => registry.fetchers.push(Box::new(wayback::WaybackFetcher::new())),
+                "Plain" => registry.fetchers.push(Box::new(plain::PlainFetcher::new())),
+                "Microlink" => registry.fetchers.push(Box::new(microlink::MicrolinkFetcher::new())),
+                "Peekalink" => registry.fetchers.push(Box::new(peekalink::PeekalinkFetcher::new())),
+                "DDG" => registry.fetchers.push(Box::new(ddg::DdgFetcher::new())),
+                other => log::warn!("Unknown fetcher in config: {other}"),
+            }
+        }
+
+        // Headless is conditional, not part of the configurable order
         let always_headless = opts.scrape_config.as_ref()
             .map(|c| c.always_headless)
             .unwrap_or(false);
         if always_headless && !opts.no_headless {
             registry.fetchers.push(Box::new(plain::HeadlessParallelFetcher::new(opts.clone())));
         }
-
-        registry.fetchers.push(Box::new(ddg::DdgFetcher::new()));
 
         assert!(
             registry.fetchers.len() <= MAX_UNBOUNDED_FETCHERS,
@@ -79,7 +88,8 @@ impl FetcherRegistry {
             let handles: Vec<_> = self
                 .fetchers
                 .iter()
-                .map(|f| {
+                .enumerate()
+                .map(|(idx, f)| {
                     let sc = scrape_config;
                     s.spawn(move || {
                         let name = f.name();
@@ -87,7 +97,7 @@ impl FetcherRegistry {
                             Ok(Some(m)) => {
                                 let fields = describe_fields(&m);
                                 log::info!("fetcher={name} outcome=success fields=[{fields}]");
-                                Some((f.priority(), name, m))
+                                Some((idx as u8, name, m))
                             }
                             Ok(None) => {
                                 log::info!("fetcher={name} outcome=skip");
