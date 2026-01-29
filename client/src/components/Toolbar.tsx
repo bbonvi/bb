@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { Plus, Pencil, Trash2, Settings, ChevronDown } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
-import { useIsMobile } from '@/hooks/useResponsive'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useSettings } from '@/hooks/useSettings'
@@ -37,7 +36,6 @@ function XIcon({ className = '' }: { className?: string }) {
 
 // ─── Main component ────────────────────────────────────────────────
 export function Toolbar() {
-  const isMobile = useIsMobile()
   // Compute initial filtersOpen: true only if URL has advanced filters
   const [filtersOpen, setFiltersOpen] = useState(() => {
     if (typeof window === 'undefined') return false
