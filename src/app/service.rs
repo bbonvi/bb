@@ -58,10 +58,16 @@ impl AppService {
         let semantic_threshold = query.threshold;
         let query_limit = query.limit;
 
+        // Strip limit from backend query when semantic ranking will reorder results
+        let mut backend_query = query;
+        if semantic_query.is_some() && self.semantic_service.as_ref().map_or(false, |s| s.is_enabled()) {
+            backend_query.limit = None;
+        }
+
         // Apply all filters via backend search
         let mut bookmarks = self
             .backend
-            .search(query)
+            .search(backend_query)
             .context("Failed to search bookmarks")?;
 
         // If semantic search requested and service available, rank results
@@ -453,6 +459,11 @@ impl AppService {
             .search_update(query, update)
             .context("Failed to perform bulk update")?;
 
+        // Mark semantic index dirty so next search triggers reconciliation
+        if let Some(ref service) = self.semantic_service {
+            service.mark_dirty();
+        }
+
         Ok(count)
     }
 
@@ -473,6 +484,11 @@ impl AppService {
             .backend
             .search_delete(query)
             .context("Failed to perform bulk deletion")?;
+
+        // Mark semantic index dirty so next search triggers reconciliation
+        if let Some(ref service) = self.semantic_service {
+            service.mark_dirty();
+        }
 
         Ok(count)
     }

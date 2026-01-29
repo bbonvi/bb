@@ -280,6 +280,13 @@ impl SemanticSearchService {
         self.reconciled.load(Ordering::Acquire)
     }
 
+    /// Reset the reconciled flag so the next semantic search triggers reconciliation.
+    /// Call this after bulk operations (search_and_update, search_and_delete) that
+    /// modify bookmarks without going through the individual update/delete paths.
+    pub fn mark_dirty(&self) {
+        self.reconciled.store(false, Ordering::Release);
+    }
+
     /// Reconcile the index with current bookmark state.
     ///
     /// Compares the index entries against the provided bookmark data and:

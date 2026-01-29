@@ -13,6 +13,7 @@ pub struct AppRemote {
     remote_addr: String,
     basic_auth: Option<(String, Option<String>)>,
     bearer_token: Option<String>,
+    client: reqwest::blocking::Client,
 }
 
 impl AppRemote {
@@ -22,19 +23,23 @@ impl AppRemote {
         bearer_token: Option<String>,
     ) -> AppRemote {
         let remote_addr = addr.strip_suffix("/").unwrap_or(addr).to_string();
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("failed to build HTTP client");
 
         AppRemote {
             remote_addr,
             basic_auth,
             bearer_token,
+            client,
         }
     }
 
     fn get(&self, url: &str) -> reqwest::blocking::RequestBuilder {
         log::info!("{}{}", self.remote_addr, url);
         let url = format!("{}{}", self.remote_addr, url);
-        let client = reqwest::blocking::Client::new();
-        let request = client.get(&url);
+        let request = self.client.get(&url);
 
         self.attach_auth(request)
     }
@@ -42,8 +47,7 @@ impl AppRemote {
     fn post(&self, url: &str) -> reqwest::blocking::RequestBuilder {
         log::info!("{}{}", self.remote_addr, url);
         let url = format!("{}{}", self.remote_addr, url);
-        let client = reqwest::blocking::Client::new();
-        let request = client.post(&url);
+        let request = self.client.post(&url);
 
         self.attach_auth(request)
     }
@@ -155,7 +159,11 @@ impl AppBackend for AppRemote {
                 "title": bmark_update.title,
                 "description": bmark_update.description,
                 "tags": bmark_update.tags.map(|t| t.join(",")),
+                "append_tags": bmark_update.append_tags.map(|t| t.join(",")),
+                "remove_tags": bmark_update.remove_tags.map(|t| t.join(",")),
                 "url": bmark_update.url,
+                "image_b64": bmark_update.image_id,
+                "icon_b64": bmark_update.icon_id,
             }))
             .send()?;
 
@@ -219,7 +227,10 @@ impl AppBackend for AppRemote {
                 "description": query.description,
                 "tags": query.tags.map(|tags| tags.join(",")),
                 "keyword": query.keyword,
-                "exact": query.exact
+                "semantic": query.semantic,
+                "threshold": query.threshold,
+                "exact": query.exact,
+                "limit": query.limit
             }))
             .send()?;
 
