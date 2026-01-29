@@ -312,10 +312,12 @@ async fn search(
             // Use alternate format to get full anyhow cause chain
             let full = format!("{:#}", e);
             if full.contains("invalid search query") {
-                // Extract the "invalid search query: <detail>" cause
+                // Use the deepest cause that mentions the parse error
+                // (CHAIN[1] is AppError::Other with Debug backtrace, CHAIN[2] is the clean message)
                 let message = e.chain()
                     .map(|c| c.to_string())
-                    .find(|s| s.contains("invalid search query"))
+                    .filter(|s| s.starts_with("invalid search query"))
+                    .last()
                     .unwrap_or_else(|| full.clone());
                 // Capitalize first letter for consistency
                 let message = format!("I{}", &message[1..]);
