@@ -43,7 +43,7 @@ The `keyword` field supports a structured query language with field prefixes, bo
 
 ### Quoted Phrases
 
-Group multiple words into a single term: `."a youtube video"`, `>"car video"`, `"rust programming"`.
+Group multiple words into a single term: `."getting started"`, `>"deploy with docker"`, `"async runtime"`.
 
 ### Boolean Operators
 
@@ -64,13 +64,14 @@ Search prefix characters literally: `\#hashtag`, `\:colon`, `\.dot`, `\>arrow`
 ### Examples
 
 ```
-video cars                        → all-fields "video" AND "cars"
-#video                            → tag exactly "video" (or hierarchical child)
-.youtube                          → title contains "youtube"
-."a youtube video"                → title contains "a youtube video"
-:github.com                       → url contains "github.com"
-not #archived                     → exclude bookmarks tagged "archived"
-(#video and .youtube) or #audio   → grouped boolean query
+rust async                        → bookmarks mentioning both "rust" and "async" anywhere
+#recipe not #dessert              → tagged "recipe" but not "dessert"
+."getting started"                → title contains the phrase "getting started"
+>"deploy to production"           → description contains "deploy to production"
+:stackoverflow.com                → URL contains "stackoverflow.com"
+#dev/backend or #dev/frontend     → hierarchical tag match on either subtree
+(#python or #rust) .tutorial      → tutorials tagged python or rust
+not #read :arxiv.org              → unread papers from arxiv
 ```
 
 ## Semantic Search
