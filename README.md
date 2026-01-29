@@ -45,6 +45,7 @@
 - **`web+bb://` protocol** — registered as a URL handler for quick bookmark creation.
 - **PWA app shortcut** — long-press the app icon for an "Add Bookmark" shortcut.
 - **URL parameters are persisted** — any query parameters in the URL are applied on load. Supported params: `workspace`, `keyword`, `tags`, `title`, `url`, `description`, `semantic`, `all`. For example, `/?workspace=Dev&keyword=rust&tags=lang` opens the Dev workspace with "rust" in the keyword field and "lang" as a tag filter. Bookmark this URL to always start with a specific view.
+- **`?action=create`** — opens the create bookmark modal on page load. Combine with other params to pre-fill fields: `/?action=create&url=https://example.com&title=Example&tags=reading` opens the modal with those values already populated.
 
 ### Settings
 
