@@ -25,6 +25,8 @@
 
 - **Bulk Operations**: Edit or delete multiple bookmarks at once. Bulk actions apply to all bookmarks matching the current search query — add, remove, or overwrite tags, and update fields in batch. Available from the toolbar in the Web UI.
 
+- **Editor Mode**: Use `bb add --editor` to open your `$EDITOR` with a structured template for filling in URL, title, tags, and description. Leave a field as `-` to skip auto-fill for that field. Works with any editor — vim, nvim, nano, etc.
+
 - **Standalone CLI Tool or Daemon**: Run bb as a standalone CLI tool or deploy it as a daemon on a remote server. Use the bb-cli as a lightweight client to connect to the server over HTTP.
 
 - **Semantic Search** *(experimental)*: Find bookmarks by meaning rather than exact keywords. Currently inaccurate for most workloads — prefer keyword search for reliable results. Disabled by default.
