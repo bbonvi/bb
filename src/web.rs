@@ -403,7 +403,7 @@ async fn create(
         description: payload.description,
         tags: payload.tags.map(|tags| {
             tags.split(',')
-                .map(|s| s.trim().to_string())
+                .map(|s| s.trim().to_lowercase())
                 .filter(|s| !s.is_empty())
                 .collect()
         }),
@@ -560,12 +560,12 @@ async fn update(
 
 #[derive(Deserialize)]
 pub struct BookmarkDeleteRequest {
-    pub _id: u64,
+    pub id: u64,
 }
 
 async fn delete(
     State(state): State<Arc<RwLock<SharedState>>>,
-    Json(payload): Json<BookmarkUpdateRequest>,
+    Json(payload): Json<BookmarkDeleteRequest>,
 ) -> Result<(), AppError> {
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
