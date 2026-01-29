@@ -3,7 +3,7 @@
 
 ## Overview
 
-**bb** is a CLI based bookmark manager designed for people who like to collect shit only to never revisit it again. It supports image previews and comes with a  simple webui. **bb** can be ran as a standalone CLI utility or deployed as a daemon on a remote server. Additionally, **bb** scrapes the web pages for you in order to retrieve metadata. 
+**bb** is a bookmark manager for people who like to collect shit only to never revisit it again. It comes with a full-featured web UI and a CLI, supports image previews, and automatically scrapes page metadata. Run it as a standalone CLI tool or deploy as a daemon on a remote server.
 
 ![Main view](https://github.com/user-attachments/assets/bc86ff85-d9ca-4baa-b5f5-f139664a0421)
 
