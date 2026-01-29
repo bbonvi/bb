@@ -208,6 +208,7 @@ fn validate_keyword(filters: &WorkspaceFilters) -> Result<(), WorkspaceError> {
         if !kw.trim().is_empty() {
             search_query::parse(kw)
                 .map_err(|e| WorkspaceError::InvalidKeyword(e.to_string()))?;
+            // None is valid (empty/operator-only input normalizes away)
         }
     }
     Ok(())
@@ -356,15 +357,15 @@ mod tests {
     }
 
     #[test]
-    fn invalid_keyword_rejected() {
+    fn malformed_keyword_accepted_tolerantly() {
         let dir = tmp_dir();
         let mut store = WorkspaceStore::load(&dir).unwrap();
+        // Unmatched parens, trailing operators, etc. are now normalized away
         let filters = WorkspaceFilters {
             keyword: Some("(unclosed".into()),
             ..Default::default()
         };
-        let err = store.create("Valid".into(), Some(filters), None).unwrap_err();
-        assert!(matches!(err, WorkspaceError::InvalidKeyword(_)));
+        store.create("Valid".into(), Some(filters), None).unwrap();
     }
 
     #[test]

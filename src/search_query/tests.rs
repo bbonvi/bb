@@ -1,5 +1,6 @@
 use crate::bookmarks::Bookmark;
 use super::{parse, eval, matches};
+use super::parser::{SearchFilter, FieldTarget};
 
 fn make_bookmark(title: &str, desc: &str, url: &str, tags: &[&str]) -> Bookmark {
     Bookmark {
@@ -13,46 +14,109 @@ fn make_bookmark(title: &str, desc: &str, url: &str, tags: &[&str]) -> Bookmark 
     }
 }
 
-// --- Lexer / Parser round-trip ---
+// === Tolerant parsing — new tests ===
+
+#[test]
+fn test_empty_returns_none() {
+    assert_eq!(parse("").unwrap(), None);
+    assert_eq!(parse("   ").unwrap(), None);
+}
+
+#[test]
+fn test_empty_parens_returns_none() {
+    assert_eq!(parse("()").unwrap(), None);
+    assert_eq!(parse("( )").unwrap(), None);
+}
+
+#[test]
+fn test_tag_with_empty_parens() {
+    let f = parse("(#dev) ( )").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+}
+
+#[test]
+fn test_trailing_and() {
+    let f = parse("#dev and").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+}
+
+#[test]
+fn test_leading_and() {
+    let f = parse("and #dev").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+}
+
+#[test]
+fn test_only_and() {
+    assert_eq!(parse("and").unwrap(), None);
+}
+
+#[test]
+fn test_only_not() {
+    assert_eq!(parse("not").unwrap(), None);
+}
+
+#[test]
+fn test_unmatched_lparen() {
+    assert_eq!(parse("(").unwrap(), None);
+}
+
+#[test]
+fn test_unmatched_rparen() {
+    assert_eq!(parse(")").unwrap(), None);
+}
+
+#[test]
+fn test_unterminated_quote_tolerant() {
+    let f = parse("\"hello").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, "hello".into()));
+}
+
+#[test]
+fn test_bare_hash() {
+    assert_eq!(parse("#").unwrap(), None);
+}
+
+#[test]
+fn test_collapsed_adjacent_operators() {
+    let f = parse("#dev and and #foo").unwrap().unwrap();
+    assert_eq!(
+        f,
+        SearchFilter::And(
+            Box::new(SearchFilter::Term(FieldTarget::Tag, "dev".into())),
+            Box::new(SearchFilter::Term(FieldTarget::Tag, "foo".into())),
+        )
+    );
+}
+
+#[test]
+fn test_workspace_merge_empty_keyword() {
+    // Simulates "(#dev) ( )" — the workspace merge scenario
+    let f = parse("(#dev) ()").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+}
+
+// === Regression: all original tests ===
 
 #[test]
 fn test_parse_simple_word() {
-    let f = parse("video").unwrap();
+    let f = parse("video").unwrap().unwrap();
     let bm = make_bookmark("My Video", "", "", &[]);
     assert!(eval(&f, &bm));
 }
 
 #[test]
-fn test_parse_empty_fails() {
-    assert!(parse("").is_err());
-    assert!(parse("   ").is_err());
-}
-
-#[test]
-fn test_unterminated_quote() {
-    assert!(parse("\"hello").is_err());
-}
-
-#[test]
-fn test_unmatched_paren() {
-    assert!(parse("(video").is_err());
-    assert!(parse("video)").is_err());
-}
-
-// --- Field prefixes ---
-
-#[test]
 fn test_tag_prefix_exact() {
     let bm = make_bookmark("", "", "", &["video"]);
     assert!(matches("#video", &bm).unwrap());
-    assert!(!matches("#vid", &bm).unwrap()); // not substring, must be exact
+    assert!(!matches("#vid", &bm).unwrap());
 }
 
 #[test]
 fn test_tag_prefix_hierarchical() {
     let bm = make_bookmark("", "", "", &["programming/rust"]);
     assert!(matches("#programming", &bm).unwrap());
-    assert!(!matches("#rust", &bm).unwrap()); // rust is child, not parent
+    assert!(!matches("#rust", &bm).unwrap());
 }
 
 #[test]
@@ -80,13 +144,11 @@ fn test_url_prefix() {
 #[test]
 fn test_all_fields_no_prefix() {
     let bm = make_bookmark("Rust Guide", "Learn programming", "https://rust-lang.org", &["dev"]);
-    assert!(matches("rust", &bm).unwrap());       // title
-    assert!(matches("programming", &bm).unwrap()); // description
-    assert!(matches("rust-lang", &bm).unwrap());   // url
-    assert!(matches("dev", &bm).unwrap());          // tag
+    assert!(matches("rust", &bm).unwrap());
+    assert!(matches("programming", &bm).unwrap());
+    assert!(matches("rust-lang", &bm).unwrap());
+    assert!(matches("dev", &bm).unwrap());
 }
-
-// --- Quoted phrases ---
 
 #[test]
 fn test_quoted_phrase_title() {
@@ -101,8 +163,6 @@ fn test_quoted_phrase_all_fields() {
     assert!(matches("\"rust programming\"", &bm).unwrap());
     assert!(!matches("\"programming rust\"", &bm).unwrap());
 }
-
-// --- Boolean operators ---
 
 #[test]
 fn test_and_explicit() {
@@ -135,24 +195,19 @@ fn test_not() {
 
 #[test]
 fn test_precedence_not_over_and() {
-    // "not #archived and rust" = (not #archived) and rust
     let bm = make_bookmark("Rust Guide", "", "", &["programming"]);
     assert!(matches("not #archived and rust", &bm).unwrap());
 }
 
 #[test]
 fn test_precedence_and_over_or() {
-    // "#video and .youtube or #audio" = (#video and .youtube) or #audio
     let bm = make_bookmark("", "", "", &["audio"]);
     assert!(matches("#video and .youtube or #audio", &bm).unwrap());
 }
 
-// --- Parentheses ---
-
 #[test]
 fn test_parentheses_grouping() {
     let bm = make_bookmark("Spotify Podcast", "", "", &["audio"]);
-    // Without parens: #video and (.spotify or #audio) would differ
     assert!(matches("(#video and .spotify) or #audio", &bm).unwrap());
     assert!(!matches("#video and (.spotify or #audio)", &bm).unwrap());
 }
@@ -160,22 +215,16 @@ fn test_parentheses_grouping() {
 #[test]
 fn test_deeply_nested_parentheses() {
     let bm = make_bookmark("Scala Akka Streams Guide", "", "https://doc.akka.io", &["jvm", "reactive"]);
-    // 3 levels deep: (#jvm and (#reactive and (.akka or (:lightbend)))) or #python
-    // #jvm ✓, #reactive ✓, .akka ✓ → true through left branch
     assert!(matches("(#jvm and (#reactive and (.akka or (:lightbend)))) or #python", &bm).unwrap());
-    // flip innermost: .spring fails, :lightbend fails → inner false → whole left false, #python false
     assert!(!matches("(#jvm and (#reactive and (.spring or (:lightbend)))) or #python", &bm).unwrap());
-    // match via outermost or
     let bm2 = make_bookmark("Django REST", "", "", &["python"]);
     assert!(matches("(#jvm and (#reactive and (.akka or (:lightbend)))) or #python", &bm2).unwrap());
 }
 
-// --- Backslash escaping ---
-
 #[test]
 fn test_escape_hash() {
     let bm = make_bookmark("#hashtag title", "", "", &[]);
-    assert!(matches("\\#hashtag", &bm).unwrap()); // literal #hashtag in all fields
+    assert!(matches("\\#hashtag", &bm).unwrap());
 }
 
 #[test]
@@ -184,8 +233,6 @@ fn test_escape_dot() {
     assert!(matches("\\.dotfile", &bm).unwrap());
 }
 
-// --- Reserved words as literals ---
-
 #[test]
 fn test_quoted_reserved_words() {
     let bm = make_bookmark("and or not", "", "", &[]);
@@ -193,8 +240,6 @@ fn test_quoted_reserved_words() {
     assert!(matches("\"or\"", &bm).unwrap());
     assert!(matches("\"not\"", &bm).unwrap());
 }
-
-// --- Case insensitivity ---
 
 #[test]
 fn test_case_insensitive() {
@@ -205,18 +250,11 @@ fn test_case_insensitive() {
     assert!(matches("#programming", &bm).unwrap());
 }
 
-// --- Complex queries from RFC examples ---
-
 #[test]
 fn test_complex_rfc_example() {
     let bm = make_bookmark("YouTube car video Tutorial", "some desc", "https://youtube.com", &["video"]);
-    // Title contains "car video", so `not ."car video"` is false → left side false.
-    // #youtube is not a tag → right side also false. Overall: false.
     assert!(!matches("(#video and .youtube and not .\"car video\") or (#youtube and not .\"car video\")", &bm).unwrap());
-
-    // Bookmark where title does NOT contain "car video"
     let bm2 = make_bookmark("YouTube Tutorial", "car video desc", "https://youtube.com", &["video"]);
-    // Left: #video ✓, .youtube ✓, not ."car video" ✓ (title lacks it) → true
     assert!(matches("(#video and .youtube and not .\"car video\") or (#youtube and not .\"car video\")", &bm2).unwrap());
 }
 
@@ -228,18 +266,12 @@ fn test_not_tag_exclude() {
     assert!(matches("not #archived", &bm2).unwrap());
 }
 
-// --- Tag exact vs all-field substring ---
-
 #[test]
 fn test_tag_prefix_vs_all_field() {
     let bm = make_bookmark("", "tagged video content", "", &[]);
-    // #video requires tag match, should fail since no tags
     assert!(!matches("#video", &bm).unwrap());
-    // bare "video" matches description
     assert!(matches("video", &bm).unwrap());
 }
-
-// --- Nested NOT ---
 
 #[test]
 fn test_double_not() {

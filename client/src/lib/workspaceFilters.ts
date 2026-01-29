@@ -49,7 +49,7 @@ export function mergeWorkspaceQuery(
   if (!wsKeyword) return userQuery
 
   const merged = { ...userQuery }
-  if (merged.keyword) {
+  if (merged.keyword && merged.keyword.trim()) {
     merged.keyword = `(${wsKeyword}) (${merged.keyword})`
   } else {
     merged.keyword = wsKeyword

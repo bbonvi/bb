@@ -141,9 +141,11 @@ fn token_to_term(tok: Token) -> SearchFilter {
     }
 }
 
-pub fn parse(tokens: Vec<Token>) -> Result<SearchFilter> {
+/// Parse normalized tokens into a SearchFilter AST.
+/// Returns `Ok(None)` for empty token vec (match all).
+pub fn parse(tokens: Vec<Token>) -> Result<Option<SearchFilter>> {
     if tokens.is_empty() {
-        bail!("empty search query");
+        return Ok(None);
     }
     let mut parser = Parser::new(tokens);
     let result = parser.parse_or()?;
@@ -154,5 +156,5 @@ pub fn parse(tokens: Vec<Token>) -> Result<SearchFilter> {
             parser.pos
         );
     }
-    Ok(result)
+    Ok(Some(result))
 }

@@ -1,5 +1,3 @@
-use anyhow::{bail, Result};
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Prefix {
     Tag,         // #
@@ -37,7 +35,8 @@ impl std::fmt::Display for Token {
     }
 }
 
-pub fn tokenize(input: &str) -> Result<Vec<Token>> {
+/// Tokenize input. Never fails — malformed input is handled tolerantly.
+pub fn tokenize(input: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let chars: Vec<char> = input.chars().collect();
     let len = chars.len();
@@ -57,7 +56,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>> {
                 i += 1;
             }
             '"' => {
-                let s = read_quoted(&chars, &mut i)?;
+                let s = read_quoted(&chars, &mut i);
                 tokens.push(Token::QuotedString(s));
             }
             '#' | '.' | '>' | ':' => {
@@ -70,25 +69,25 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>> {
                 };
                 i += 1;
                 if i < len && chars[i] == '"' {
-                    let s = read_quoted(&chars, &mut i)?;
+                    let s = read_quoted(&chars, &mut i);
                     tokens.push(Token::PrefixedQuoted(prefix, s));
                 } else {
                     let word = read_word(&chars, &mut i);
                     if word.is_empty() {
-                        bail!("expected word after prefix character at position {}", i);
+                        // Bare prefix with no following word — skip (drop it)
+                    } else {
+                        tokens.push(Token::PrefixedWord(prefix, word));
                     }
-                    tokens.push(Token::PrefixedWord(prefix, word));
                 }
             }
             '\\' => {
-                // Backslash escaping
                 i += 1;
                 if i >= len {
-                    bail!("unexpected end of input after backslash");
+                    // Trailing backslash — ignore
+                    break;
                 }
                 let escaped_char = chars[i];
                 i += 1;
-                // Read rest of word after the escaped char
                 let rest = read_word(&chars, &mut i);
                 let word = format!("{}{}", escaped_char, rest);
                 tokens.push(Token::Word(word));
@@ -105,11 +104,11 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>> {
         }
     }
 
-    Ok(tokens)
+    tokens
 }
 
-fn read_quoted(chars: &[char], i: &mut usize) -> Result<String> {
-    let start = *i;
+/// Read a quoted string. Tolerant: unterminated quote treats rest-of-input as the string.
+fn read_quoted(chars: &[char], i: &mut usize) -> String {
     *i += 1; // skip opening quote
     let mut s = String::new();
     while *i < chars.len() {
@@ -121,12 +120,13 @@ fn read_quoted(chars: &[char], i: &mut usize) -> Result<String> {
         }
         if chars[*i] == '"' {
             *i += 1; // skip closing quote
-            return Ok(s);
+            return s;
         }
         s.push(chars[*i]);
         *i += 1;
     }
-    bail!("unterminated quoted string starting at position {}", start);
+    // Unterminated — return what we have
+    s
 }
 
 fn read_word(chars: &[char], i: &mut usize) -> String {
