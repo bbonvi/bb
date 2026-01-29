@@ -21,7 +21,9 @@
 
 - **Scrape Metadata**: When you create a bookmark, bb attempts to fetch metadata from the page via a simple GET request. It extracts the title, description, and URL for page thumbnails (og:image metadata). If the request fails, bb will launch a headless chromium instance to retrieve the same information and take a screenshot of the page as well as favicon. Additionally, the chrome instance will attempt to bypass captchas.
 
-- **Web UI**: Manage your bookmarks through a user-friendly web interface. This feature is particularly useful as bb stores screenshots and favicons of your pages for quick reference.
+- **Web UI**: Manage your bookmarks through a user-friendly web interface built with Vite, React, and shadcn/ui. Stores screenshots and favicons for quick reference. Installable as a PWA with share target and protocol handler support — share URLs directly from your browser or OS into bb.
+
+- **Workspaces**: Organize bookmarks into filtered views. Each workspace defines tag whitelist/blacklist and an optional keyword filter query. Bookmarks matching the workspace filters appear automatically. Workspaces are persisted in `workspaces.yaml` and managed via the Web UI settings panel or the REST API. Drag-and-drop reordering is supported.
 
 - **Standalone CLI Tool or Daemon**: Run bb as a standalone CLI tool or deploy it as a daemon on a remote server. Use the bb-cli as a lightweight client to connect to the server over HTTP.
 
@@ -168,36 +170,41 @@ bb compress --yes
 
 ## Installation
 
-*There are no precompiled binaries for now.*
+### Docker Compose (preferred)
 
-To install bb, follow these steps:
+```bash
+git clone https://github.com/bbonvi/bb.git
+cd bb
+cp .env.example .env
+# Edit .env and set BB_AUTH_TOKEN (required)
 
-1. Ensure you have Rust installed on your machine. If not, you can install it from [rust-lang.org](https://www.rust-lang.org/).
+# Production
+docker compose up -d
 
-2. Clone the repository:
+# Development (cargo watch + vite dev server)
+docker compose -f docker-compose.dev.yml up
+```
 
-   ```bash
-   git clone https://github.com/bbonvi/bb.git
-   cd bb
-   ```
+See [Running daemon in docker](#running-daemon-in-docker) for details.
 
-3. Build the project:
+### Manual build
 
-   ```bash
-   cargo build --release
-   # move binary to your PATH
-   sudo mv ./target/release/bb /usr/local/bin/bb
-   ```
+Requires [Rust](https://www.rust-lang.org/) and optionally [Node.js](https://nodejs.org/) for the web UI.
 
-4. Build web-ui (optional):
+```bash
+git clone https://github.com/bbonvi/bb.git
+cd bb
 
-   ```bash
-   cd client
-   yarn
-   yarn run build --release
-   cd ../
-   ```
-   
+# Build backend
+cargo build --release
+sudo mv ./target/release/bb /usr/local/bin/bb
+
+# Build web-ui (optional)
+cd client
+yarn install
+yarn build
+```
+
 ## Usage
 
 ### Standalone CLI:
@@ -230,37 +237,29 @@ To install bb, follow these steps:
 
 ### Running daemon in docker
 
-**Quick start:**
+**Production** (`docker-compose.yml`):
 ```bash
-# build with headless chrome
-docker build -t bb:latest -f daemon.Dockerfile .
+docker compose up -d
+docker compose logs -f   # view logs
+docker compose down      # stop
+```
 
-# run and open http://localhost:8080
+Includes automatic restarts, health checks, memory limits (2GB), log rotation, and Cloudflare DNS.
+
+**Development** (`docker-compose.dev.yml`):
+```bash
+docker compose -f docker-compose.dev.yml up
+# Backend: http://localhost:8080
+# Frontend: http://localhost:3000
+```
+
+Mounts source directories — backend recompiles via `cargo watch`, frontend hot-reloads via Vite.
+
+**Standalone docker (without compose):**
+```bash
+docker build -t bb:latest -f daemon.Dockerfile .
 docker run --rm -it -v bb-data:/root/.local/share/bb -p 8080:8080 --name bb-daemon bb:latest
 ```
-
-**Production deployment with docker-compose:**
-```bash
-# Copy and configure environment
-cp .env.example .env
-# Edit .env and set BB_AUTH_TOKEN (required)
-
-# Build and start
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Stop
-docker compose down
-```
-
-The compose file includes:
-- Automatic restarts
-- Health checks
-- Memory limits (2GB)
-- Log rotation
-- Cloudflare DNS (1.1.1.1)
 
 ### WebUI
 
