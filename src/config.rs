@@ -35,10 +35,6 @@ pub struct SemanticSearchConfig {
     #[serde(default = "default_semantic_threshold")]
     pub default_threshold: f32,
 
-    /// Parallelism for embedding generation: "auto" or a positive integer
-    #[serde(default = "default_embedding_parallelism")]
-    pub embedding_parallelism: String,
-
     /// Timeout for model download in seconds
     #[serde(default = "default_download_timeout_secs")]
     pub download_timeout_secs: u64,
@@ -56,7 +52,6 @@ impl Default for SemanticSearchConfig {
             enabled: false,
             model: DEFAULT_SEMANTIC_MODEL.to_string(),
             default_threshold: DEFAULT_SEMANTIC_THRESHOLD,
-            embedding_parallelism: "auto".to_string(),
             download_timeout_secs: DEFAULT_DOWNLOAD_TIMEOUT_SECS,
             semantic_weight: DEFAULT_SEMANTIC_WEIGHT,
         }
@@ -69,10 +64,6 @@ fn default_semantic_model() -> String {
 
 fn default_semantic_threshold() -> f32 {
     DEFAULT_SEMANTIC_THRESHOLD
-}
-
-fn default_embedding_parallelism() -> String {
-    "auto".to_string()
 }
 
 fn default_download_timeout_secs() -> u64 {
@@ -117,8 +108,6 @@ pub struct Config {
     #[serde(default = "task_queue_max_threads")]
     pub task_queue_max_threads: u16,
     #[serde(default)]
-    pub hidden_by_default: Vec<String>,
-    #[serde(default)]
     pub rules: Vec<Rule>,
     #[serde(default)]
     pub semantic_search: SemanticSearchConfig,
@@ -162,18 +151,6 @@ impl Config {
                 "semantic_search.default_threshold must be between 0.0 and 1.0, got {}",
                 sem.default_threshold
             );
-        }
-
-        // validate embedding_parallelism: "auto" or positive integer
-        if sem.embedding_parallelism != "auto" {
-            match sem.embedding_parallelism.parse::<u32>() {
-                Ok(0) => panic!("semantic_search.embedding_parallelism must be 'auto' or a positive integer, got '0'"),
-                Err(_) => panic!(
-                    "semantic_search.embedding_parallelism must be 'auto' or a positive integer, got '{}'",
-                    sem.embedding_parallelism
-                ),
-                Ok(_) => {}
-            }
         }
 
         if sem.download_timeout_secs == 0 {

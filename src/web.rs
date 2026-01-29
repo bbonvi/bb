@@ -504,19 +504,19 @@ async fn update(
         description: payload.description,
         tags: payload.tags.map(|tags| {
             tags.split(',')
-                .map(|s| s.trim().to_string())
+                .map(|s| s.trim().to_lowercase())
                 .filter(|s| !s.is_empty())
                 .collect()
         }),
         append_tags: payload.append_tags.map(|tags| {
             tags.split(',')
-                .map(|s| s.trim().to_string())
+                .map(|s| s.trim().to_lowercase())
                 .filter(|s| !s.is_empty())
                 .collect()
         }),
         remove_tags: payload.remove_tags.map(|tags| {
             tags.split(',')
-                .map(|s| s.trim().to_string())
+                .map(|s| s.trim().to_lowercase())
                 .filter(|s| !s.is_empty())
                 .collect()
         }),
@@ -1175,7 +1175,6 @@ mod tests {
                 enabled: false,
                 model: "all-MiniLM-L6-v2".to_string(),
                 default_threshold: 0.35,
-                embedding_parallelism: "auto".to_string(),
                 download_timeout_secs: 300,
                 semantic_weight: 0.6,
             };
@@ -1215,7 +1214,6 @@ mod tests {
                 enabled: true,
                 model: "all-MiniLM-L6-v2".to_string(),
                 default_threshold: 0.35,
-                embedding_parallelism: "auto".to_string(),
                 download_timeout_secs: 300,
                 semantic_weight: 0.6,
             };
@@ -1258,7 +1256,6 @@ mod tests {
                 enabled: false,
                 model: "bge-small-en-v1.5".to_string(),
                 default_threshold: 0.35,
-                embedding_parallelism: "auto".to_string(),
                 download_timeout_secs: 300,
                 semantic_weight: 0.6,
             };

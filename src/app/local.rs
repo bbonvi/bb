@@ -313,32 +313,6 @@ impl AppBackend for AppLocal {
             if query.keyword.clone().unwrap_or_default() == "" {
                 query.keyword = None;
             }
-
-            // TODO: this was here initially but it is introduces weird behaviour.
-            // // hidden by default functionality
-            // let config = self.config.read().unwrap();
-            // let hidden_by_default = &config.hidden_by_default;
-            // if !hidden_by_default.is_empty() {
-            //     let mut query_tags = query.tags.clone().unwrap_or_default();
-            //
-            //     let mut append = Vec::new();
-            //     for hidden_tag in hidden_by_default {
-            //         if query_tags
-            //             .iter()
-            //             .find(|query_tag| {
-            //                 **query_tag == *hidden_tag
-            //                     || query_tag.starts_with(&format!("{hidden_tag}/"))
-            //             })
-            //             .is_none()
-            //         {
-            //             append.push(format!("-{hidden_tag}"))
-            //         }
-            //     }
-            //
-            //     query_tags.append(&mut append);
-            //
-            //     query.tags = Some(query_tags);
-            // }
         }
 
         Ok(self.bmark_mgr.search(query)?)

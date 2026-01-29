@@ -88,7 +88,6 @@ impl AppService {
         }
 
         if count_only {
-            println!("{} bookmarks found", bookmarks.len());
             return Ok(vec![]);
         }
 
@@ -768,7 +767,6 @@ mod tests {
             enabled: false,
             model: "all-MiniLM-L6-v2".to_string(),
             default_threshold: 0.35,
-            embedding_parallelism: "auto".to_string(),
             download_timeout_secs: 300,
             semantic_weight: 0.6,
         }
