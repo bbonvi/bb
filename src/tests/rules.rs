@@ -124,9 +124,6 @@ pub fn test_rule_matches_by_description() {
 
 #[test]
 pub fn test_rule_matches_by_tags_with_url() {
-    // NOTE: tags-only rules (no url/title/desc) always return false due to
-    // `matched` never being set to true. Tags matching requires at least one
-    // other field to set `matched = true` first.
     let rule = rules::Rule {
         url: Some("any.com".to_string()),
         title: None,
@@ -171,8 +168,7 @@ pub fn test_rule_matches_by_tags_with_url() {
 
 #[test]
 pub fn test_rule_empty_tags_matches_untagged() {
-    // Special case: empty tags vec matches records with no tags.
-    // This is the one tags-only path that returns true (early return).
+    // Empty tags vec matches records with no tags.
     let rule = rules::Rule {
         url: None,
         title: None,
@@ -200,8 +196,7 @@ pub fn test_rule_empty_tags_matches_untagged() {
         tags: Some(vec![]),
     }));
 
-    // Non-empty tags + empty rule tags: falls through tag loop (no iterations),
-    // but matched is still false → returns false
+    // Non-empty record tags don't match empty rule tags
     assert!(!rule.is_match(&rules::Record {
         url: "https://any.com".into(),
         title: None,
@@ -252,7 +247,6 @@ pub fn test_rule_multiple_fields_all_must_match() {
 
 #[test]
 pub fn test_rule_tag_matching_is_case_insensitive() {
-    // Needs a url/title/desc field to set `matched = true`
     let rule = rules::Rule {
         url: Some("any.com".to_string()),
         title: None,
@@ -274,13 +268,8 @@ pub fn test_rule_tag_matching_is_case_insensitive() {
     }));
 }
 
-// Documents two known quirks in Rule::is_match:
-// 1. Tags-only rules (no url/title/desc) never match because `matched`
-//    is never set to `true`.
-// 2. Tag matching uses a single consumed iterator, so rule tags must
-//    appear in the same order as record tags.
 #[test]
-pub fn test_rule_tags_only_never_matches() {
+pub fn test_rule_tags_only_matches() {
     let rule = rules::Rule {
         url: None,
         title: None,
@@ -294,17 +283,23 @@ pub fn test_rule_tags_only_never_matches() {
         },
     };
 
-    // BUG: tags-only rule returns false even when tags match
-    assert!(!rule.is_match(&rules::Record {
+    assert!(rule.is_match(&rules::Record {
         url: "https://any.com".into(),
         title: None,
         description: None,
         tags: Some(vec!["rust".to_string()]),
     }));
+
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://any.com".into(),
+        title: None,
+        description: None,
+        tags: Some(vec!["python".to_string()]),
+    }));
 }
 
 #[test]
-pub fn test_rule_tag_order_matters() {
+pub fn test_rule_tag_order_independent() {
     let rule = rules::Rule {
         url: Some("any.com".to_string()),
         title: None,
@@ -318,16 +313,14 @@ pub fn test_rule_tag_order_matters() {
         },
     };
 
-    // rule tags ["b", "a"] vs record tags ["a", "b"] — iterator advances
-    // past "a" looking for "b", so "a" is never found
-    assert!(!rule.is_match(&rules::Record {
+    // any order matches
+    assert!(rule.is_match(&rules::Record {
         url: "https://any.com".into(),
         title: None,
         description: None,
         tags: Some(vec!["a".to_string(), "b".to_string()]),
     }));
 
-    // same order — works
     assert!(rule.is_match(&rules::Record {
         url: "https://any.com".into(),
         title: None,

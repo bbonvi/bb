@@ -44,48 +44,50 @@ impl Rule {
     }
 
     pub fn is_match(&self, record: &Record) -> bool {
-        let mut matched = false;
+        let mut has_any_condition = false;
 
         if let Some(match_url) = &self.url {
-            matched = Rule::is_string_matches(match_url, &record.url);
-            if !matched {
+            has_any_condition = true;
+            if !Rule::is_string_matches(match_url, &record.url) {
                 return false;
             }
-        };
+        }
 
         if let (Some(match_title), Some(record_title)) = (&self.title, &record.title) {
-            matched = Rule::is_string_matches(match_title, record_title);
-            if !matched {
+            has_any_condition = true;
+            if !Rule::is_string_matches(match_title, record_title) {
                 return false;
             }
-        };
+        }
 
         if let (Some(match_description), Some(record_description)) = (&self.description, &record.description) {
-            matched = Rule::is_string_matches(match_description, record_description);
-            if !matched {
+            has_any_condition = true;
+            if !Rule::is_string_matches(match_description, record_description) {
                 return false;
             }
-        };
+        }
 
         if let Some(match_tags) = &self.tags {
-            // matching absence of tags
-            let record_tags = &record.tags.clone().unwrap_or_default();
+            has_any_condition = true;
+            let record_tags = record.tags.clone().unwrap_or_default();
 
-            if match_tags.is_empty() && record_tags.is_empty() {
-                return true;
-            }
-
-            let mut iter = record_tags.iter();
-
-            for tag in match_tags.iter() {
-                if !iter.any(|t| *t.to_lowercase() == tag.to_lowercase())
-                {
+            if match_tags.is_empty() {
+                if !record_tags.is_empty() {
                     return false;
                 }
-            }
-        };
+            } else {
+                let record_tags_lower: Vec<String> =
+                    record_tags.iter().map(|t| t.to_lowercase()).collect();
 
-        matched
+                for tag in match_tags {
+                    if !record_tags_lower.iter().any(|t| *t == tag.to_lowercase()) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        has_any_condition
     }
 }
 
