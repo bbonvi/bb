@@ -173,7 +173,7 @@ export function Toolbar() {
             type="text"
             value={localPrimary}
             onChange={(e) => setLocalPrimary(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); searchInputRef.current?.select() } }}
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); searchInputRef.current?.select() } else if (e.key === 'Enter') { flushPrimary(localPrimary) } }}
             autoFocus
             placeholder={semanticEnabled ? 'Search semantically…' : 'Search bookmarks…'}
             className="h-9 w-full rounded-lg border border-white/[0.06] bg-surface pl-9 pr-[4.25rem] text-sm text-text placeholder:text-text-dim outline-none transition-colors focus:border-hi-dim focus:bg-surface-hover"
