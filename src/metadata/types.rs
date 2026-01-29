@@ -1,5 +1,6 @@
 use crate::config::ScrapeConfig;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::time::Duration;
 
 /// Error types for metadata fetching, distinguishing retryable from terminal failures
@@ -41,6 +42,9 @@ pub struct Metadata {
     /// Which fetcher produced the validated image
     #[serde(skip_serializing, skip_deserializing)]
     pub image_source: Option<String>,
+    /// Which fetcher provided each field (field_name → fetcher_name)
+    #[serde(skip_serializing, skip_deserializing)]
+    pub sources: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

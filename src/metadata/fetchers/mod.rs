@@ -64,7 +64,7 @@ impl FetcherRegistry {
         let scrape_config = opts.scrape_config.as_ref();
 
         // Fan out parallel fetchers using thread::scope (bounded by fetcher count)
-        let results: Vec<(u8, Metadata)> = thread::scope(|s| {
+        let results: Vec<(u8, &str, Metadata)> = thread::scope(|s| {
             let handles: Vec<_> = self
                 .fetchers
                 .iter()
@@ -76,7 +76,7 @@ impl FetcherRegistry {
                             Ok(Some(m)) => {
                                 let fields = describe_fields(&m);
                                 log::info!("fetcher={name} outcome=success fields=[{fields}]");
-                                Some((f.priority(), m))
+                                Some((f.priority(), name, m))
                             }
                             Ok(None) => {
                                 log::info!("fetcher={name} outcome=skip");
@@ -123,26 +123,32 @@ impl FetcherRegistry {
 /// Merge multiple fetcher results by priority (lower priority number = preferred).
 /// For each field, take the first non-None value from the sorted results.
 /// Validate images during merge and set image_valid flag.
-fn merge_results(mut results: Vec<(u8, Metadata)>, scrape_config: Option<&ScrapeConfig>) -> Metadata {
-    results.sort_by_key(|(priority, _)| *priority);
+/// Tracks which fetcher provided each field in `sources`.
+fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&ScrapeConfig>) -> Metadata {
+    results.sort_by_key(|(priority, _, _)| *priority);
 
     let mut merged = Metadata::default();
 
-    for (_priority, m) in &results {
-        if merged.title.is_none() {
+    for (_priority, name, m) in &results {
+        if merged.title.is_none() && m.title.is_some() {
             merged.title.clone_from(&m.title);
+            merged.sources.insert("title".into(), name.to_string());
         }
-        if merged.description.is_none() {
+        if merged.description.is_none() && m.description.is_some() {
             merged.description.clone_from(&m.description);
+            merged.sources.insert("description".into(), name.to_string());
         }
-        if merged.keywords.is_none() {
+        if merged.keywords.is_none() && m.keywords.is_some() {
             merged.keywords.clone_from(&m.keywords);
+            merged.sources.insert("keywords".into(), name.to_string());
         }
-        if merged.canonical_url.is_none() {
+        if merged.canonical_url.is_none() && m.canonical_url.is_some() {
             merged.canonical_url.clone_from(&m.canonical_url);
+            merged.sources.insert("canonical_url".into(), name.to_string());
         }
-        if merged.icon_url.is_none() {
+        if merged.icon_url.is_none() && m.icon_url.is_some() {
             merged.icon_url.clone_from(&m.icon_url);
+            merged.sources.insert("icon".into(), name.to_string());
         }
         if merged.icon.is_none() {
             merged.icon.clone_from(&m.icon);
@@ -158,11 +164,12 @@ fn merge_results(mut results: Vec<(u8, Metadata)>, scrape_config: Option<&Scrape
                     merged.image = Some(bytes.clone());
                     merged.image_url.clone_from(&m.image_url);
                     merged.image_valid = true;
+                    merged.image_source = Some(name.to_string());
+                    merged.sources.insert("image".into(), name.to_string());
                 } else {
-                    log::debug!("Image from fetcher failed validation, trying next source");
+                    log::debug!("Image from fetcher={name} failed validation, trying next source");
                 }
-            } else if merged.image_url.is_none() {
-                // No bytes but has URL — store URL for potential later fetch
+            } else if merged.image_url.is_none() && m.image_url.is_some() {
                 merged.image_url.clone_from(&m.image_url);
             }
         }
@@ -175,19 +182,18 @@ fn merge_results(mut results: Vec<(u8, Metadata)>, scrape_config: Option<&Scrape
                 if validate_image(&bytes) {
                     merged.image = Some(bytes);
                     merged.image_valid = true;
+                    // image_source stays from whichever fetcher provided the URL
+                    if !merged.sources.contains_key("image") {
+                        // Find which fetcher provided this image_url
+                        for (_priority, name, m) in &results {
+                            if m.image_url.as_deref() == Some(img_url.as_str()) {
+                                merged.image_source = Some(name.to_string());
+                                merged.sources.insert("image".into(), name.to_string());
+                                break;
+                            }
+                        }
+                    }
                 }
-            }
-        }
-    }
-
-    // Set image_source based on which fetcher provided the validated image
-    if merged.image_valid {
-        // Determine source by checking which result has matching image_url
-        for (_priority, m) in &results {
-            if m.image_url == merged.image_url {
-                // We can't get the fetcher name here; tag generically
-                // The priority number serves as identifier
-                break;
             }
         }
     }
@@ -195,22 +201,29 @@ fn merge_results(mut results: Vec<(u8, Metadata)>, scrape_config: Option<&Scrape
     merged
 }
 
-/// Merge overlay into base, filling only missing fields. Never overwrites existing non-None fields.
+/// Merge overlay (from headless fallback) into base, filling only missing fields.
+/// Never overwrites existing non-None fields.
 fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&ScrapeConfig>) -> Metadata {
-    if base.title.is_none() {
+    let source = "Headless";
+
+    if base.title.is_none() && overlay.title.is_some() {
         base.title = overlay.title;
+        base.sources.insert("title".into(), source.into());
     }
-    if base.description.is_none() {
+    if base.description.is_none() && overlay.description.is_some() {
         base.description = overlay.description;
+        base.sources.insert("description".into(), source.into());
     }
     if base.keywords.is_none() {
         base.keywords = overlay.keywords;
     }
-    if base.canonical_url.is_none() {
+    if base.canonical_url.is_none() && overlay.canonical_url.is_some() {
         base.canonical_url = overlay.canonical_url;
+        base.sources.insert("canonical_url".into(), source.into());
     }
-    if base.icon_url.is_none() {
+    if base.icon_url.is_none() && overlay.icon_url.is_some() {
         base.icon_url = overlay.icon_url;
+        base.sources.insert("icon".into(), source.into());
     }
     if base.icon.is_none() {
         base.icon = overlay.icon;
@@ -226,6 +239,8 @@ fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&Scrap
                 base.image = Some(bytes.clone());
                 base.image_url = overlay.image_url;
                 base.image_valid = true;
+                base.image_source = Some(source.into());
+                base.sources.insert("image".into(), source.into());
             }
         } else if base.image_url.is_none() {
             base.image_url = overlay.image_url;
@@ -238,6 +253,8 @@ fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&Scrap
                     if validate_image(&bytes) {
                         base.image = Some(bytes);
                         base.image_valid = true;
+                        base.image_source = Some(source.into());
+                        base.sources.insert("image".into(), source.into());
                     }
                 }
             }

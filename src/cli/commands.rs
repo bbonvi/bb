@@ -294,12 +294,15 @@ impl MetaCommand {
         }
 
         // Print summary to stderr
-        eprintln!("  title:       {}", meta.title.as_deref().unwrap_or("(none)"));
-        eprintln!("  description: {}", truncate(meta.description.as_deref().unwrap_or("(none)"), 80));
-        eprintln!("  canonical:   {}", meta.canonical_url.as_deref().unwrap_or("(none)"));
-        eprintln!("  image_url:   {}", meta.image_url.as_deref().unwrap_or("(none)"));
+        let src = |field: &str| -> &str {
+            meta.sources.get(field).map(|s| s.as_str()).unwrap_or("—")
+        };
+        eprintln!("  title:       {} [{}]", meta.title.as_deref().unwrap_or("(none)"), src("title"));
+        eprintln!("  description: {} [{}]", truncate(meta.description.as_deref().unwrap_or("(none)"), 80), src("description"));
+        eprintln!("  canonical:   {} [{}]", meta.canonical_url.as_deref().unwrap_or("(none)"), src("canonical_url"));
+        eprintln!("  image_url:   {} [{}]", meta.image_url.as_deref().unwrap_or("(none)"), src("image"));
         eprintln!("  image_valid: {}", meta.image_valid);
-        eprintln!("  icon_url:    {}", meta.icon_url.as_deref().unwrap_or("(none)"));
+        eprintln!("  icon_url:    {} [{}]", meta.icon_url.as_deref().unwrap_or("(none)"), src("icon"));
         eprintln!("  image_bytes: {}", meta.image.as_ref().map_or(0, |b| b.len()));
         eprintln!("  icon_bytes:  {}", meta.icon.as_ref().map_or(0, |b| b.len()));
         eprintln!("  elapsed:     {:.2?}", elapsed);
