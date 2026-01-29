@@ -17,14 +17,13 @@ impl AppFactory {
     ///
     /// For local backends, also creates a SemanticSearchService if enabled.
     /// For remote backends (BB_ADDR set), semantic search is handled by the daemon.
-    pub fn create_app_service() -> Result<AppService> {
+    pub fn create_app_service(paths: &AppPaths) -> Result<AppService> {
         if std::env::var("BB_ADDR").is_ok() {
             // Remote mode: semantic search handled by daemon
             let backend = Self::create_backend()?;
             Ok(AppService::new(backend))
         } else {
             // Local mode: create semantic service if config available
-            let paths = Self::get_paths()?;
             let config = Self::create_config(&paths.base_path)?;
 
             let backend = Self::create_local_backend(&paths, config.clone())?;
@@ -54,8 +53,7 @@ impl AppFactory {
     }
 
     /// Create a local application instance
-    pub fn create_local_app() -> Result<AppLocal> {
-        let paths = Self::get_paths()?;
+    pub fn create_local_app(paths: &AppPaths) -> Result<AppLocal> {
         let config = Arc::new(RwLock::new(Config::load_with(&paths.base_path)));
         let storage = storage::BackendLocal::new(&paths.uploads_path);
 

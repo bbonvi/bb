@@ -51,9 +51,8 @@ fn setup_logger() {
 
 /// Acquire database lock for CLI operations in local mode.
 /// Skips if BB_ADDR is set (daemon handles locking).
-fn acquire_cli_lock() -> anyhow::Result<LockGuard> {
-    let paths = app::AppFactory::get_paths()?;
-    LockGuard::acquire_if_local(std::path::Path::new(&paths.base_path)).map_err(|e| {
+fn acquire_cli_lock(base_path: &std::path::Path) -> anyhow::Result<LockGuard> {
+    LockGuard::acquire_if_local(base_path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::WouldBlock {
             anyhow::anyhow!(
                 "Database locked. Set BB_ADDR to connect to running daemon, or stop the daemon."
@@ -72,6 +71,8 @@ fn main() -> anyhow::Result<()> {
     setup_logger();
 
     let args = Args::parse();
+    let paths = app::AppFactory::get_paths()?;
+    let base_path = std::path::Path::new(&paths.base_path);
 
     match args.command {
         #[cfg(feature = "markdown-docs")]
@@ -82,12 +83,11 @@ fn main() -> anyhow::Result<()> {
         }
 
         Command::Daemon { .. } => {
-            let paths = app::AppFactory::get_paths()?;
-            let _lock = FileLock::try_acquire(std::path::Path::new(&paths.base_path))
+            let _lock = FileLock::try_acquire(base_path)
                 .map_err(|_| anyhow::anyhow!("Another instance is running"))?;
 
             log::debug!("Creating application manager...");
-            let mut app_mgr = app::AppFactory::create_local_app()?;
+            let mut app_mgr = app::AppFactory::create_local_app(&paths)?;
 
             #[cfg(feature = "headless")]
             log::debug!("Testing headless chrome launch...");
@@ -96,7 +96,6 @@ fn main() -> anyhow::Result<()> {
 
             log::debug!("Starting queue processor...");
             app_mgr.run_queue();
-            let paths = app::AppFactory::get_paths()?;
             log::debug!("starting web server...");
             web::start_daemon(app_mgr, &paths.base_path);
             Ok(())
@@ -116,11 +115,11 @@ fn main() -> anyhow::Result<()> {
             action,
         } => {
             let _lock = if action.as_ref().map_or(false, |a| a.is_write()) {
-                Some(acquire_cli_lock()?)
+                Some(acquire_cli_lock(base_path)?)
             } else {
                 None
             };
-            let app_service = app::AppFactory::create_app_service()?;
+            let app_service = app::AppFactory::create_app_service(&paths)?;
             let params = cli::SearchParams {
                 url,
                 title,
@@ -146,8 +145,8 @@ fn main() -> anyhow::Result<()> {
             async_meta,
             meta_args,
         } => {
-            let _lock = acquire_cli_lock()?;
-            let app_service = app::AppFactory::create_app_service()?;
+            let _lock = acquire_cli_lock(base_path)?;
+            let app_service = app::AppFactory::create_app_service(&paths)?;
             let params = cli::AddParams {
                 use_editor,
                 url,
@@ -168,16 +167,15 @@ fn main() -> anyhow::Result<()> {
         }
 
         Command::Rule { action } => {
-            let _lock = acquire_cli_lock()?;
-            let app_service = app::AppFactory::create_app_service()?;
+            let _lock = acquire_cli_lock(base_path)?;
+            let app_service = app::AppFactory::create_app_service(&paths)?;
             let config = app_service.get_config()?;
             let mut conf = config.write().unwrap();
             cli::handle_rule(action, &mut conf)
         }
 
         Command::Compress { dry_run, yes } => {
-            let _lock = acquire_cli_lock()?;
-            let paths = app::AppFactory::get_paths()?;
+            let _lock = acquire_cli_lock(base_path)?;
             let config = config::Config::load_with(&paths.base_path);
             let storage = storage::BackendLocal::new(&paths.uploads_path);
             let bmark_mgr = std::sync::Arc::new(
@@ -186,11 +184,11 @@ fn main() -> anyhow::Result<()> {
             cli::handle_compress(dry_run, yes, &storage, bmark_mgr, &config)
         }
 
-        Command::Backup { path } => backup::create_backup(path),
+        Command::Backup { path } => backup::create_backup(path, base_path),
 
         Command::Import { path, yes } => {
-            let _lock = acquire_cli_lock()?;
-            backup::import_backup(path.as_deref(), yes)
+            let _lock = acquire_cli_lock(base_path)?;
+            backup::import_backup(path.as_deref(), yes, base_path)
         }
     }
 }
