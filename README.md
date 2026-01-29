@@ -32,8 +32,8 @@
 ### Web UI Tips
 
 - **Paste a URL anywhere** to instantly open the create bookmark modal with the URL pre-filled (as long as focus isn't in a text field).
-- **Ctrl+N / ⌘+N** opens the create bookmark modal.
-- **Ctrl+Enter / ⌘+Enter** saves edits in the detail modal.
+- **Ctrl+N** opens the create bookmark modal.
+- **Ctrl+Enter** saves edits in the detail modal.
 - **Left/Right arrow keys** navigate between bookmarks in the detail view.
 - **Escape** in the search bar selects all text for quick replacement; in edit mode it cancels without closing the modal.
 - **Enter** in the search bar flushes the debounce and searches immediately.
@@ -44,6 +44,18 @@
 - **Share URLs** from other apps directly into bb via the PWA share target.
 - **`web+bb://` protocol** — registered as a URL handler for quick bookmark creation.
 - **PWA app shortcut** — long-press the app icon for an "Add Bookmark" shortcut.
+- **URL parameters are persisted** — any query parameters in the URL are applied on load. Supported params: `workspace`, `keyword`, `tags`, `title`, `url`, `description`, `semantic`, `all`. For example, `/?workspace=Dev&keyword=rust&tags=lang` opens the Dev workspace with "rust" in the keyword field and "lang" as a tag filter. Bookmark this URL to always start with a specific view.
+
+### Settings
+
+The Web UI settings panel (gear icon) has two sections:
+
+- **Preferences**
+  - **Show catch-all workspace** — display a "---" option in the workspace selector to view all bookmarks regardless of workspace.
+  - **Polling intervals** — configure how often the UI refreshes data in the background (separate intervals for normal, busy, and hidden-tab states).
+  - **Globally ignored tags** — bookmarks with these tags are completely hidden everywhere in the UI. Useful for archiving or soft-deleting without removing data.
+
+- **Workspaces** — create, edit, reorder, and delete workspaces. Each workspace defines tag whitelists/blacklists and an optional keyword filter.
 
 ## Keyword Search Query Language
 
