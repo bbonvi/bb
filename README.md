@@ -29,6 +29,22 @@
 
 - **Semantic Search** *(experimental)*: Find bookmarks by meaning rather than exact keywords. Currently inaccurate for most workloads — prefer keyword search for reliable results. Disabled by default.
 
+### Web UI Tips
+
+- **Paste a URL anywhere** to instantly open the create bookmark modal with the URL pre-filled (as long as focus isn't in a text field).
+- **Ctrl+N / ⌘+N** opens the create bookmark modal.
+- **Ctrl+Enter / ⌘+Enter** saves edits in the detail modal.
+- **Left/Right arrow keys** navigate between bookmarks in the detail view.
+- **Escape** in the search bar selects all text for quick replacement; in edit mode it cancels without closing the modal.
+- **Enter** in the search bar flushes the debounce and searches immediately.
+- **Click any tag** to add it as a search filter.
+- **Click the logo** to clear all search filters.
+- **Double-click the delete button** to confirm deletion (first click arms, second executes).
+- **Drag & drop or paste images** onto the cover or favicon area in edit mode to upload custom artwork.
+- **Share URLs** from other apps directly into bb via the PWA share target.
+- **`web+bb://` protocol** — registered as a URL handler for quick bookmark creation.
+- **PWA app shortcut** — long-press the app icon for an "Add Bookmark" shortcut.
+
 ## Keyword Search Query Language
 
 The `keyword` field supports a structured query language with field prefixes, boolean operators, quoted phrases, and grouping.
