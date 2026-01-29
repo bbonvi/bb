@@ -15,7 +15,7 @@
 
 - **Tags**: Categorize bookmarks with tags. Tags are hierarchical — use `/` to create nested categories (e.g. `dev/rust`, `dev/python`). Searching for a parent tag matches all children: filtering by `dev` also matches `dev/rust` and `dev/python`. This applies to both tag filters and the `#` keyword prefix.
 - **Rules**: Create custom rules using YAML configuration. Define matching queries for titles, URLs, or descriptions, and apply actions based on those matches. For example, bb can automatically assign tag "dev" for every url containing "github.com".
-- **Scrape Metadata**: When you create a bookmark, bb attempts to fetch metadata from the page via a simple GET request. It extracts the title, description, and URL for page thumbnails (og:image metadata). If the request fails, bb will launch a headless chromium instance to retrieve the same information and take a screenshot of the page as well as favicon. Additionally, the chrome instance will attempt to bypass captchas. You can also upload custom cover images and favicons per bookmark via the Web UI.
+- **Scrape Metadata**: When you create a bookmark, bb fetches metadata through a multi-stage pipeline: URLs are normalized (tracking params stripped, hosts lowercased), then bb fans out parallel requests to oEmbed, Plain HTML, Microlink, and Peekalink fetchers. Results are merged field-by-field by priority. Images are validated via magic byte detection, decode check, and minimum resolution (>32x32) to filter out tracking pixels and corrupt data. Headless Chrome is used as fallback when no validated image is found. The Chrome instance includes fingerprint spoofing (deviceMemory, maxTouchPoints, WebGL vendor/renderer, AudioContext) to bypass bot detection. Failed metadata tasks are retried up to 3 times (configurable) with exponential backoff (5s × 2^attempt + jitter) for transient errors (5xx, timeout); 4xx errors are terminal. You can also upload custom cover images and favicons per bookmark via the Web UI.
 - **Web UI**: Manage your bookmarks through a user-friendly web interface built with Vite, React, and shadcn/ui. Stores screenshots and favicons for quick reference. Installable as a PWA with share target and protocol handler support — share URLs directly from your browser or OS into bb.
 - **Workspaces**: Organize bookmarks into filtered views. Each workspace defines tag whitelist/blacklist and an optional keyword filter query. Bookmarks matching the workspace filters appear automatically. Workspaces are persisted in `workspaces.yaml` and managed via the Web UI settings panel or the REST API. Drag-and-drop reordering is supported.
 - **Bulk Operations**: Edit or delete multiple bookmarks at once. Bulk actions apply to all bookmarks matching the current search query — add, remove, or overwrite tags, and update fields in batch. Available from the toolbar in the Web UI.
@@ -170,16 +170,33 @@ scrape:
   # Block requests to private/loopback IP ranges (default: true)
   # Prevents SSRF attacks by rejecting 127.0.0.1, 192.168.x.x, etc.
   block_private_ips: true
+
+# Maximum retries for failed metadata fetches (default: 3, range: 1-10)
+# Only transient errors (5xx, timeout, connection) are retried with exponential backoff
+task_queue_max_retries: 3
 ```
 
 Configuration options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `accept_invalid_certs` | bool | `false` | Accept invalid TLS certificates when fetching URLs |
-| `allowed_schemes` | list | `["http", "https"]` | Allowed URL schemes (e.g., http, https, ftp) |
-| `blocked_hosts` | list | `[]` | Blocked hostnames — requests to these hosts will be rejected |
-| `block_private_ips` | bool | `true` | Block requests to private/loopback IP ranges for SSRF protection |
+| `scrape.accept_invalid_certs` | bool | `false` | Accept invalid TLS certificates when fetching URLs |
+| `scrape.allowed_schemes` | list | `["http", "https"]` | Allowed URL schemes (e.g., http, https, ftp) |
+| `scrape.blocked_hosts` | list | `[]` | Blocked hostnames — requests to these hosts will be rejected |
+| `scrape.block_private_ips` | bool | `true` | Block requests to private/loopback IP ranges for SSRF protection |
+| `task_queue_max_retries` | int | `3` | Max retries for transient metadata fetch failures (5xx, timeout); 4xx errors are terminal |
+
+### Metadata Fetching Pipeline
+
+When scraping metadata, bb executes the following stages:
+
+1. **URL Normalization**: Tracking parameters stripped (utm_*, fbclid, gclid, etc.), hosts lowercased, trailing slashes removed, protocol-relative URLs resolved
+2. **Parallel Fetching**: oEmbed, Plain HTML, Microlink, and Peekalink fetchers run concurrently via thread pool
+3. **oEmbed Support**: Checks URL against provider registry (cached from oembed.com/providers.json with hardcoded fallback for top 15 providers). Supports YouTube, Vimeo, Twitter, Spotify, SoundCloud, TikTok, etc.
+4. **Field Merging**: Results merged by priority (oEmbed > HTML > Microlink > Peekalink)
+5. **Image Validation**: Fetched images validated via magic byte detection (PNG/JPEG/WebP/GIF), decode check, minimum resolution >32x32. Rejects tracking pixels, HTML responses, corrupt data
+6. **Headless Chrome Fallback**: Launched only when no validated image is found. Includes stealth fingerprinting (deviceMemory, maxTouchPoints, WebGL vendor/renderer, AudioContext)
+7. **Retry Logic**: Failed tasks retried with exponential backoff (5s × 2^attempt + jitter) up to `task_queue_max_retries` for transient errors (5xx, timeout, connection); 4xx errors are terminal
 
 ## Data Management
 

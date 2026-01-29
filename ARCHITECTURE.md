@@ -116,6 +116,7 @@ Called from `BackendCsv::search()` when a `keyword` is present on the query.
 YAML config at `~/.local/share/bb/config.yaml`:
 ```yaml
 task_queue_max_threads: 4
+task_queue_max_retries: 3  # NEW: max retries for metadata fetch failures
 rules: []
 semantic_search:
   enabled: false
@@ -137,6 +138,11 @@ Config validation returns `Result<(), Vec<String>>` for proper error propagation
 - Scheme validation: only whitelisted schemes (default: `http`, `https`) are allowed
 - Host blocking: explicitly blocked hostnames are rejected
 - SSRF protection: private/loopback IP ranges blocked by default (127.0.0.1, 192.168.x.x, 10.x.x.x, 172.16.x.x, fc00::/7, etc.)
+
+**Task Queue Retry Settings**:
+- `task_queue_max_retries`: max retry attempts for failed metadata fetches (default: 3, range: 1-10)
+- Only transient errors (5xx, timeout, connection) are retried with exponential backoff
+- 4xx errors and validation failures are terminal (no retry)
 
 ### 5. Workspace Storage (`src/workspaces.rs`)
 
@@ -189,6 +195,82 @@ Background metadata fetching for `--async-meta` flag:
 - Tasks persisted to `task-queue.json` for recovery
 - Worker thread pool with configurable concurrency
 - Graceful shutdown on SIGTERM
+- Retry logic with exponential backoff (5s × 2^attempt + jitter) up to `task_queue_max_retries` (default 3)
+- Smart retry: only transient errors (5xx, timeout, connection) are retried; 4xx errors are terminal
+- Task state tracking: pending → running → completed/failed
+- Errors classified as Retryable or Terminal for smarter scheduling
+
+### 9. Metadata Scraping (`src/metadata/`)
+
+Multi-stage metadata fetching pipeline with parallel sources and validation:
+
+```
+src/metadata/
+├── mod.rs           # Public API: fetch_metadata()
+├── normalize.rs     # URL normalization (tracking params, case, trailing slash)
+├── oembed.rs        # oEmbed provider registry and fetcher
+├── fetchers/        # Parallel metadata sources
+│   ├── html.rs      # Plain HTML parser (og:*, meta tags)
+│   ├── microlink.rs # Microlink API client
+│   └── peekalink.rs # Peekalink API client
+├── merge.rs         # Field-by-field priority merging
+├── validate.rs      # Image validation (magic bytes, decode, resolution)
+├── chrome.rs        # Headless Chrome fallback with stealth
+└── error.rs         # FetchError types (Retryable/Terminal)
+```
+
+**Data Flow**:
+
+```
+URL
+ → normalize_url()
+     - Strip tracking params (utm_*, fbclid, gclid, etc.)
+     - Lowercase host, trim trailing slash
+     - Resolve protocol-relative URLs (//example.com → https://example.com)
+ → thread::scope() parallel fetch:
+     ├─→ oEmbed fetcher (checks provider registry)
+     ├─→ Plain HTML fetcher (og:*, meta tags)
+     ├─→ Microlink API
+     └─→ Peekalink API
+ → merge_metadata(results)
+     - Priority: oEmbed > HTML > Microlink > Peekalink
+     - Field-by-field selection (first non-empty wins)
+ → validate_image(image_url)
+     - Magic byte detection (PNG/JPEG/WebP/GIF)
+     - Image decode check (image-rs)
+     - Minimum resolution >32x32
+     - Reject tracking pixels, HTML responses, corrupt data
+ → if no valid image:
+     - Launch headless Chrome
+     - Stealth fingerprinting (deviceMemory, maxTouchPoints, WebGL, AudioContext)
+     - Screenshot + favicon extraction
+```
+
+**oEmbed Support**:
+- Provider registry cached from oembed.com/providers.json (5-minute TTL)
+- Hardcoded fallback for top 15 providers (YouTube, Vimeo, Twitter, Spotify, etc.)
+- URL scheme matching via regex patterns
+- Direct API calls to provider endpoints
+
+**Image Validation Gate**:
+- Magic byte detection for format verification (not Content-Type, which can lie)
+- Full decode check to catch corrupt data
+- Resolution check: width > 32 && height > 32
+- Invalid images discarded; fallback to next priority source
+
+**Headless Chrome Stealth**:
+- Only launched when no validated image found (expensive operation)
+- Additional fingerprint spoofing beyond basic User-Agent:
+  - `navigator.deviceMemory` → 8
+  - `navigator.maxTouchPoints` → 0
+  - `WebGLRenderingContext.getParameter()` → Intel GPU vendor/renderer
+  - `AudioContext` fingerprint masking
+- Bypass detection for aggressive bot protections (Cloudflare, etc.)
+
+**Error Classification** (`error.rs`):
+- **Retryable**: HTTP 5xx, timeout, connection refused, DNS failure
+- **Terminal**: HTTP 4xx, parse error, invalid URL, blocked host
+- Task queue uses classification for retry decisions
 
 ---
 
@@ -233,6 +315,7 @@ Background metadata fetching for `--async-meta` flag:
 | `src/bookmarks.rs` | CSV bookmark storage |
 | `src/search_query/` | Keyword query language (lexer, parser, evaluator) |
 | `src/config.rs` | Configuration loading/validation |
+| `src/metadata/` | Metadata fetching pipeline (oEmbed, HTML, validation, Chrome fallback) |
 | `src/workspaces.rs` | Workspace CRUD and YAML persistence |
 | `src/web.rs` | HTTP API server |
 | `src/cli/handlers.rs` | CLI command routing |
