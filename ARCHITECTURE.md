@@ -132,9 +132,9 @@ YAML-persisted workspace definitions at `~/.local/share/bb/workspaces.yaml`:
 - `WorkspaceStore` holds `Vec<Workspace>` in `Arc<RwLock<>>` (same concurrency pattern as config)
 - Atomic writes via `BackendLocal::write`
 - Auto-creates empty file on first load
-- Validation: name non-empty/trimmed/max 100 chars, regex patterns must compile, no duplicate names (case-insensitive)
+- Validation: name non-empty/trimmed/max 100 chars, keyword query must parse, no duplicate names (case-insensitive)
 - ID generation via `Eid` (ULID-based)
-- Workspace filtering is frontend-only; the backend stores filter definitions but does not evaluate them
+- Workspace filtering uses server-side keyword search; the client translates tag whitelist/blacklist + keyword into a keyword query string
 
 ### 6. CLI Layer (`src/cli/`)
 

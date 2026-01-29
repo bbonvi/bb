@@ -101,12 +101,9 @@ List all workspaces.
     "id": "01JJXYZ...",
     "name": "Dev",
     "filters": {
-      "tag_whitelist": ["dev/*", "rust"],
+      "tag_whitelist": ["dev", "rust"],
       "tag_blacklist": ["internal"],
-      "url_pattern": null,
-      "title_pattern": null,
-      "description_pattern": null,
-      "any_field_pattern": null
+      "keyword": null
     },
     "view_prefs": {
       "mode": "grid",
@@ -125,12 +122,9 @@ Create a new workspace.
 {
   "name": "Dev",
   "filters": {
-    "tag_whitelist": ["dev/*"],
+    "tag_whitelist": ["dev"],
     "tag_blacklist": [],
-    "url_pattern": "https?://.*\\.dev",
-    "title_pattern": null,
-    "description_pattern": null,
-    "any_field_pattern": null
+    "keyword": ":example.dev"
   },
   "view_prefs": {
     "mode": "grid",
@@ -148,7 +142,7 @@ Returns the created workspace object (same shape as list items).
 
 | Status | Condition |
 |--------|-----------|
-| 400 | Empty/whitespace name, name > 100 chars, invalid regex pattern, duplicate name (case-insensitive) |
+| 400 | Empty/whitespace name, name > 100 chars, invalid keyword query, duplicate name (case-insensitive) |
 
 ### `PUT /api/workspaces/:id`
 
