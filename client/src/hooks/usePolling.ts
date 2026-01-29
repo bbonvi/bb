@@ -182,6 +182,7 @@ export function usePolling() {
     let prevShowAll = useStore.getState().showAll
     let prevActiveWorkspaceId = useStore.getState().activeWorkspaceId
     let prevRefetchTrigger = useStore.getState().refetchTrigger
+    let fetchQueued = false
 
     const unsub = useStore.subscribe((state) => {
       const queryChanged = state.searchQuery !== prevQuery
@@ -190,18 +191,21 @@ export function usePolling() {
       const triggerChanged = state.refetchTrigger !== prevRefetchTrigger
 
       if (queryChanged || showAllChanged || workspaceChanged) {
-        // Query/filter changed — clear ETag to get fresh data
         clearEtagCache('bookmarks')
-      }
-
-      if (queryChanged || showAllChanged || workspaceChanged || triggerChanged) {
-        fetchBookmarks()
       }
 
       prevQuery = state.searchQuery
       prevShowAll = state.showAll
       prevActiveWorkspaceId = state.activeWorkspaceId
       prevRefetchTrigger = state.refetchTrigger
+
+      if ((queryChanged || showAllChanged || workspaceChanged || triggerChanged) && !fetchQueued) {
+        fetchQueued = true
+        queueMicrotask(() => {
+          fetchQueued = false
+          fetchBookmarks()
+        })
+      }
     })
 
     return () => {
