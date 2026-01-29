@@ -75,25 +75,26 @@ export function Toolbar() {
     return tags.filter((t) => !hidden.has(t))
   }, [tags, hiddenTags])
 
+  const SEARCH_DEBOUNCE_MS = 500
+
   // Primary search — semantic if enabled, keyword otherwise
-  const primaryDelay = semanticEnabled ? 500 : 300
   const primaryField = semanticEnabled ? 'semantic' : 'keyword'
   const primaryExternal = searchQuery[primaryField] ?? ''
   const [debouncedPrimary, setLocalPrimary, localPrimary, flushPrimary] =
-    useDebouncedValue(primaryExternal, primaryDelay)
+    useDebouncedValue(primaryExternal, SEARCH_DEBOUNCE_MS)
 
   // Advanced filter fields
   const [debouncedTags, setLocalTags, localTags, flushTags] =
-    useDebouncedValue(searchQuery.tags ?? '', 300)
+    useDebouncedValue(searchQuery.tags ?? '', SEARCH_DEBOUNCE_MS)
   const [debouncedTitle, setLocalTitle, localTitle, flushTitle] =
-    useDebouncedValue(searchQuery.title ?? '', 300)
+    useDebouncedValue(searchQuery.title ?? '', SEARCH_DEBOUNCE_MS)
   const [debouncedUrl, setLocalUrl, localUrl, flushUrl] =
-    useDebouncedValue(searchQuery.url ?? '', 300)
+    useDebouncedValue(searchQuery.url ?? '', SEARCH_DEBOUNCE_MS)
   const [debouncedDescription, setLocalDescription, localDescription, flushDescription] =
-    useDebouncedValue(searchQuery.description ?? '', 300)
+    useDebouncedValue(searchQuery.description ?? '', SEARCH_DEBOUNCE_MS)
   // keyword field shown in filters when semantic is the primary
   const [debouncedKeywordAlt, setLocalKeywordAlt, localKeywordAlt, flushKeywordAlt] =
-    useDebouncedValue(searchQuery.keyword ?? '', 300)
+    useDebouncedValue(searchQuery.keyword ?? '', SEARCH_DEBOUNCE_MS)
 
   // Apply debounced values to store
   useEffect(() => {
@@ -173,7 +174,19 @@ export function Toolbar() {
             type="text"
             value={localPrimary}
             onChange={(e) => setLocalPrimary(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); searchInputRef.current?.select() } else if (e.key === 'Enter') { flushPrimary(localPrimary) } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') { e.stopPropagation(); searchInputRef.current?.select() }
+              else if (e.key === 'Enter') {
+                flushPrimary(localPrimary)
+                const el = searchInputRef.current
+                if (el) {
+                  el.classList.remove('search-flash')
+                  void el.offsetWidth
+                  el.classList.add('search-flash')
+                  el.addEventListener('animationend', () => el.classList.remove('search-flash'), { once: true })
+                }
+              }
+            }}
             autoFocus
             placeholder={semanticEnabled ? 'Search semantically…' : 'Search bookmarks…'}
             className="h-9 w-full rounded-lg border border-white/[0.06] bg-surface pl-9 pr-[4.25rem] text-sm text-text placeholder:text-text-dim outline-none transition-colors focus:border-hi-dim focus:bg-surface-hover"

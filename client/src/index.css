@@ -80,6 +80,16 @@
   --chart-5: oklch(0.645 0.246 16.439);
 }
 
+@keyframes search-flash {
+  0%   { border-color: var(--color-hi); }
+  30%  { border-color: var(--color-hi); }
+  100% { border-color: var(--color-hi-dim); }
+}
+
+.search-flash {
+  animation: search-flash 400ms cubic-bezier(0, 0, 0.2, 1);
+}
+
 @layer base {
   html {
     color-scheme: dark;
