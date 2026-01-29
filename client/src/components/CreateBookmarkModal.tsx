@@ -44,7 +44,9 @@ export default function CreateBookmarkModal() {
   const setOpen = useStore((s) => s.setCreateModalOpen)
   const initialUrl = useStore((s) => s.createModalInitialUrl)
   const initialTitle = useStore((s) => s.createModalInitialTitle)
-  const openCreateWithUrl = useStore((s) => s.openCreateWithUrl)
+  const initialDescription = useStore((s) => s.createModalInitialDescription)
+  const initialTags = useStore((s) => s.createModalInitialTags)
+  const openCreateModal = useStore((s) => s.openCreateModal)
   const bookmarks = useStore((s) => s.bookmarks)
   const setBookmarks = useStore((s) => s.setBookmarks)
 
@@ -52,17 +54,19 @@ export default function CreateBookmarkModal() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Reset form when modal opens, pre-fill URL and title if provided
+  // Reset form when modal opens, pre-fill fields if provided
   useEffect(() => {
     if (open) {
       setForm({
         ...emptyForm,
         url: initialUrl || '',
         title: initialTitle || '',
+        description: initialDescription || '',
+        tags: initialTags || '',
       })
       setError(null)
     }
-  }, [open, initialUrl, initialTitle])
+  }, [open, initialUrl, initialTitle, initialDescription, initialTags])
 
   // Ctrl+N global shortcut
   useEffect(() => {
@@ -94,12 +98,12 @@ export default function CreateBookmarkModal() {
       const text = e.clipboardData?.getData('text/plain')?.trim()
       if (text && isUrl(text)) {
         e.preventDefault()
-        openCreateWithUrl(text)
+        openCreateModal({ url: text })
       }
     }
     window.addEventListener('paste', handler)
     return () => window.removeEventListener('paste', handler)
-  }, [openCreateWithUrl])
+  }, [openCreateModal])
 
   const update = useCallback(
     <K extends keyof CreateForm>(field: K, value: CreateForm[K]) =>

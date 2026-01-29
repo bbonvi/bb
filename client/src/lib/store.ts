@@ -51,9 +51,10 @@ export interface AppState {
   createModalOpen: boolean
   createModalInitialUrl: string
   createModalInitialTitle: string
+  createModalInitialDescription: string
+  createModalInitialTags: string
   setCreateModalOpen: (open: boolean) => void
-  openCreateWithUrl: (url: string) => void
-  openCreateWithUrlAndTitle: (url: string, title: string) => void
+  openCreateModal: (init?: { url?: string; title?: string; description?: string; tags?: string }) => void
 
   // Bulk operations
   bulkEditOpen: boolean
@@ -214,12 +215,18 @@ export const useStore = create<AppState>()((set, get) => ({
   createModalOpen: false,
   createModalInitialUrl: '',
   createModalInitialTitle: '',
+  createModalInitialDescription: '',
+  createModalInitialTags: '',
   setCreateModalOpen: (createModalOpen) =>
-    set({ createModalOpen, createModalInitialUrl: '', createModalInitialTitle: '' }),
-  openCreateWithUrl: (url) =>
-    set({ createModalOpen: true, createModalInitialUrl: url, createModalInitialTitle: '' }),
-  openCreateWithUrlAndTitle: (url, title) =>
-    set({ createModalOpen: true, createModalInitialUrl: url, createModalInitialTitle: title }),
+    set({ createModalOpen, createModalInitialUrl: '', createModalInitialTitle: '', createModalInitialDescription: '', createModalInitialTags: '' }),
+  openCreateModal: (init) =>
+    set({
+      createModalOpen: true,
+      createModalInitialUrl: init?.url ?? '',
+      createModalInitialTitle: init?.title ?? '',
+      createModalInitialDescription: init?.description ?? '',
+      createModalInitialTags: init?.tags ?? '',
+    }),
 
   // Bulk operations
   bulkEditOpen: false,

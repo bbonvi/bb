@@ -30,7 +30,7 @@ function AppShell() {
     setBulkEditOpen,
     bulkDeleteOpen,
     setBulkDeleteOpen,
-    openCreateWithUrlAndTitle,
+    openCreateModal,
   } = useStore(
     useShallow((s) => ({
       viewMode: s.viewMode,
@@ -38,7 +38,7 @@ function AppShell() {
       setBulkEditOpen: s.setBulkEditOpen,
       bulkDeleteOpen: s.bulkDeleteOpen,
       setBulkDeleteOpen: s.setBulkDeleteOpen,
-      openCreateWithUrlAndTitle: s.openCreateWithUrlAndTitle,
+      openCreateModal: s.openCreateModal,
     })),
   )
 
@@ -50,22 +50,29 @@ function AppShell() {
     const sharedTitle = params.get('title')
     const sharedText = params.get('text')
 
-    if (action === 'create' || sharedUrl) {
+    if (action === 'create') {
       // Use sharedText as fallback URL if no explicit url param
       const url = sharedUrl || (sharedText?.match(/https?:\/\/\S+/)?.[0] ?? '')
-      openCreateWithUrlAndTitle(url, sharedTitle || '')
+      openCreateModal({
+        url,
+        title: sharedTitle || '',
+        description: params.get('description') || '',
+        tags: params.get('tags') || '',
+      })
 
       // Clean URL
       params.delete('action')
       params.delete('url')
       params.delete('title')
       params.delete('text')
+      params.delete('description')
+      params.delete('tags')
       const newUrl = params.toString()
         ? `${window.location.pathname}?${params}`
         : window.location.pathname
       window.history.replaceState({}, '', newUrl)
     }
-  }, [openCreateWithUrlAndTitle])
+  }, [openCreateModal])
 
   return (
     <div className="flex h-screen flex-col bg-bg">
