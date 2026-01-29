@@ -11,7 +11,7 @@ import {
   ApiError,
 } from '@/lib/api'
 import type { Bookmark, SearchQuery, Workspace } from '@/lib/api'
-import { injectWorkspaceFilters } from '@/lib/workspaceFilters'
+import { mergeWorkspaceQuery } from '@/lib/workspaceFilters'
 
 const POLL_INTERVAL = 3000
 
@@ -66,7 +66,7 @@ export function usePolling() {
         ? workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
         : null
       const effectiveQuery = activeWorkspace
-        ? injectWorkspaceFilters(searchQuery, activeWorkspace)
+        ? mergeWorkspaceQuery(searchQuery, activeWorkspace)
         : searchQuery
 
       // On first load with a stored workspace OR pending URL workspace param,

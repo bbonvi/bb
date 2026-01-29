@@ -295,10 +295,7 @@ export function fetchSemanticStatus(): Promise<SemanticStatus> {
 export interface WorkspaceFilters {
   tag_whitelist: string[]
   tag_blacklist: string[]
-  url_pattern: string | null
-  title_pattern: string | null
-  description_pattern: string | null
-  any_field_pattern: string | null
+  keyword: string | null
 }
 
 export interface ViewPrefs {

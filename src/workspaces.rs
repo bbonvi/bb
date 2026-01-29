@@ -1,4 +1,4 @@
-use crate::{eid::Eid, storage, storage::StorageManager};
+use crate::{eid::Eid, search_query, storage, storage::StorageManager};
 use serde::{Deserialize, Serialize};
 
 const WORKSPACES_FILE: &str = "workspaces.yaml";
@@ -18,13 +18,7 @@ pub struct WorkspaceFilters {
     #[serde(default)]
     pub tag_blacklist: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url_pattern: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub title_pattern: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description_pattern: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub any_field_pattern: Option<String>,
+    pub keyword: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -43,11 +37,8 @@ pub enum WorkspaceError {
     InvalidName,
     #[error("duplicate workspace name: {0}")]
     DuplicateName(String),
-    #[error("invalid regex pattern in {field}: {source}")]
-    InvalidPattern {
-        field: String,
-        source: regex::Error,
-    },
+    #[error("invalid keyword query: {0}")]
+    InvalidKeyword(String),
     #[error("workspace not found: {0}")]
     NotFound(String),
     #[error("invalid reorder: {0}")]
@@ -104,7 +95,7 @@ impl WorkspaceStore {
     ) -> Result<Workspace, WorkspaceError> {
         let name = validate_name(&name)?;
         let filters = filters.unwrap_or_default();
-        validate_patterns(&filters)?;
+        validate_keyword(&filters)?;
         self.check_duplicate_name(&name, None)?;
 
         let workspace = Workspace {
@@ -139,7 +130,7 @@ impl WorkspaceStore {
         }
 
         if let Some(filters) = filters {
-            validate_patterns(&filters)?;
+            validate_keyword(&filters)?;
             self.workspaces[idx].filters = filters;
         }
 
@@ -212,23 +203,13 @@ fn validate_name(name: &str) -> Result<String, WorkspaceError> {
     Ok(trimmed.to_string())
 }
 
-fn validate_patterns(filters: &WorkspaceFilters) -> Result<(), WorkspaceError> {
-    let patterns = [
-        ("url_pattern", &filters.url_pattern),
-        ("title_pattern", &filters.title_pattern),
-        ("description_pattern", &filters.description_pattern),
-        ("any_field_pattern", &filters.any_field_pattern),
-    ];
-
-    for (field, pattern) in patterns {
-        if let Some(p) = pattern {
-            regex::Regex::new(p).map_err(|e| WorkspaceError::InvalidPattern {
-                field: field.to_string(),
-                source: e,
-            })?;
+fn validate_keyword(filters: &WorkspaceFilters) -> Result<(), WorkspaceError> {
+    if let Some(ref kw) = filters.keyword {
+        if !kw.trim().is_empty() {
+            search_query::parse(kw)
+                .map_err(|e| WorkspaceError::InvalidKeyword(e.to_string()))?;
         }
     }
-
     Ok(())
 }
 
@@ -375,15 +356,15 @@ mod tests {
     }
 
     #[test]
-    fn invalid_regex_rejected() {
+    fn invalid_keyword_rejected() {
         let dir = tmp_dir();
         let mut store = WorkspaceStore::load(&dir).unwrap();
         let filters = WorkspaceFilters {
-            url_pattern: Some("[invalid".into()),
+            keyword: Some("(unclosed".into()),
             ..Default::default()
         };
         let err = store.create("Valid".into(), Some(filters), None).unwrap_err();
-        assert!(matches!(err, WorkspaceError::InvalidPattern { .. }));
+        assert!(matches!(err, WorkspaceError::InvalidKeyword(_)));
     }
 
     #[test]
@@ -401,7 +382,7 @@ mod tests {
         let mut store = WorkspaceStore::load(&dir).unwrap();
         let filters = WorkspaceFilters {
             tag_whitelist: vec!["rust".into()],
-            url_pattern: Some(r"https?://.*\.rs".into()),
+            keyword: Some(":github.com".into()),
             ..Default::default()
         };
         let view_prefs = ViewPrefs {

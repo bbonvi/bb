@@ -397,10 +397,7 @@ function WorkspaceEditor({
   const [name, setName] = useState(workspace.name)
   const [whitelistInput, setWhitelistInput] = useState('')
   const [blacklistInput, setBlacklistInput] = useState('')
-  const [urlPattern, setUrlPattern] = useState(workspace.filters.url_pattern ?? '')
-  const [titlePattern, setTitlePattern] = useState(workspace.filters.title_pattern ?? '')
-  const [descPattern, setDescPattern] = useState(workspace.filters.description_pattern ?? '')
-  const [anyFieldPattern, setAnyFieldPattern] = useState(workspace.filters.any_field_pattern ?? '')
+  const [keyword, setKeyword] = useState(workspace.filters.keyword ?? '')
 
   // Related tags (separate per list)
   const [whitelistRelated, setWhitelistRelated] = useState<string[]>([])
@@ -411,10 +408,7 @@ function WorkspaceEditor({
   // Reset form when workspace changes
   useEffect(() => {
     setName(workspace.name)
-    setUrlPattern(workspace.filters.url_pattern ?? '')
-    setTitlePattern(workspace.filters.title_pattern ?? '')
-    setDescPattern(workspace.filters.description_pattern ?? '')
-    setAnyFieldPattern(workspace.filters.any_field_pattern ?? '')
+    setKeyword(workspace.filters.keyword ?? '')
     setWhitelistInput('')
     setBlacklistInput('')
     setWhitelistRelated([])
@@ -451,10 +445,7 @@ function WorkspaceEditor({
     const filters = {
       tag_whitelist: whitelist,
       tag_blacklist: blacklist,
-      url_pattern: urlPattern || null,
-      title_pattern: titlePattern || null,
-      description_pattern: descPattern || null,
-      any_field_pattern: anyFieldPattern || null,
+      keyword: keyword || null,
       ...overrides,
     }
     onSave({ ...workspace, name, filters })
@@ -534,9 +525,9 @@ function WorkspaceEditor({
     }
   }, [name, workspace.name]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handlePatternBlur = useCallback(() => {
+  const handleKeywordBlur = useCallback(() => {
     saveWorkspace()
-  }, [urlPattern, titlePattern, descPattern, anyFieldPattern]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [keyword]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col gap-4">
@@ -614,12 +605,25 @@ function WorkspaceEditor({
         />
       </div>
 
-      {/* Regex pattern filters */}
-      <div className="grid grid-cols-2 gap-3">
-        <PatternInput label="URL pattern" value={urlPattern} onChange={setUrlPattern} onBlur={handlePatternBlur} placeholder="regex" />
-        <PatternInput label="Title pattern" value={titlePattern} onChange={setTitlePattern} onBlur={handlePatternBlur} placeholder="regex" />
-        <PatternInput label="Description pattern" value={descPattern} onChange={setDescPattern} onBlur={handlePatternBlur} placeholder="regex" />
-        <PatternInput label="Any field" value={anyFieldPattern} onChange={setAnyFieldPattern} onBlur={handlePatternBlur} placeholder="regex" />
+      {/* Keyword filter */}
+      <div>
+        <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-text-dim">
+          Keyword filter
+        </label>
+        <input
+          type="text"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          onBlur={handleKeywordBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleKeywordBlur()
+          }}
+          className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs font-mono text-text outline-none transition-colors focus:border-hi-dim"
+          placeholder="e.g. .tutorial :github.com"
+        />
+        <p className="mt-1 text-[11px] text-text-dim">
+          Keyword search query — combined with tag filters above
+        </p>
       </div>
 
     </div>
@@ -752,41 +756,6 @@ function RelatedTags({
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-// ─── Pattern Input ───────────────────────────────────────────────
-
-function PatternInput({
-  label,
-  value,
-  onChange,
-  onBlur,
-  placeholder,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  onBlur: () => void
-  placeholder: string
-}) {
-  return (
-    <div>
-      <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-text-dim">
-        {label}
-      </label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') onBlur()
-        }}
-        className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs font-mono text-text outline-none transition-colors focus:border-hi-dim"
-        placeholder={placeholder}
-      />
     </div>
   )
 }

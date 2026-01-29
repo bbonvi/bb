@@ -1,136 +1,58 @@
-// Workspace filter evaluation logic (§6.3)
+// Workspace filter → keyword query construction
 //
-// Workspace filters are applied client-side after fetch. Tag whitelist uses
-// OR logic (bookmark matches if it has ANY whitelisted tag). Blacklist uses
-// OR logic for exclusion (bookmark excluded if it has ANY blacklisted tag).
+// Translates workspace filter fields (tag whitelist, blacklist, keyword)
+// into a keyword search query string for server-side evaluation.
 
-import type { Bookmark, SearchQuery, Workspace } from './api'
+import type { SearchQuery, Workspace } from './api'
 
-// --- Glob matching ---
-// Converts a glob pattern to a RegExp. Supports *, ?, and [...] character classes.
-function globToRegex(pattern: string): RegExp {
-  let re = '^'
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i]
-    if (c === '*') re += '.*'
-    else if (c === '?') re += '.'
-    else if (c === '[') {
-      // Pass through character class until ]
-      const start = i
-      i++
-      if (i < pattern.length && pattern[i] === '!') {
-        re += '[^'
-        i++
-      } else {
-        re += '['
-      }
-      while (i < pattern.length && pattern[i] !== ']') {
-        re += pattern[i]
-        i++
-      }
-      if (i < pattern.length) re += ']'
-      else re += pattern.slice(start) // malformed — literal
+/**
+ * Build a keyword query string from workspace filter fields.
+ * Returns null if no filters produce any query terms.
+ */
+export function buildWorkspaceKeyword(workspace: Workspace): string | null {
+  const parts: string[] = []
+  const f = workspace.filters
+
+  // Tag whitelist: OR semantics → (#tag1 or #tag2 or ...)
+  if (f.tag_whitelist.length > 0) {
+    if (f.tag_whitelist.length === 1) {
+      parts.push(`#${f.tag_whitelist[0]}`)
     } else {
-      re += pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 0) // no-op
-      // Escape special regex chars
-      re += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const tags = f.tag_whitelist.map((t) => `#${t}`).join(' or ')
+      parts.push(`(${tags})`)
     }
   }
-  re += '$'
-  return new RegExp(re, 'i')
+
+  // Tag blacklist: each negated independently → not #tag1 not #tag2
+  for (const tag of f.tag_blacklist) {
+    parts.push(`not #${tag}`)
+  }
+
+  // Keyword: append as-is
+  if (f.keyword) {
+    parts.push(f.keyword)
+  }
+
+  if (parts.length === 0) return null
+  return parts.join(' ')
 }
 
-function hasGlobChars(s: string): boolean {
-  return /[*?[]/.test(s)
-}
-
-function hasRegexChars(s: string): boolean {
-  return /[.*+?^${}()|\\[\]]/.test(s)
-}
-
-// --- Server-side query injection ---
-// Modifies the search query to include plain workspace filters that can be
-// delegated to the backend.
-export function injectWorkspaceFilters(
-  query: SearchQuery,
+/**
+ * Merge workspace keyword query with user's search query.
+ * The workspace keyword is AND-combined with the user's existing keyword.
+ */
+export function mergeWorkspaceQuery(
+  userQuery: SearchQuery,
   workspace: Workspace,
 ): SearchQuery {
-  const injected = { ...query }
-  const f = workspace.filters
+  const wsKeyword = buildWorkspaceKeyword(workspace)
+  if (!wsKeyword) return userQuery
 
-  // Simple substring patterns → inject into corresponding search fields
-  if (f.title_pattern && !hasRegexChars(f.title_pattern) && !injected.title) {
-    injected.title = f.title_pattern
+  const merged = { ...userQuery }
+  if (merged.keyword) {
+    merged.keyword = `${wsKeyword} ${merged.keyword}`
+  } else {
+    merged.keyword = wsKeyword
   }
-  if (f.url_pattern && !hasRegexChars(f.url_pattern) && !injected.url) {
-    injected.url = f.url_pattern
-  }
-  if (f.description_pattern && !hasRegexChars(f.description_pattern) && !injected.description) {
-    injected.description = f.description_pattern
-  }
-
-  return injected
-}
-
-// --- Client-side post-filter ---
-// Applies workspace filters that can't be delegated to the backend.
-export function applyWorkspaceFilter(
-  bookmarks: Bookmark[],
-  workspace: Workspace,
-): Bookmark[] {
-  const f = workspace.filters
-
-  // Tag whitelist: plain tags (exact match) and glob patterns — both use OR logic
-  const plainWhitelist = f.tag_whitelist.filter((t) => !hasGlobChars(t)).map((t) => t.toLowerCase())
-  const globWhitelist = f.tag_whitelist.filter(hasGlobChars).map(globToRegex)
-
-  // Regex patterns (only when they contain regex metacharacters — simple strings already sent server-side)
-  const titleRe = f.title_pattern && hasRegexChars(f.title_pattern) ? safeRegex(f.title_pattern) : null
-  const urlRe = f.url_pattern && hasRegexChars(f.url_pattern) ? safeRegex(f.url_pattern) : null
-  const descRe = f.description_pattern && hasRegexChars(f.description_pattern) ? safeRegex(f.description_pattern) : null
-  const anyRe = f.any_field_pattern ? safeRegex(f.any_field_pattern) : null
-
-  // Blacklist glob patterns
-  const blacklistPatterns = f.tag_blacklist.map(globToRegex)
-
-  const needsClientInclusion = plainWhitelist.length > 0 || globWhitelist.length > 0 || titleRe || urlRe || descRe || anyRe
-  const needsBlacklist = blacklistPatterns.length > 0
-
-  if (!needsClientInclusion && !needsBlacklist) return bookmarks
-
-  return bookmarks.filter((bm) => {
-    // Inclusion: if there are client-side inclusion filters, bookmark must match at least one
-    if (needsClientInclusion) {
-      const matchesPlain = plainWhitelist.length > 0 && bm.tags.some((t) => plainWhitelist.includes(t.toLowerCase()))
-      const matchesGlob = globWhitelist.length > 0 && bm.tags.some((t) => globWhitelist.some((re) => re.test(t)))
-      const matchesTitle = titleRe ? titleRe.test(bm.title) : false
-      const matchesUrl = urlRe ? urlRe.test(bm.url) : false
-      const matchesDesc = descRe ? descRe.test(bm.description) : false
-      const matchesAny = anyRe
-        ? anyRe.test(bm.title) || anyRe.test(bm.url) || anyRe.test(bm.description) || bm.tags.some((t) => anyRe.test(t))
-        : false
-
-      if (!matchesPlain && !matchesGlob && !matchesTitle && !matchesUrl && !matchesDesc && !matchesAny) {
-        return false
-      }
-    }
-
-    // Exclusion: blacklisted tag match → exclude
-    if (needsBlacklist) {
-      if (bm.tags.some((t) => blacklistPatterns.some((re) => re.test(t)))) {
-        return false
-      }
-    }
-
-    return true
-  })
-}
-
-// Safe regex construction — returns null on invalid pattern
-function safeRegex(pattern: string): RegExp | null {
-  try {
-    return new RegExp(pattern, 'i')
-  } catch {
-    return null
-  }
+  return merged
 }

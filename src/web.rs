@@ -208,7 +208,7 @@ impl IntoResponse for AppError {
                     WorkspaceError::NotFound(_) => StatusCode::NOT_FOUND,
                     WorkspaceError::InvalidName
                     | WorkspaceError::DuplicateName(_)
-                    | WorkspaceError::InvalidPattern { .. }
+                    | WorkspaceError::InvalidKeyword(_)
                     | WorkspaceError::InvalidReorder(_) => StatusCode::BAD_REQUEST,
                     WorkspaceError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 };

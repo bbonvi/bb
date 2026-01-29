@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useShallow } from 'zustand/react/shallow'
-import type { Bookmark, Workspace } from '@/lib/api'
-import { applyWorkspaceFilter } from '@/lib/workspaceFilters'
+import type { Bookmark } from '@/lib/api'
 import { useSettings } from '@/hooks/useSettings'
 
 // Deterministic shuffle using seed + bookmark ID (Knuth multiplicative hash)
@@ -30,7 +29,6 @@ export function useDisplayBookmarks() {
     bookmarksFresh,
     initialLoadComplete,
     activeWorkspaceId,
-    workspaces,
   } = useStore(
     useShallow((s) => ({
       bookmarks: s.bookmarks,
@@ -42,7 +40,6 @@ export function useDisplayBookmarks() {
       bookmarksFresh: s.bookmarksFresh,
       initialLoadComplete: s.initialLoadComplete,
       activeWorkspaceId: s.activeWorkspaceId,
-      workspaces: s.workspaces,
     })),
   )
 
@@ -76,24 +73,13 @@ export function useDisplayBookmarks() {
     return bookmarks.filter((b) => !b.tags.some((t) => ignoreSet.has(t)))
   }, [bookmarks, settings.globalIgnoredTags, bookmarksFresh])
 
-  // Apply client-side workspace filters (glob patterns, regex, blacklist)
-  const workspaceFiltered = useMemo(() => {
-    if (!bookmarksFresh || globalFiltered === null) return null
-    if (!activeWorkspaceId) return globalFiltered
-
-    const ws = workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
-    if (!ws) return globalFiltered
-
-    return applyWorkspaceFilter(globalFiltered, ws)
-  }, [globalFiltered, activeWorkspaceId, workspaces, bookmarksFresh])
-
   const freshDisplay = useMemo(() => {
-    if (!bookmarksFresh || workspaceFiltered === null) return null
-    if (shuffle && !searchQuery.semantic) return shuffleBookmarks(workspaceFiltered, shuffleSeed)
+    if (!bookmarksFresh || globalFiltered === null) return null
+    if (shuffle && !searchQuery.semantic) return shuffleBookmarks(globalFiltered, shuffleSeed)
     // Non-semantic: reverse for newest-first; semantic: relevance-ranked as-is
-    if (!searchQuery.semantic) return [...workspaceFiltered].reverse()
-    return workspaceFiltered
-  }, [workspaceFiltered, shuffle, shuffleSeed, searchQuery.semantic, bookmarksFresh])
+    if (!searchQuery.semantic) return [...globalFiltered].reverse()
+    return globalFiltered
+  }, [globalFiltered, shuffle, shuffleSeed, searchQuery.semantic, bookmarksFresh])
 
   // Cache last fresh result to avoid flashing stale data with new ordering
   // Uses "update state during render" pattern (React-supported for derived state)
