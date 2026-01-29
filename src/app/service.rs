@@ -876,4 +876,136 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 1);
     }
+
+    #[test]
+    fn test_create_empty_url_rejected() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let result = service.create_bookmark(
+            BookmarkCreate { url: "".to_string(), ..Default::default() },
+            AddOpts::default(),
+        );
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string().to_lowercase();
+        assert!(msg.contains("empty"), "expected 'empty' in: {msg}");
+    }
+
+    #[test]
+    fn test_create_whitespace_url_rejected() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let result = service.create_bookmark(
+            BookmarkCreate { url: "   ".to_string(), ..Default::default() },
+            AddOpts::default(),
+        );
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string().to_lowercase();
+        assert!(msg.contains("empty"), "expected 'empty' in: {msg}");
+    }
+
+    #[test]
+    #[should_panic(expected = "not implemented")]
+    fn test_create_title_at_500_passes_validation() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let title = "a".repeat(500);
+        // Validation passes, duplicate check passes (empty mock), then backend.create panics
+        let _ = service.create_bookmark(
+            BookmarkCreate {
+                url: "https://example.com/valid".to_string(),
+                title: Some(title),
+                ..Default::default()
+            },
+            AddOpts::default(),
+        );
+    }
+
+    #[test]
+    fn test_create_title_501_rejected() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let title = "a".repeat(501);
+        let result = service.create_bookmark(
+            BookmarkCreate {
+                url: "https://example.com/valid".to_string(),
+                title: Some(title),
+                ..Default::default()
+            },
+            AddOpts::default(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("500"));
+    }
+
+    #[test]
+    fn test_create_description_2001_rejected() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let desc = "a".repeat(2001);
+        let result = service.create_bookmark(
+            BookmarkCreate {
+                url: "https://example.com/valid".to_string(),
+                description: Some(desc),
+                ..Default::default()
+            },
+            AddOpts::default(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("2000"));
+    }
+
+    #[test]
+    fn test_create_tag_51_chars_rejected() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let tag = "a".repeat(51);
+        let result = service.create_bookmark(
+            BookmarkCreate {
+                url: "https://example.com/valid".to_string(),
+                tags: Some(vec![tag]),
+                ..Default::default()
+            },
+            AddOpts::default(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("50"));
+    }
+
+    #[test]
+    fn test_create_tag_with_spaces_rejected() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let result = service.create_bookmark(
+            BookmarkCreate {
+                url: "https://example.com/valid".to_string(),
+                tags: Some(vec!["my tag".to_string()]),
+                ..Default::default()
+            },
+            AddOpts::default(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("spaces"));
+    }
+
+    #[test]
+    fn test_validate_config_zero_threads_rejected() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let mut config = Config::default();
+        config.task_queue_max_threads = 0;
+        let result = service.update_config(config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("0"));
+    }
+
+    #[test]
+    fn test_validate_config_101_threads_rejected() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let mut config = Config::default();
+        config.task_queue_max_threads = 101;
+        let result = service.update_config(config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("100"));
+    }
+
+    #[test]
+    fn test_delete_nonexistent_bookmark() {
+        let service = AppService::new(Box::new(MockBackend::new(vec![])));
+        let result = service.delete_bookmark(999);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string().to_lowercase();
+        assert!(msg.contains("not found"), "expected 'not found' in: {msg}");
+    }
 }

@@ -395,3 +395,42 @@ fn test_double_not() {
     let bm = make_bookmark("Rust", "", "", &[]);
     assert!(matches("not not rust", &bm).unwrap());
 }
+
+#[test]
+fn test_unicode_tag() {
+    assert!(matches("#café", &make_bookmark("", "", "", &["café"])).unwrap());
+    assert!(matches("#カフェ", &make_bookmark("", "", "", &["カフェ"])).unwrap());
+}
+
+#[test]
+fn test_unicode_term() {
+    assert!(matches("résumé", &make_bookmark("My résumé", "", "", &[])).unwrap());
+}
+
+#[test]
+fn test_quoted_empty_string() {
+    let _ = parse("\"\"");
+    let _ = parse(".\"\"");
+}
+
+#[test]
+fn test_very_long_input() {
+    let input = "a ".repeat(5000);
+    assert!(parse_tolerant(&input).is_ok());
+}
+
+#[test]
+fn test_normalize_balance_parens_indirect() {
+    // "and () or" — all tokens are operators/empty parens, should normalize to nothing
+    let result = parse_tolerant("and () or").unwrap();
+    assert!(result.is_none(), "expected None after stripping operators and empty parens");
+
+    // Unmatched parens should be balanced away, leaving the tag filter
+    let result = parse_tolerant("(((#dev").unwrap();
+    assert!(result.is_some(), "expected Some(tag filter) after balancing parens");
+    let filter = result.unwrap();
+    let bm_match = make_bookmark("", "", "", &["dev"]);
+    let bm_miss = make_bookmark("", "", "", &["other"]);
+    assert!(eval(&filter, &bm_match));
+    assert!(!eval(&filter, &bm_miss));
+}

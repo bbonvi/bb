@@ -328,3 +328,107 @@ pub fn test_rule_tag_order_independent() {
         tags: Some(vec!["b".to_string(), "a".to_string()]),
     }));
 }
+
+#[test]
+#[should_panic(expected = "malformed regex")]
+pub fn test_malformed_regex_panics() {
+    // is_string_matches panics on malformed regex via .expect()
+    rules::Rule::is_string_matches("r/[unclosed/", "input");
+}
+
+#[test]
+pub fn test_title_rule_vs_none_title_record() {
+    // When rule has a title condition but record.title is None,
+    // the `if let (Some(..), Some(..))` silently skips the check.
+    // The rule still matches if other conditions pass.
+    let rule = rules::Rule {
+        url: Some("any.com".to_string()),
+        title: Some("x".to_string()),
+        description: None,
+        tags: None,
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    assert!(rule.is_match(&rules::Record {
+        url: "https://any.com".into(),
+        title: None,
+        description: None,
+        tags: None,
+    }));
+}
+
+#[test]
+pub fn test_description_rule_vs_none_description_record() {
+    // Same silent-skip behavior for description: rule has description
+    // condition but record.description is None — check is skipped.
+    let rule = rules::Rule {
+        url: Some("any.com".to_string()),
+        title: None,
+        description: Some("tutorial".to_string()),
+        tags: None,
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    assert!(rule.is_match(&rules::Record {
+        url: "https://any.com".into(),
+        title: None,
+        description: None,
+        tags: None,
+    }));
+}
+
+#[test]
+pub fn test_no_condition_rule_returns_false() {
+    // All condition fields are None — has_any_condition stays false.
+    let rule = rules::Rule {
+        url: None,
+        title: None,
+        description: None,
+        tags: None,
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://any.com".into(),
+        title: Some("anything".into()),
+        description: Some("anything".into()),
+        tags: Some(vec!["tag".to_string()]),
+    }));
+}
+
+#[test]
+pub fn test_action_fields_exist() {
+    // Verify Action::UpdateBookmark can carry all optional fields.
+    let action = rules::Action::UpdateBookmark {
+        title: Some("New Title".to_string()),
+        description: Some("New Description".to_string()),
+        tags: Some(vec!["tag1".to_string(), "tag2".to_string()]),
+    };
+
+    match action {
+        rules::Action::UpdateBookmark {
+            title,
+            description,
+            tags,
+        } => {
+            assert_eq!(title.unwrap(), "New Title");
+            assert_eq!(description.unwrap(), "New Description");
+            assert_eq!(tags.unwrap().len(), 2);
+        }
+    }
+}

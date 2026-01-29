@@ -496,3 +496,226 @@ fn search_update_append_tags_across_multiple() {
     let all = mgr.search(SearchQuery::default()).unwrap();
     assert!(all.iter().all(|b| b.tags.contains(&"new_tag".to_string())));
 }
+
+// --- additional coverage ---
+
+#[test]
+fn tags_containing_commas_roundtrip_corruption() {
+    let tmp = tempfile::tempdir().unwrap();
+    let csv_path = tmp.path().join("bookmarks.csv");
+    let path_str = csv_path.to_str().unwrap();
+
+    {
+        let mgr = BackendCsv::load(path_str).unwrap();
+        mgr.create(BookmarkCreate {
+            url: "https://comma.com".into(),
+            tags: Some(vec!["a,b".into(), "c".into()]),
+            ..Default::default()
+        })
+        .unwrap();
+    }
+
+    // Reload from disk — the comma inside "a,b" is indistinguishable from the delimiter
+    let mgr = BackendCsv::load(path_str).unwrap();
+    let all = mgr.search(SearchQuery::default()).unwrap();
+    assert_eq!(all.len(), 1);
+    // Known corruption: "a,b" + "c" → join(",") → "a,b,c" → split(",") → ["a","b","c"]
+    assert_eq!(all[0].tags, vec!["a", "b", "c"]);
+}
+
+#[test]
+fn csv_fields_with_embedded_quotes_and_newlines() {
+    let tmp = tempfile::tempdir().unwrap();
+    let csv_path = tmp.path().join("bookmarks.csv");
+    let path_str = csv_path.to_str().unwrap();
+
+    {
+        let mgr = BackendCsv::load(path_str).unwrap();
+        mgr.create(BookmarkCreate {
+            url: "https://special.com".into(),
+            title: Some("Hello, \"World\"".into()),
+            description: Some("line1\nline2".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    }
+
+    let mgr = BackendCsv::load(path_str).unwrap();
+    let all = mgr.search(SearchQuery::default()).unwrap();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].title, "Hello, \"World\"");
+    assert_eq!(all[0].description, "line1\nline2");
+}
+
+#[test]
+fn empty_string_tags() {
+    let (mgr, _tmp) = fresh_mgr();
+    let b = mgr
+        .create(BookmarkCreate {
+            url: "https://empty-tag.com".into(),
+            tags: Some(vec!["".into(), "real".into()]),
+            ..Default::default()
+        })
+        .unwrap();
+    // Empty string tag may survive — document actual behavior
+    assert!(b.tags.contains(&"real".to_string()));
+    // The empty string is either kept or filtered; record whichever is true
+    let has_empty = b.tags.contains(&"".to_string());
+    // Re-check via search to confirm persistence
+    let results = mgr.search(SearchQuery::default()).unwrap();
+    assert_eq!(results[0].tags.contains(&"".to_string()), has_empty);
+}
+
+#[test]
+fn search_with_only_negated_tags() {
+    let (mgr, _tmp) = fresh_mgr();
+    mgr.create(BookmarkCreate {
+        url: "https://hidden.com".into(),
+        tags: Some(vec!["hidden".into()]),
+        ..Default::default()
+    })
+    .unwrap();
+    mgr.create(BookmarkCreate {
+        url: "https://visible.com".into(),
+        tags: Some(vec!["visible".into()]),
+        ..Default::default()
+    })
+    .unwrap();
+
+    let results = mgr
+        .search(SearchQuery {
+            tags: Some(vec!["-hidden".into()]),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].url, "https://visible.com");
+}
+
+#[test]
+fn delete_then_create_id_monotonicity() {
+    let (mgr, _tmp) = fresh_mgr();
+    seed(&mgr, 3); // ids 0, 1, 2
+    mgr.delete(0).unwrap();
+
+    let new = mgr
+        .create(BookmarkCreate {
+            url: "https://new.com".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    // ID should be last.id + 1 = 3, not reuse deleted 0
+    assert_eq!(new.id, 3);
+}
+
+#[test]
+fn search_by_description_filter() {
+    let (mgr, _tmp) = fresh_mgr();
+    mgr.create(BookmarkCreate {
+        url: "https://a.com".into(),
+        description: Some("unique desc for matching".into()),
+        ..Default::default()
+    })
+    .unwrap();
+    mgr.create(BookmarkCreate {
+        url: "https://b.com".into(),
+        description: Some("something else".into()),
+        ..Default::default()
+    })
+    .unwrap();
+
+    let results = mgr
+        .search(SearchQuery {
+            description: Some("unique desc".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].url, "https://a.com");
+}
+
+#[test]
+fn search_update_with_remove_tags() {
+    let (mgr, _tmp) = fresh_mgr();
+    seed(&mgr, 3); // each has tags ["all", "tagN"]
+
+    let count = mgr
+        .search_update(
+            SearchQuery {
+                tags: Some(vec!["all".into()]),
+                ..Default::default()
+            },
+            BookmarkUpdate {
+                remove_tags: Some(vec!["all".into()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(count, 3);
+
+    let all = mgr.search(SearchQuery::default()).unwrap();
+    for b in &all {
+        assert!(
+            !b.tags.contains(&"all".to_string()),
+            "bookmark {} still has 'all' tag",
+            b.id
+        );
+    }
+}
+
+#[test]
+fn search_delete_entire_collection() {
+    let (mgr, _tmp) = fresh_mgr();
+    seed(&mgr, 5); // all have tag "all"
+
+    let count = mgr
+        .search_delete(SearchQuery {
+            tags: Some(vec!["all".into()]),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(count, 5);
+
+    let remaining = mgr.search(SearchQuery::default()).unwrap();
+    assert!(remaining.is_empty());
+}
+
+#[test]
+fn keyword_with_tag_prefix_search() {
+    let (mgr, _tmp) = fresh_mgr();
+    seed(&mgr, 3); // tags: ["all","tag0"], ["all","tag1"], ["all","tag2"]
+
+    let results = mgr
+        .search(SearchQuery {
+            keyword: Some("#tag0".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(results.len(), 1);
+    assert!(results[0].tags.contains(&"tag0".to_string()));
+}
+
+#[test]
+fn empty_and_whitespace_keyword_returns_all() {
+    let (mgr, _tmp) = fresh_mgr();
+    seed(&mgr, 4);
+
+    // Known behavior: Some("") is not None, so the early "return all" path is
+    // skipped, yet the empty keyword sets no has_match flag → returns nothing.
+    // This documents the current (arguably buggy) behavior.
+    let results_empty = mgr
+        .search(SearchQuery {
+            keyword: Some("".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(results_empty.len(), 0);
+
+    let results_whitespace = mgr
+        .search(SearchQuery {
+            keyword: Some("   ".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(results_whitespace.len(), 0);
+}

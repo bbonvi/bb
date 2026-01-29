@@ -475,4 +475,64 @@ mod tests {
         store.reorder(&[]).unwrap();
         assert!(store.list().is_empty());
     }
+
+    #[test]
+    fn test_name_exactly_100_chars_passes() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let name = "a".repeat(100);
+        let ws = store.create(name.clone(), None, None).unwrap();
+        assert_eq!(ws.name, name);
+    }
+
+    #[test]
+    fn test_update_to_duplicate_name_of_another() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        store.create("Alpha".into(), None, None).unwrap();
+        let beta = store.create("Beta".into(), None, None).unwrap();
+        let err = store
+            .update(&beta.id, Some("Alpha".into()), None, None)
+            .unwrap_err();
+        assert!(matches!(err, WorkspaceError::DuplicateName(_)));
+    }
+
+    #[test]
+    fn test_create_with_empty_keyword() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let filters = WorkspaceFilters {
+            keyword: Some("".into()),
+            ..Default::default()
+        };
+        let ws = store.create("EmptyKw".into(), Some(filters), None).unwrap();
+        assert_eq!(ws.name, "EmptyKw");
+    }
+
+    #[test]
+    fn test_reorder_with_subset_of_ids_fails() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let ws1 = store.create("One".into(), None, None).unwrap();
+        let ws2 = store.create("Two".into(), None, None).unwrap();
+        store.create("Three".into(), None, None).unwrap();
+        let err = store
+            .reorder(&[ws1.id.clone(), ws2.id.clone()])
+            .unwrap_err();
+        assert!(matches!(err, WorkspaceError::InvalidReorder(_)));
+    }
+
+    #[test]
+    fn test_create_with_whitespace_keyword() {
+        let dir = tmp_dir();
+        let mut store = WorkspaceStore::load(&dir).unwrap();
+        let filters = WorkspaceFilters {
+            keyword: Some("   ".into()),
+            ..Default::default()
+        };
+        let ws = store
+            .create("WhitespaceKw".into(), Some(filters), None)
+            .unwrap();
+        assert_eq!(ws.name, "WhitespaceKw");
+    }
 }
