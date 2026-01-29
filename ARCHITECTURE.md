@@ -209,9 +209,10 @@ src/metadata/
 ├── mod.rs           # Public API: fetch_metadata()
 ├── normalize.rs     # URL normalization (tracking params, case, trailing slash)
 ├── oembed.rs        # oEmbed provider registry and fetcher
-├── fetchers/        # Parallel metadata sources
+├── fetchers/        # Parallel metadata sources (order configurable via scrape.fetcher_order)
 │   ├── html.rs      # Plain HTML parser (og:*, meta tags, JSON-LD)
-│   ├── ddg.rs       # DuckDuckGo API client (parallel, lowest priority)
+│   ├── wayback.rs   # Wayback Machine (archive.org) snapshot fetcher
+│   ├── ddg.rs       # DuckDuckGo API client
 │   ├── microlink.rs # Microlink API client
 │   └── peekalink.rs # Peekalink API client
 ├── merge.rs         # Field-by-field priority merging with smart defaults
@@ -230,12 +231,13 @@ URL
      - Resolve protocol-relative URLs (//example.com → https://example.com)
  → thread::scope() parallel fetch:
      ├─→ oEmbed fetcher (checks provider registry)
+     ├─→ Wayback Machine (archive.org snapshot)
      ├─→ Plain HTML fetcher (og:title, twitter:*, meta tags, JSON-LD structured data, <link rel="canonical">)
      ├─→ Microlink API
      ├─→ Peekalink API
-     └─→ DDG API fetcher (priority 10, lowest)
+     └─→ DDG API fetcher
  → merge_metadata(results)
-     - Priority: oEmbed > HTML > Microlink > Peekalink > DDG
+     - Priority from config: scrape.fetcher_order (default: oEmbed > Wayback > Plain > Microlink > Peekalink > DDG)
      - Smart title fallback: og:title > twitter:title > JSON-LD > <title> tag
      - Smart description: generic/empty descriptions overridden by real content from lower-priority fetchers
      - Title validity: rejects site-wide defaults, error pages, bare domains, short generic strings
@@ -263,10 +265,22 @@ URL
 - URL scheme matching via regex patterns
 - Direct API calls to provider endpoints
 
+**Wayback Fetcher** (`fetchers/wayback.rs`):
+- Queries `archive.org/wayback/available?url=` for closest snapshot
+- Fetches archived HTML, parses with original URL for correct relative resolution
+- Strips icon URLs (rewritten by archive.org)
+- Useful for pages that block scrapers but have archived copies
+
 **DDG Fetcher** (`fetchers/ddg.rs`):
-- Runs in parallel with other fetchers (priority 10, lowest)
+- Runs in parallel with other fetchers
 - Not a post-failure fallback; contributes to merge pool with all other sources
 - Provides additional title/description coverage for generic or missing content
+
+**Configurable Fetcher Order**:
+- `scrape.fetcher_order` in config.yaml controls which fetchers run and their merge priority
+- Default: `[oEmbed, Wayback, Plain, Microlink, Peekalink, DDG]`
+- Remove an entry to disable that fetcher; reorder to change priority
+- Headless Chrome is excluded from this list (controlled by `always_headless`)
 
 **Smart Merge Logic**:
 - Title merging: generic/auto-generated titles (site-wide defaults, error page titles, bare domains, short strings <3 chars) are discarded in favor of real titles from lower-priority sources
