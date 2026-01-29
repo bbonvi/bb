@@ -12,7 +12,7 @@ use anyhow::Result;
 pub fn fetch_meta(url: &str, opts: MetaOptions) -> Result<Metadata> {
     let url = &normalize::normalize_url(url);
     let scrape_config = opts.scrape_config.as_ref();
-    let registry = FetcherRegistry::new();
+    let registry = FetcherRegistry::new(&opts);
 
     let mut metadata = registry.fetch_metadata(url, &opts)?
         .unwrap_or_default();

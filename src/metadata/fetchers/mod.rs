@@ -41,7 +41,7 @@ pub struct FetcherRegistry {
 const MAX_UNBOUNDED_FETCHERS: usize = 6;
 
 impl FetcherRegistry {
-    pub fn new() -> Self {
+    pub fn new(opts: &MetaOptions) -> Self {
         let mut registry = Self { fetchers: Vec::new() };
 
         // Add fetchers — all run in parallel, priority determines merge order
@@ -49,6 +49,15 @@ impl FetcherRegistry {
         registry.fetchers.push(Box::new(plain::PlainFetcher::new()));
         registry.fetchers.push(Box::new(microlink::MicrolinkFetcher::new()));
         registry.fetchers.push(Box::new(peekalink::PeekalinkFetcher::new()));
+
+        // When always_headless is enabled, run Chrome in parallel with other fetchers
+        let always_headless = opts.scrape_config.as_ref()
+            .map(|c| c.always_headless)
+            .unwrap_or(false);
+        if always_headless && !opts.no_headless {
+            registry.fetchers.push(Box::new(plain::HeadlessParallelFetcher::new(opts.clone())));
+        }
+
         registry.fetchers.push(Box::new(ddg::DdgFetcher::new()));
 
         assert!(
@@ -104,9 +113,14 @@ impl FetcherRegistry {
         // Short-circuit only if we have ALL key fields: validated image,
         // non-generic title, and a description. Missing or generic text
         // fields warrant a headless fallback attempt.
-        let needs_headless = !merged.has_valid_image()
-            || merged.description.is_none()
-            || is_generic_title(merged.title.as_deref());
+        // Skip fallback if headless already ran in parallel (always_headless).
+        let already_ran_headless = opts.scrape_config.as_ref()
+            .map(|c| c.always_headless)
+            .unwrap_or(false);
+        let needs_headless = !already_ran_headless
+            && (!merged.has_valid_image()
+                || merged.description.is_none()
+                || is_generic_title(merged.title.as_deref()));
 
         if needs_headless && !opts.no_headless {
             let headless_fetcher = plain::HeadlessFetcher::new(opts.clone());

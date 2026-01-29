@@ -42,7 +42,34 @@ impl MetadataFetcher for PlainFetcher {
     }
 }
 
-/// Enhanced plain fetcher that can use headless browser if needed
+/// Headless fetcher that runs in parallel with other fetchers.
+/// Registered only when `scrape.always_headless = true`.
+pub struct HeadlessParallelFetcher {
+    opts: MetaOptions,
+}
+
+impl HeadlessParallelFetcher {
+    pub fn new(opts: MetaOptions) -> Self {
+        Self { opts }
+    }
+}
+
+impl MetadataFetcher for HeadlessParallelFetcher {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
+        let inner = HeadlessFetcher::new(self.opts.clone());
+        inner.fetch_with_headless(url, scrape_config)
+    }
+
+    fn name(&self) -> &'static str {
+        "Headless"
+    }
+
+    fn priority(&self) -> u8 {
+        5 // After Plain (2), before DDG (10)
+    }
+}
+
+/// Enhanced plain fetcher that can use headless browser if needed (fallback mode)
 pub struct HeadlessFetcher {
     opts: MetaOptions,
 }

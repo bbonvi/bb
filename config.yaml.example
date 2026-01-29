@@ -44,6 +44,11 @@ scrape:
   # Prevents SSRF attacks by rejecting 127.0.0.1, 192.168.x.x, 10.x.x.x, etc.
   block_private_ips: true
 
+  # Always run headless Chrome in parallel with other fetchers (default: false)
+  # When false, headless only runs as a fallback when metadata is incomplete.
+  # Enable for sites that heavily rely on JS rendering (e.g. SPAs).
+  always_headless: false
+
 rules:
 - url: mail.proton.me
   action: !UpdateBookmark

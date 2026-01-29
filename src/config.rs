@@ -35,6 +35,11 @@ pub struct ScrapeConfig {
     /// Block requests to private/loopback IP ranges (default: true)
     #[serde(default = "default_block_private_ips")]
     pub block_private_ips: bool,
+
+    /// Always run headless Chrome in parallel with other fetchers (default: false)
+    /// When false, headless only runs as a fallback when metadata is incomplete.
+    #[serde(default)]
+    pub always_headless: bool,
 }
 
 impl Default for ScrapeConfig {
@@ -44,6 +49,7 @@ impl Default for ScrapeConfig {
             allowed_schemes: default_allowed_schemes(),
             blocked_hosts: Vec::new(),
             block_private_ips: true,
+            always_headless: false,
         }
     }
 }
