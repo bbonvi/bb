@@ -806,6 +806,51 @@ function GeneralSettings({ visibleTags }: { visibleTags: string[] }) {
         onChange={(v) => updateSettings({ showCatchAllWorkspace: v })}
       />
 
+      {/* Polling intervals */}
+      <div>
+        <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-dim">
+          Polling intervals (seconds)
+        </label>
+        <p className="mb-2 text-xs text-text-muted">
+          How often auxiliary data (tags, totals, tasks) is fetched
+        </p>
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="mb-1 block text-[11px] text-text-dim">Normal</label>
+            <input
+              type="number"
+              step={0.5}
+              min={0.5}
+              value={settings.pollIntervalNormal / 1000}
+              onChange={(e) => updateSettings({ pollIntervalNormal: Math.max(500, Number(e.target.value) * 1000) })}
+              className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="mb-1 block text-[11px] text-text-dim">Busy</label>
+            <input
+              type="number"
+              step={0.5}
+              min={0.5}
+              value={settings.pollIntervalBusy / 1000}
+              onChange={(e) => updateSettings({ pollIntervalBusy: Math.max(500, Number(e.target.value) * 1000) })}
+              className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="mb-1 block text-[11px] text-text-dim">Hidden tab</label>
+            <input
+              type="number"
+              step={0.5}
+              min={5}
+              value={settings.pollIntervalHidden / 1000}
+              onChange={(e) => updateSettings({ pollIntervalHidden: Math.max(5000, Number(e.target.value) * 1000) })}
+              className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Global ignored tags */}
       <div>
         <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-dim">

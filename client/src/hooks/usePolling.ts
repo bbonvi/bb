@@ -13,8 +13,18 @@ import {
 } from '@/lib/api'
 import type { Bookmark, SearchQuery, Workspace } from '@/lib/api'
 import { mergeWorkspaceQuery } from '@/lib/workspaceFilters'
+import { getSettings } from '@/hooks/useSettings'
 
-const AUX_POLL_INTERVAL = 10_000
+function hasActiveTasks(): boolean {
+  const queue = useStore.getState().taskQueue.queue
+  return queue.some((t) => t.status === 'Pending' || t.status === 'InProgress')
+}
+
+function getAuxInterval(visible: boolean): number {
+  const s = getSettings()
+  if (!visible) return s.pollIntervalHidden
+  return hasActiveTasks() ? s.pollIntervalBusy : s.pollIntervalNormal
+}
 
 function mergeWithDirty(
   incoming: Bookmark[],
@@ -128,13 +138,21 @@ export function usePolling() {
     }
   }, [])
 
+  const lastAuxFetchRef = useRef(0)
+
   useEffect(() => {
-    // --- Visibility change: refetch bookmarks with ETag on tab refocus ---
+    // --- Visibility change: refetch on tab refocus with debounce ---
     function handleVisibility() {
       visibleRef.current = document.visibilityState === 'visible'
       if (visibleRef.current) {
-        fetchBookmarks()
-        fetchAuxiliary()
+        const elapsed = Date.now() - lastAuxFetchRef.current
+        const minGap = getSettings().pollIntervalNormal
+        if (elapsed >= minGap) {
+          fetchBookmarks()
+          fetchAuxiliary()
+        }
+        // Always restart polling when tab regains focus
+        scheduleAuxPoll()
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -143,13 +161,21 @@ export function usePolling() {
     // Fetch auxiliary first (to get workspaces), then bookmarks
     fetchAuxiliary().then(() => fetchBookmarks())
 
-    // --- Auxiliary poll on interval ---
+    // --- Auxiliary poll on dynamic interval ---
     function scheduleAuxPoll() {
       if (auxTimerRef.current) clearTimeout(auxTimerRef.current)
+      const interval = getAuxInterval(visibleRef.current)
       auxTimerRef.current = setTimeout(async () => {
         await fetchAuxiliary()
-        if (visibleRef.current) scheduleAuxPoll()
-      }, AUX_POLL_INTERVAL)
+        lastAuxFetchRef.current = Date.now()
+
+        // Always refetch bookmarks on each cycle — ETags make this
+        // cheap (304 when unchanged), and it keeps data fresh when
+        // external changes occur (task completions, other clients).
+        fetchBookmarks()
+
+        scheduleAuxPoll()
+      }, interval)
     }
     scheduleAuxPoll()
 

@@ -3,11 +3,17 @@ import { useCallback, useSyncExternalStore } from 'react'
 export interface GlobalSettings {
   showCatchAllWorkspace: boolean
   globalIgnoredTags: string[]
+  pollIntervalNormal: number   // ms, default 5000
+  pollIntervalBusy: number     // ms, default 1500
+  pollIntervalHidden: number   // ms, default 60000
 }
 
 const DEFAULTS: GlobalSettings = {
   showCatchAllWorkspace: true,
   globalIgnoredTags: [],
+  pollIntervalNormal: 5000,
+  pollIntervalBusy: 1500,
+  pollIntervalHidden: 60000,
 }
 
 const STORAGE_KEY = 'bb:settings'
