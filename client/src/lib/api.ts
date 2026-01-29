@@ -217,6 +217,91 @@ async function fetchApi<T>(
   return JSON.parse(text) as T
 }
 
+// --- ETag conditional fetch for search endpoint ---
+
+const etagCache = new Map<string, string>()
+const responseCache = new Map<string, unknown>()
+
+async function fetchApiWithEtag<T>(
+  path: string,
+  cacheKey: string,
+  options: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+
+  const token = _getToken()
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const cachedEtag = etagCache.get(cacheKey)
+  if (cachedEtag) {
+    headers['If-None-Match'] = cachedEtag
+  }
+
+  const res = await fetch(path, {
+    method: options.method ?? 'GET',
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+  })
+
+  if (res.status === 401) {
+    _onUnauthorized()
+    throw new ApiError(401, 'Unauthorized', 'Unauthorized')
+  }
+
+  if (res.status === 304) {
+    const cached = responseCache.get(cacheKey)
+    if (cached !== undefined) return cached as T
+    // Fallback: cache miss after 304 — clear and refetch without ETag
+    etagCache.delete(cacheKey)
+    return fetchApiWithEtag(path, cacheKey, options)
+  }
+
+  if (!res.ok) {
+    let code = 'UNKNOWN'
+    let message = res.statusText
+    try {
+      const body = await res.json()
+      if (body.error) code = body.error
+      if (body.message) message = body.message
+    } catch {
+      // non-JSON error body
+    }
+    throw new ApiError(res.status, code, message)
+  }
+
+  const text = await res.text()
+  if (!text) return undefined as T
+  const data = JSON.parse(text) as T
+
+  // Store ETag and response
+  const newEtag = res.headers.get('etag')
+  if (newEtag) {
+    etagCache.set(cacheKey, newEtag)
+    responseCache.set(cacheKey, data)
+  }
+
+  return data
+}
+
+export function clearEtagCache(prefix?: string) {
+  if (prefix) {
+    for (const key of etagCache.keys()) {
+      if (key.startsWith(prefix)) {
+        etagCache.delete(key)
+        responseCache.delete(key)
+      }
+    }
+  } else {
+    etagCache.clear()
+    responseCache.clear()
+  }
+}
+
 // --- File URL helper (for <img src>) ---
 
 export function fileUrl(fileId: string): string {
@@ -228,36 +313,45 @@ export function fileUrl(fileId: string): string {
 // --- Endpoint functions ---
 
 export function searchBookmarks(query: SearchQuery = {}): Promise<Bookmark[]> {
-  return fetchApi('/api/bookmarks/search', { method: 'POST', body: query })
+  return fetchApiWithEtag('/api/bookmarks/search', 'bookmarks-search', { method: 'POST', body: query })
 }
 
-export function createBookmark(data: BookmarkCreate): Promise<Bookmark> {
-  return fetchApi('/api/bookmarks/create', { method: 'POST', body: data })
+export async function createBookmark(data: BookmarkCreate): Promise<Bookmark> {
+  const result = await fetchApi<Bookmark>('/api/bookmarks/create', { method: 'POST', body: data })
+  clearEtagCache('bookmarks')
+  return result
 }
 
-export function updateBookmark(data: BookmarkUpdate): Promise<Bookmark> {
-  return fetchApi('/api/bookmarks/update', { method: 'POST', body: data })
+export async function updateBookmark(data: BookmarkUpdate): Promise<Bookmark> {
+  const result = await fetchApi<Bookmark>('/api/bookmarks/update', { method: 'POST', body: data })
+  clearEtagCache('bookmarks')
+  return result
 }
 
-export function deleteBookmark(id: number): Promise<void> {
-  return fetchApi('/api/bookmarks/delete', { method: 'POST', body: { id } })
+export async function deleteBookmark(id: number): Promise<void> {
+  await fetchApi<void>('/api/bookmarks/delete', { method: 'POST', body: { id } })
+  clearEtagCache('bookmarks')
 }
 
-export function searchUpdateBookmarks(
+export async function searchUpdateBookmarks(
   query: BulkSearchQuery,
   update: BulkUpdate,
 ): Promise<number> {
-  return fetchApi('/api/bookmarks/search_update', {
+  const result = await fetchApi<number>('/api/bookmarks/search_update', {
     method: 'POST',
     body: { query, update },
   })
+  clearEtagCache('bookmarks')
+  return result
 }
 
-export function searchDeleteBookmarks(query: BulkSearchQuery): Promise<number> {
-  return fetchApi('/api/bookmarks/search_delete', {
+export async function searchDeleteBookmarks(query: BulkSearchQuery): Promise<number> {
+  const result = await fetchApi<number>('/api/bookmarks/search_delete', {
     method: 'POST',
     body: query,
   })
+  clearEtagCache('bookmarks')
+  return result
 }
 
 export function fetchTotal(): Promise<{ total: number }> {
@@ -268,14 +362,15 @@ export function fetchTags(): Promise<string[]> {
   return fetchApi('/api/bookmarks/tags', { method: 'POST', body: {} })
 }
 
-export function refreshMetadata(
+export async function refreshMetadata(
   id: number,
   opts?: { async_meta?: boolean; no_headless?: boolean },
 ): Promise<void> {
-  return fetchApi('/api/bookmarks/refresh_metadata', {
+  await fetchApi<void>('/api/bookmarks/refresh_metadata', {
     method: 'POST',
     body: { id, ...opts },
   })
+  clearEtagCache('bookmarks')
 }
 
 export function fetchConfig(): Promise<Config> {

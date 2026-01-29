@@ -293,6 +293,7 @@ mod backend_integration {
         fn update_config(&self, _: Config) -> Result<(), AppError> {
             unimplemented!()
         }
+        fn bookmark_version(&self) -> u64 { 0 }
     }
 
     /// Test that semantic ranking reorders filtered results by similarity.
@@ -921,6 +922,7 @@ mod index_maintenance {
         fn update_config(&self, _: Config) -> Result<(), AppError> {
             unimplemented!()
         }
+        fn bookmark_version(&self) -> u64 { 0 }
     }
 
     /// Test that creating a bookmark indexes it for semantic search.
@@ -1295,6 +1297,7 @@ mod index_maintenance {
         fn update_config(&self, _: Config) -> Result<(), AppError> {
             unimplemented!()
         }
+        fn bookmark_version(&self) -> u64 { 0 }
     }
 
     /// Test that updating bookmark content triggers re-embedding.

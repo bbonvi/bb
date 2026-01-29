@@ -16,7 +16,7 @@ use crate::{
 use anyhow::Context;
 use axum::{
     extract::{DefaultBodyLimit, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{delete as delete_method, get, post, put},
     Json, Router,
@@ -254,8 +254,9 @@ pub struct ListBookmarksRequest {
 
 async fn search(
     State(state): State<Arc<RwLock<SharedState>>>,
+    headers: HeaderMap,
     Json(payload): Json<ListBookmarksRequest>,
-) -> Result<axum::Json<Vec<Bookmark>>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     log::info!("Search bookmarks request: {:?}", payload);
 
     // Validate threshold before processing
@@ -272,6 +273,18 @@ async fn search(
 
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
+
+    // ETag support
+    let version = app_service.bookmark_version();
+    let etag = format!("W/\"v{}\"", version);
+
+    if let Some(if_none_match) = headers.get("if-none-match") {
+        if let Ok(val) = if_none_match.to_str() {
+            if val == etag {
+                return Ok(StatusCode::NOT_MODIFIED.into_response());
+            }
+        }
+    }
 
     let query = SearchQuery {
         id: payload.id,
@@ -290,7 +303,6 @@ async fn search(
     let bookmarks = app_service
         .search_bookmarks(query, false)
         .map_err(|e| {
-            // Map semantic-disabled errors to proper HTTP response
             let err_msg = e.to_string();
             if err_msg.contains("Semantic search is disabled") {
                 AppError::SemanticDisabled {
@@ -307,7 +319,12 @@ async fn search(
             }
         })?;
 
-    Ok(axum::Json(bookmarks))
+    let mut response = axum::Json(bookmarks).into_response();
+    response.headers_mut().insert(
+        "etag",
+        etag.parse().unwrap(),
+    );
+    Ok(response)
 }
 
 #[derive(Deserialize)]
@@ -1002,6 +1019,8 @@ mod tests {
             fn update_config(&self, _: Config) -> Result<(), BackendError> {
                 unimplemented!()
             }
+
+            fn bookmark_version(&self) -> u64 { 0 }
         }
 
         /// Build a test router with the given app service

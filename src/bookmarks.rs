@@ -5,7 +5,10 @@ use std::{
     collections::HashSet,
     hash::Hash,
     io::ErrorKind,
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, RwLock,
+    },
     time::Instant,
 };
 
@@ -105,6 +108,7 @@ pub trait BookmarkManager: Send + Sync {
     fn create(&self, bookmark: BookmarkCreate) -> anyhow::Result<Bookmark>;
     fn update(&self, id: u64, update: BookmarkUpdate) -> anyhow::Result<Bookmark>;
     fn delete(&self, id: u64) -> anyhow::Result<()>;
+    fn version(&self) -> u64 { 0 }
 }
 
 impl SearchQuery {
@@ -123,10 +127,21 @@ impl SearchQuery {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct BackendCsv {
     list: Arc<RwLock<Vec<Bookmark>>>,
     path: String,
+    version: Arc<AtomicU64>,
+}
+
+impl Clone for BackendCsv {
+    fn clone(&self) -> Self {
+        Self {
+            list: self.list.clone(),
+            path: self.path.clone(),
+            version: self.version.clone(),
+        }
+    }
 }
 
 const CSV_HEADERS: [&str; 7] = [
@@ -220,6 +235,7 @@ impl BackendCsv {
         let mgr = BackendCsv {
             list: Arc::new(RwLock::new(bmarks)),
             path: path.to_string(),
+            version: Arc::new(AtomicU64::new(0)),
         };
 
         Ok(mgr)
@@ -246,6 +262,11 @@ impl BackendCsv {
         }
         csv_wrt.flush().unwrap();
         std::fs::rename(&temp_path, &self.path).unwrap();
+        self.version.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn version(&self) -> u64 {
+        self.version.load(Ordering::SeqCst)
     }
 
     #[cfg(test)]
@@ -257,6 +278,10 @@ impl BackendCsv {
 }
 
 impl BookmarkManager for BackendCsv {
+    fn version(&self) -> u64 {
+        self.version.load(Ordering::SeqCst)
+    }
+
     fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
         let id = if let Some(last_bookmark) = self.list.write().unwrap().last() {
             last_bookmark.id + 1

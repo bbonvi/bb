@@ -35,6 +35,10 @@ impl AppService {
         }
     }
 
+    pub fn bookmark_version(&self) -> u64 {
+        self.backend.bookmark_version()
+    }
+
     /// Get a reference to the semantic search service (if available)
     pub fn semantic_service(&self) -> Option<&Arc<SemanticSearchService>> {
         self.semantic_service.as_ref()
@@ -743,6 +747,8 @@ mod tests {
         fn update_config(&self, _: Config) -> anyhow::Result<(), AppError> {
             unimplemented!()
         }
+
+        fn bookmark_version(&self) -> u64 { 0 }
     }
 
     fn create_test_bookmark(id: u64, title: &str) -> Bookmark {

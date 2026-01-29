@@ -102,6 +102,10 @@ export interface AppState {
   setIsLoading: (loading: boolean) => void
   isUserLoading: boolean
   setIsUserLoading: (loading: boolean) => void
+
+  // Refetch trigger — incremented after mutations to force bookmark refetch
+  refetchTrigger: number
+  triggerRefetch: () => void
 }
 
 // Re-export Workspace from api for consumers that import from store
@@ -297,4 +301,8 @@ export const useStore = create<AppState>()((set, get) => ({
   setIsLoading: (isLoading) => set({ isLoading }),
   isUserLoading: false,
   setIsUserLoading: (isUserLoading) => set({ isUserLoading }),
+
+  // Refetch trigger
+  refetchTrigger: 0,
+  triggerRefetch: () => set((state) => ({ refetchTrigger: state.refetchTrigger + 1 })),
 }))

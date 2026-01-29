@@ -344,6 +344,10 @@ impl AppBackend for AppLocal {
         Ok(self.bmark_mgr.search(query)?)
     }
 
+    fn bookmark_version(&self) -> u64 {
+        self.bmark_mgr.version()
+    }
+
     fn tags(&self) -> anyhow::Result<Vec<String>, AppError> {
         if self.tags_cache.read().unwrap().is_empty() {
             Self::tags_cache_reeval(self.bmark_mgr.clone(), self.tags_cache.clone())?;

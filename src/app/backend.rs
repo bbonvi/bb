@@ -36,6 +36,7 @@ pub trait AppBackend: Send + Sync {
     fn config(&self) -> anyhow::Result<Arc<RwLock<Config>>, AppError>;
     #[allow(dead_code)]
     fn update_config(&self, config: Config) -> anyhow::Result<(), AppError>;
+    fn bookmark_version(&self) -> u64;
 }
 
 #[derive(Debug, Clone, Default)]

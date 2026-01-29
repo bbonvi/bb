@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useStore } from '@/lib/store'
 import {
   searchBookmarks,
@@ -8,12 +8,13 @@ import {
   fetchTaskQueue,
   fetchSemanticStatus,
   fetchWorkspaces,
+  clearEtagCache,
   ApiError,
 } from '@/lib/api'
 import type { Bookmark, SearchQuery, Workspace } from '@/lib/api'
 import { mergeWorkspaceQuery } from '@/lib/workspaceFilters'
 
-const POLL_INTERVAL = 3000
+const AUX_POLL_INTERVAL = 10_000
 
 function mergeWithDirty(
   incoming: Bookmark[],
@@ -26,7 +27,6 @@ function mergeWithDirty(
     if (dirtyIds.has(bm.id)) dirtyMap.set(bm.id, bm)
   }
   const merged = incoming.map((bm) => dirtyMap.get(bm.id) ?? bm)
-  // O(n) set lookup instead of O(n²) array scan
   const incomingIds = new Set(incoming.map((b) => b.id))
   for (const [id, bm] of dirtyMap) {
     if (!incomingIds.has(id)) merged.push(bm)
@@ -39,133 +39,151 @@ function isQueryEmpty(q: SearchQuery): boolean {
 }
 
 export function usePolling() {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const auxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const visibleRef = useRef(true)
   const lastAppliedSeq = useRef(0)
 
-  // Subscribe to searchQuery + showAll changes for immediate fetch
-  const prevQueryRef = useRef<{ query: SearchQuery; showAll: boolean; activeWorkspaceId: string | null } | null>(null)
+  // Fetch bookmarks (event-driven, not on a timer)
+  const fetchBookmarks = useCallback(async () => {
+    const store = useStore.getState()
+    const seq = store.nextPollSequence()
+    const { searchQuery, showAll, activeWorkspaceId, workspaces } = store
 
-  useEffect(() => {
-    function handleVisibility() {
-      visibleRef.current = document.visibilityState === 'visible'
-      if (visibleRef.current) schedulePoll(0)
-    }
+    const activeWorkspace = activeWorkspaceId
+      ? workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
+      : null
+    const effectiveQuery = activeWorkspace
+      ? mergeWorkspaceQuery(searchQuery, activeWorkspace)
+      : searchQuery
 
-    document.addEventListener('visibilitychange', handleVisibility)
+    // Defer until workspaces loaded on first mount
+    const awaitingWorkspaces = !store.initialLoadComplete
+      && (activeWorkspaceId !== null || store.urlWorkspaceName !== null)
+      && workspaces.length === 0
+    if (awaitingWorkspaces) return
 
-    async function poll() {
-      if (!visibleRef.current) return
+    const hasWorkspace = activeWorkspaceId !== null
+    const shouldFetchBookmarks = showAll || !isQueryEmpty(searchQuery) || hasWorkspace
 
-      const store = useStore.getState()
-      const seq = store.nextPollSequence()
-      const { searchQuery, showAll, activeWorkspaceId, workspaces } = store
-
-      // Inject workspace filters into the search query for server-side filtering
-      const activeWorkspace = activeWorkspaceId
-        ? workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
-        : null
-      const effectiveQuery = activeWorkspace
-        ? mergeWorkspaceQuery(searchQuery, activeWorkspace)
-        : searchQuery
-
-      // On first load with a stored workspace OR pending URL workspace param,
-      // defer bookmark fetch until workspaces are loaded so filters can be applied correctly
-      const awaitingWorkspaces = !store.initialLoadComplete
-        && (activeWorkspaceId !== null || store.urlWorkspaceName !== null)
-        && workspaces.length === 0
-
-      // When a workspace is active, always fetch bookmarks (workspace implies filtering)
-      const hasWorkspace = activeWorkspaceId !== null
-      // Skip bookmark fetch when show-all OFF + no query + no workspace
-      const shouldFetchBookmarks = !awaitingWorkspaces && (showAll || !isQueryEmpty(searchQuery) || hasWorkspace)
-
-      store.setIsLoading(true)
-      try {
-        const [bookmarks, totalResp, tags, config, taskQueue, semanticStatus, workspacesResult] =
-          await Promise.all([
-            shouldFetchBookmarks ? searchBookmarks(effectiveQuery) : Promise.resolve(null),
-            fetchTotal(),
-            fetchTags(),
-            fetchConfig(),
-            fetchTaskQueue(),
-            fetchSemanticStatus(),
-            fetchWorkspaces().then(
-              (ws) => ({ available: true as const, workspaces: ws }),
-              (err) => {
-                if (err instanceof ApiError && err.status === 404) {
-                  return { available: false as const, workspaces: [] }
-                }
-                throw err
-              },
-            ),
-          ])
-
-        // Stale poll suppression
+    store.setIsLoading(true)
+    try {
+      if (shouldFetchBookmarks) {
+        const bookmarks = await searchBookmarks(effectiveQuery)
         if (seq <= lastAppliedSeq.current) return
         lastAppliedSeq.current = seq
-
         const state = useStore.getState()
+        state.setBookmarks(mergeWithDirty(bookmarks, state.bookmarks, state.dirtyIds))
+      } else {
+        if (seq <= lastAppliedSeq.current) return
+        lastAppliedSeq.current = seq
+        useStore.getState().setBookmarks([])
+      }
 
-        if (bookmarks !== null) {
-          state.setBookmarks(mergeWithDirty(bookmarks, state.bookmarks, state.dirtyIds))
-        } else {
-          // show-all OFF + no query → clear display
-          state.setBookmarks([])
-        }
+      const state = useStore.getState()
+      if (!state.initialLoadComplete) {
+        state.setInitialLoadComplete(true)
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return
+    } finally {
+      const s = useStore.getState()
+      s.setIsLoading(false)
+      s.setIsUserLoading(false)
+    }
+  }, [])
 
-        state.setTotalCount(totalResp.total)
-        state.setTags(tags)
-        state.setConfig(config)
-        state.setTaskQueue(taskQueue)
-        state.setSemanticEnabled(semanticStatus.enabled)
-        state.setWorkspacesAvailable(workspacesResult.available)
-        state.setWorkspaces(workspacesResult.workspaces)
+  // Fetch auxiliary data (tags, total, config, task queue, semantic status, workspaces)
+  const fetchAuxiliary = useCallback(async () => {
+    if (!visibleRef.current) return
 
-        if (!state.initialLoadComplete) {
-          // Bookmarks were deferred until workspaces loaded — fetch now, don't show UI yet
-          if (awaitingWorkspaces) {
-            poll()
-          } else {
-            state.setInitialLoadComplete(true)
-          }
-        }
-        state.setIsLoading(false)
-        state.setIsUserLoading(false)
-      } catch (err) {
-        const s = useStore.getState()
-        s.setIsLoading(false)
-        s.setIsUserLoading(false)
-        if (err instanceof ApiError && err.status === 401) return
-        // Silently continue polling on other errors
+    try {
+      const [totalResp, tags, config, taskQueue, semanticStatus, workspacesResult] =
+        await Promise.all([
+          fetchTotal(),
+          fetchTags(),
+          fetchConfig(),
+          fetchTaskQueue(),
+          fetchSemanticStatus(),
+          fetchWorkspaces().then(
+            (ws) => ({ available: true as const, workspaces: ws }),
+            (err) => {
+              if (err instanceof ApiError && err.status === 404) {
+                return { available: false as const, workspaces: [] as Workspace[] }
+              }
+              throw err
+            },
+          ),
+        ])
+
+      const state = useStore.getState()
+      state.setTotalCount(totalResp.total)
+      state.setTags(tags)
+      state.setConfig(config)
+      state.setTaskQueue(taskQueue)
+      state.setSemanticEnabled(semanticStatus.enabled)
+      state.setWorkspacesAvailable(workspacesResult.available)
+      state.setWorkspaces(workspacesResult.workspaces)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return
+    }
+  }, [])
+
+  useEffect(() => {
+    // --- Visibility change: refetch bookmarks with ETag on tab refocus ---
+    function handleVisibility() {
+      visibleRef.current = document.visibilityState === 'visible'
+      if (visibleRef.current) {
+        fetchBookmarks()
+        fetchAuxiliary()
       }
     }
+    document.addEventListener('visibilitychange', handleVisibility)
 
-    function schedulePoll(delay: number = POLL_INTERVAL) {
-      if (timerRef.current) clearTimeout(timerRef.current)
-      timerRef.current = setTimeout(async () => {
-        await poll()
-        if (visibleRef.current) schedulePoll()
-      }, delay)
+    // --- Initial load ---
+    // Fetch auxiliary first (to get workspaces), then bookmarks
+    fetchAuxiliary().then(() => fetchBookmarks())
+
+    // --- Auxiliary poll on interval ---
+    function scheduleAuxPoll() {
+      if (auxTimerRef.current) clearTimeout(auxTimerRef.current)
+      auxTimerRef.current = setTimeout(async () => {
+        await fetchAuxiliary()
+        if (visibleRef.current) scheduleAuxPoll()
+      }, AUX_POLL_INTERVAL)
     }
+    scheduleAuxPoll()
 
-    poll().then(() => schedulePoll())
+    // --- Subscribe to store changes for event-driven bookmark fetch ---
+    let prevQuery = useStore.getState().searchQuery
+    let prevShowAll = useStore.getState().showAll
+    let prevActiveWorkspaceId = useStore.getState().activeWorkspaceId
+    let prevRefetchTrigger = useStore.getState().refetchTrigger
 
-    // Subscribe to store changes for immediate fetch on query change
     const unsub = useStore.subscribe((state) => {
-      const current = { query: state.searchQuery, showAll: state.showAll, activeWorkspaceId: state.activeWorkspaceId }
-      const prev = prevQueryRef.current
-      if (prev && (prev.query !== current.query || prev.showAll !== current.showAll || prev.activeWorkspaceId !== current.activeWorkspaceId)) {
-        // Immediate fetch — reset poll timer
-        schedulePoll(0)
+      const queryChanged = state.searchQuery !== prevQuery
+      const showAllChanged = state.showAll !== prevShowAll
+      const workspaceChanged = state.activeWorkspaceId !== prevActiveWorkspaceId
+      const triggerChanged = state.refetchTrigger !== prevRefetchTrigger
+
+      if (queryChanged || showAllChanged || workspaceChanged) {
+        // Query/filter changed — clear ETag to get fresh data
+        clearEtagCache('bookmarks')
       }
-      prevQueryRef.current = current
+
+      if (queryChanged || showAllChanged || workspaceChanged || triggerChanged) {
+        fetchBookmarks()
+      }
+
+      prevQuery = state.searchQuery
+      prevShowAll = state.showAll
+      prevActiveWorkspaceId = state.activeWorkspaceId
+      prevRefetchTrigger = state.refetchTrigger
     })
 
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
+      if (auxTimerRef.current) clearTimeout(auxTimerRef.current)
       document.removeEventListener('visibilitychange', handleVisibility)
       unsub()
     }
-  }, [])
+  }, [fetchBookmarks, fetchAuxiliary])
 }

@@ -226,6 +226,10 @@ impl AppBackend for AppRemote {
         Ok(handle_response(resp)?)
     }
 
+    fn bookmark_version(&self) -> u64 {
+        0
+    }
+
     fn tags(&self) -> anyhow::Result<Vec<String>, AppError> {
         let resp = self.post("/api/bookmarks/tags").send()?;
 
