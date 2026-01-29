@@ -29,8 +29,13 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
         url = format!("https:{}", url);
     }
 
-    let url_parsed =
-        reqwest::Url::parse(&url).unwrap_or_else(|_| panic!("{url} is not a valid url"));
+    let url_parsed = match reqwest::Url::parse(&url) {
+        Ok(u) => u,
+        Err(e) => {
+            log::warn!("{url}: invalid URL: {e}");
+            return None;
+        }
+    };
     let host = url_parsed.host_str().unwrap_or_default();
     let path = url_parsed.path();
     let iden = format!("{host}{path}");
@@ -142,7 +147,10 @@ pub fn get_data_from_ddg_html(resp_text: String, url: &str) -> Option<Metadata> 
     let mut title = None;
     let mut icon_url = None;
 
-    let body = document.select(&body_selector).next().unwrap();
+    let body = match document.select(&body_selector).next() {
+        Some(b) => b,
+        None => return None,
+    };
     body.select(&title_selector).next().map(|heading_el| {
         heading_el.text().next().map(|title_text| {
             title = Some(title_text.to_string().trim().to_string());
@@ -155,13 +163,14 @@ pub fn get_data_from_ddg_html(resp_text: String, url: &str) -> Option<Metadata> 
     });
 
     if icon_url.is_none() {
-        let url_parsed = reqwest::Url::parse(url).unwrap();
-        let host = url_parsed.host_str();
+        if let Ok(url_parsed) = reqwest::Url::parse(url) {
+            let host = url_parsed.host_str();
 
-        if let Some(host) = host {
-            icon_url = Some(format!(
-                "https://external-content.duckduckgo.com/ip3/{host}.ico"
-            ));
+            if let Some(host) = host {
+                icon_url = Some(format!(
+                    "https://external-content.duckduckgo.com/ip3/{host}.ico"
+                ));
+            }
         }
     }
 
@@ -196,7 +205,22 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     let mut icon_url = None;
     let mut canonical_url = None;
 
-    let head = document.select(&head_selector).next().unwrap();
+    let head = match document.select(&head_selector).next() {
+        Some(h) => h,
+        None => {
+            return Metadata {
+                title: None,
+                description: None,
+                keywords: None,
+                canonical_url: None,
+                image_url: None,
+                icon_url: None,
+                image: None,
+                icon: None,
+                dump: None,
+            };
+        }
+    };
     for element in head.select(&meta_selector) {
         let meta_prop = element.attr("property").unwrap_or_default();
 
@@ -259,9 +283,10 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
                     log::debug!("base64 icons are not supported");
                     continue;
                 } else {
-                    let mut url_parsed = reqwest::Url::parse(url).unwrap();
-                    url_parsed.set_path(link_href);
-                    href = url_parsed.to_string();
+                    if let Ok(mut url_parsed) = reqwest::Url::parse(url) {
+                        url_parsed.set_path(link_href);
+                        href = url_parsed.to_string();
+                    }
                 }
             }
 
@@ -295,13 +320,14 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
 
     // try to get favicon from duckduckgo
     if icon_url.is_none() {
-        let url_parsed = reqwest::Url::parse(url).unwrap();
-        let host = url_parsed.host_str();
+        if let Ok(url_parsed) = reqwest::Url::parse(url) {
+            let host = url_parsed.host_str();
 
-        if let Some(host) = host {
-            icon_url = Some(format!(
-                "https://external-content.duckduckgo.com/ip3/{host}.ico"
-            ));
+            if let Some(host) = host {
+                icon_url = Some(format!(
+                    "https://external-content.duckduckgo.com/ip3/{host}.ico"
+                ));
+            }
         }
     }
 

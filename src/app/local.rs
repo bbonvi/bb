@@ -369,7 +369,8 @@ impl AppLocal {
     }
 
     pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> anyhow::Result<Metadata> {
-        let mut url_parsed = reqwest::Url::parse(url).unwrap();
+        let mut url_parsed = reqwest::Url::parse(url)
+            .map_err(|e| anyhow!("invalid URL '{}': {}", url, e))?;
         let mut tried_https = false;
         if url_parsed.scheme() == "http" && !opts.no_https_upgrade {
             log::warn!("http url provided. trying https first");
