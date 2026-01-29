@@ -12,7 +12,7 @@ pub fn normalize(tokens: Vec<Token>) -> Vec<Token> {
 }
 
 /// Remove `LParen RParen` pairs (empty groups).
-fn remove_empty_parens(mut tokens: Vec<Token>) -> Vec<Token> {
+pub fn remove_empty_parens(mut tokens: Vec<Token>) -> Vec<Token> {
     loop {
         let mut changed = false;
         let mut out = Vec::with_capacity(tokens.len());

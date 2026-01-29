@@ -158,3 +158,20 @@ pub fn parse(tokens: Vec<Token>) -> Result<Option<SearchFilter>> {
     }
     Ok(Some(result))
 }
+
+/// Strict parse: errors on empty input, otherwise same as `parse`.
+pub fn parse_strict(tokens: Vec<Token>) -> Result<SearchFilter> {
+    if tokens.is_empty() {
+        bail!("empty search query");
+    }
+    let mut parser = Parser::new(tokens);
+    let result = parser.parse_or()?;
+    if parser.pos < parser.tokens.len() {
+        bail!(
+            "unexpected {} at position {}",
+            parser.tokens[parser.pos],
+            parser.pos
+        );
+    }
+    Ok(result)
+}

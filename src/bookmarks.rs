@@ -574,20 +574,12 @@ impl BookmarkManager for BackendCsv {
             if let Some(keyword) = &query.keyword {
                 let keyword = keyword.trim();
                 if !keyword.is_empty() {
-                    match crate::search_query::parse(keyword)
-                        .map_err(|e| anyhow::anyhow!("invalid search query: {}", e))?
-                    {
-                        Some(filter) => {
-                            if !crate::search_query::eval(&filter, bookmark) {
-                                continue;
-                            }
-                            has_match = true;
-                        }
-                        None => {
-                            // Empty/normalized-away query — match all
-                            has_match = true;
-                        }
+                    let filter = crate::search_query::parse(keyword)
+                        .map_err(|e| anyhow::anyhow!("invalid search query: {}", e))?;
+                    if !crate::search_query::eval(&filter, bookmark) {
+                        continue;
                     }
+                    has_match = true;
                 }
             };
 

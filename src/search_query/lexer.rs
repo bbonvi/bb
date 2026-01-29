@@ -74,7 +74,14 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 } else {
                     let word = read_word(&chars, &mut i);
                     if word.is_empty() {
-                        // Bare prefix with no following word — skip (drop it)
+                        // Bare prefix with no following word — emit as literal
+                        let literal = match prefix {
+                            Prefix::Tag => "#",
+                            Prefix::Title => ".",
+                            Prefix::Description => ">",
+                            Prefix::Url => ":",
+                        };
+                        tokens.push(Token::Word(literal.to_string()));
                     } else {
                         tokens.push(Token::PrefixedWord(prefix, word));
                     }
@@ -83,7 +90,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             '\\' => {
                 i += 1;
                 if i >= len {
-                    // Trailing backslash — ignore
+                    // Trailing backslash — emit as literal
+                    tokens.push(Token::Word("\\".to_string()));
                     break;
                 }
                 let escaped_char = chars[i];

@@ -206,9 +206,8 @@ fn validate_name(name: &str) -> Result<String, WorkspaceError> {
 fn validate_keyword(filters: &WorkspaceFilters) -> Result<(), WorkspaceError> {
     if let Some(ref kw) = filters.keyword {
         if !kw.trim().is_empty() {
-            search_query::parse(kw)
+            search_query::parse_tolerant(kw)
                 .map_err(|e| WorkspaceError::InvalidKeyword(e.to_string()))?;
-            // None is valid (empty/operator-only input normalizes away)
         }
     }
     Ok(())

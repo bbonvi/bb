@@ -1,5 +1,5 @@
 use crate::bookmarks::Bookmark;
-use super::{parse, eval, matches};
+use super::{parse, parse_tolerant, eval, matches};
 use super::parser::{SearchFilter, FieldTarget};
 
 fn make_bookmark(title: &str, desc: &str, url: &str, tags: &[&str]) -> Bookmark {
@@ -14,72 +14,190 @@ fn make_bookmark(title: &str, desc: &str, url: &str, tags: &[&str]) -> Bookmark 
     }
 }
 
-// === Tolerant parsing — new tests ===
+// === Strict parse — error cases ===
 
 #[test]
-fn test_empty_returns_none() {
-    assert_eq!(parse("").unwrap(), None);
-    assert_eq!(parse("   ").unwrap(), None);
+fn test_strict_empty_is_err() {
+    assert!(parse("").is_err());
+    assert!(parse("   ").is_err());
 }
 
 #[test]
-fn test_empty_parens_returns_none() {
-    assert_eq!(parse("()").unwrap(), None);
-    assert_eq!(parse("( )").unwrap(), None);
+fn test_strict_trailing_operator_is_err() {
+    assert!(parse("#dev and").is_err());
 }
 
 #[test]
-fn test_tag_with_empty_parens() {
-    let f = parse("(#dev) ( )").unwrap().unwrap();
-    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+fn test_strict_leading_operator_is_err() {
+    assert!(parse("or #dev").is_err());
 }
 
 #[test]
-fn test_trailing_and() {
-    let f = parse("#dev and").unwrap().unwrap();
-    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+fn test_strict_unmatched_lparen_is_err() {
+    assert!(parse("(foo").is_err());
 }
 
 #[test]
-fn test_leading_and() {
-    let f = parse("and #dev").unwrap().unwrap();
-    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+fn test_strict_unmatched_rparen_is_err() {
+    assert!(parse("foo)").is_err());
 }
 
 #[test]
-fn test_only_and() {
-    assert_eq!(parse("and").unwrap(), None);
+fn test_strict_dangling_double_operator_is_err() {
+    // Has real terms but dangling operator between
+    assert!(parse("#dev and and #foo").is_err());
 }
 
-#[test]
-fn test_only_not() {
-    assert_eq!(parse("not").unwrap(), None);
-}
+// === Strict parse — literal treatment (no error) ===
 
 #[test]
-fn test_unmatched_lparen() {
-    assert_eq!(parse("(").unwrap(), None);
-}
-
-#[test]
-fn test_unmatched_rparen() {
-    assert_eq!(parse(")").unwrap(), None);
-}
-
-#[test]
-fn test_unterminated_quote_tolerant() {
-    let f = parse("\"hello").unwrap().unwrap();
+fn test_strict_unmatched_quote_literal() {
+    // `"hello` → literal search for "hello"
+    let f = parse("\"hello").unwrap();
     assert_eq!(f, SearchFilter::Term(FieldTarget::All, "hello".into()));
 }
 
 #[test]
-fn test_bare_hash() {
-    assert_eq!(parse("#").unwrap(), None);
+fn test_strict_bare_hash_literal() {
+    // `#` alone → literal word "#"
+    let f = parse("#").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, "#".into()));
 }
 
 #[test]
-fn test_collapsed_adjacent_operators() {
-    let f = parse("#dev and and #foo").unwrap().unwrap();
+fn test_strict_bare_dot_literal() {
+    let f = parse(".").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, ".".into()));
+}
+
+#[test]
+fn test_strict_bare_gt_literal() {
+    let f = parse(">").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, ">".into()));
+}
+
+#[test]
+fn test_strict_bare_colon_literal() {
+    let f = parse(":").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, ":".into()));
+}
+
+#[test]
+fn test_strict_only_and_becomes_literal() {
+    // `and` alone → literal word "and"
+    let f = parse("and").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, "and".into()));
+}
+
+#[test]
+fn test_strict_or_not_becomes_literal() {
+    // `or not` → literal words "or", "not" (implicit AND)
+    let f = parse("or not").unwrap();
+    assert_eq!(
+        f,
+        SearchFilter::And(
+            Box::new(SearchFilter::Term(FieldTarget::All, "or".into())),
+            Box::new(SearchFilter::Term(FieldTarget::All, "not".into())),
+        )
+    );
+}
+
+#[test]
+fn test_strict_only_parens_becomes_literal() {
+    // `(` → empty parens removed, but `(` alone is not empty pair.
+    // Actually `(` has no matching `)`, and after empty-paren removal it stays.
+    // All tokens are non-term → re-interpret as literal
+    let f = parse("(").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, "(".into()));
+}
+
+#[test]
+fn test_strict_empty_parens_is_err() {
+    // `()` → empty parens removed → empty → error
+    assert!(parse("()").is_err());
+    assert!(parse("( )").is_err());
+}
+
+#[test]
+fn test_strict_tag_with_empty_parens() {
+    let f = parse("(#dev) ()").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+}
+
+#[test]
+fn test_strict_trailing_backslash_literal() {
+    let f = parse("\\").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, "\\".into()));
+}
+
+// === Tolerant parse — preserves old behavior ===
+
+#[test]
+fn test_tolerant_empty_returns_none() {
+    assert_eq!(parse_tolerant("").unwrap(), None);
+    assert_eq!(parse_tolerant("   ").unwrap(), None);
+}
+
+#[test]
+fn test_tolerant_empty_parens_returns_none() {
+    assert_eq!(parse_tolerant("()").unwrap(), None);
+    assert_eq!(parse_tolerant("( )").unwrap(), None);
+}
+
+#[test]
+fn test_tolerant_tag_with_empty_parens() {
+    let f = parse_tolerant("(#dev) ( )").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+}
+
+#[test]
+fn test_tolerant_trailing_and() {
+    let f = parse_tolerant("#dev and").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+}
+
+#[test]
+fn test_tolerant_leading_and() {
+    let f = parse_tolerant("and #dev").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
+}
+
+#[test]
+fn test_tolerant_only_and() {
+    assert_eq!(parse_tolerant("and").unwrap(), None);
+}
+
+#[test]
+fn test_tolerant_only_not() {
+    assert_eq!(parse_tolerant("not").unwrap(), None);
+}
+
+#[test]
+fn test_tolerant_unmatched_lparen() {
+    assert_eq!(parse_tolerant("(").unwrap(), None);
+}
+
+#[test]
+fn test_tolerant_unmatched_rparen() {
+    assert_eq!(parse_tolerant(")").unwrap(), None);
+}
+
+#[test]
+fn test_tolerant_unterminated_quote() {
+    let f = parse_tolerant("\"hello").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, "hello".into()));
+}
+
+#[test]
+fn test_tolerant_bare_hash() {
+    // Bare hash now emits literal "#" word, so tolerant parse gets a term
+    let f = parse_tolerant("#").unwrap().unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, "#".into()));
+}
+
+#[test]
+fn test_tolerant_collapsed_adjacent_operators() {
+    let f = parse_tolerant("#dev and and #foo").unwrap().unwrap();
     assert_eq!(
         f,
         SearchFilter::And(
@@ -90,17 +208,16 @@ fn test_collapsed_adjacent_operators() {
 }
 
 #[test]
-fn test_workspace_merge_empty_keyword() {
-    // Simulates "(#dev) ( )" — the workspace merge scenario
-    let f = parse("(#dev) ()").unwrap().unwrap();
+fn test_tolerant_workspace_merge_empty_keyword() {
+    let f = parse_tolerant("(#dev) ()").unwrap().unwrap();
     assert_eq!(f, SearchFilter::Term(FieldTarget::Tag, "dev".into()));
 }
 
-// === Regression: all original tests ===
+// === Regression: all original functional tests (using strict `matches`) ===
 
 #[test]
 fn test_parse_simple_word() {
-    let f = parse("video").unwrap().unwrap();
+    let f = parse("video").unwrap();
     let bm = make_bookmark("My Video", "", "", &[]);
     assert!(eval(&f, &bm));
 }
