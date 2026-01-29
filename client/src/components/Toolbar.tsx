@@ -38,9 +38,8 @@ function XIcon({ className = '' }: { className?: string }) {
 // ─── Main component ────────────────────────────────────────────────
 export function Toolbar() {
   const isMobile = useIsMobile()
-  // Compute initial filtersOpen: true if desktop OR URL has advanced filters
+  // Compute initial filtersOpen: true only if URL has advanced filters
   const [filtersOpen, setFiltersOpen] = useState(() => {
-    if (!isMobile) return true
     if (typeof window === 'undefined') return false
     const p = new URLSearchParams(window.location.search)
     return !!(p.get('tags') || p.get('title') || p.get('url') || p.get('description'))

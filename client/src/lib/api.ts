@@ -317,6 +317,10 @@ export function searchBookmarks(query: SearchQuery = {}, signal?: AbortSignal): 
   return fetchApiWithEtag('/api/bookmarks/search', 'bookmarks-search', { method: 'POST', body: query, signal })
 }
 
+export function searchBookmarksUncached(query: SearchQuery = {}): Promise<Bookmark[]> {
+  return fetchApi('/api/bookmarks/search', { method: 'POST', body: query })
+}
+
 export async function createBookmark(data: BookmarkCreate): Promise<Bookmark> {
   const result = await fetchApi<Bookmark>('/api/bookmarks/create', { method: 'POST', body: data })
   clearEtagCache('bookmarks')

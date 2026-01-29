@@ -10,9 +10,11 @@ import {
   reorderWorkspaces as apiReorderWorkspaces,
   fetchWorkspaces,
   searchBookmarks,
+  searchBookmarksUncached,
 } from '@/lib/api'
 import type { Workspace } from '@/lib/api'
 import { DeleteButton } from './bookmark-parts'
+import { buildWorkspaceKeyword } from '@/lib/workspaceFilters'
 import {
   DndContext,
   closestCenter,
@@ -415,6 +417,23 @@ function WorkspaceEditor({
     setBlacklistRelated([])
   }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Bookmark count for this workspace
+  const [bookmarkCount, setBookmarkCount] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const wsKeyword = buildWorkspaceKeyword(workspace)
+    if (!wsKeyword) {
+      setBookmarkCount(null)
+      return
+    }
+    searchBookmarksUncached({ keyword: wsKeyword }).then((results) => {
+      if (!cancelled) setBookmarkCount(results.length)
+    }).catch(() => {
+      if (!cancelled) setBookmarkCount(null)
+    })
+    return () => { cancelled = true }
+  }, [workspace.id, workspace.filters])
+
   // Filtered autocomplete suggestions (exclude already-added tags)
   const whitelist = useMemo(() => workspace.filters.tag_whitelist ?? [], [workspace.filters.tag_whitelist])
   const blacklist = useMemo(() => workspace.filters.tag_blacklist ?? [], [workspace.filters.tag_blacklist])
@@ -556,6 +575,11 @@ function WorkspaceEditor({
         )}
         <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-8 w-8" />
       </div>
+      {bookmarkCount !== null && (
+        <p className="text-xs text-text-dim">
+          {bookmarkCount} {bookmarkCount === 1 ? 'bookmark' : 'bookmarks'} matching filters
+        </p>
+      )}
 
       {/* Tag whitelist */}
       <div>
