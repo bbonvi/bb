@@ -52,9 +52,16 @@ export function usePolling() {
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const visibleRef = useRef(true)
   const lastAppliedSeq = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
 
-  // Fetch bookmarks (event-driven, not on a timer)
+  // Single fetch pathway for bookmarks. Only called from the store subscription.
   const fetchBookmarks = useCallback(async () => {
+    // Abort any in-flight request to prevent stale responses from
+    // polluting the ETag/response cache
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     const store = useStore.getState()
     const seq = store.nextPollSequence()
     const { searchQuery, showAll, activeWorkspaceId, workspaces } = store
@@ -78,7 +85,7 @@ export function usePolling() {
     store.setIsLoading(true)
     try {
       if (shouldFetchBookmarks) {
-        const bookmarks = await searchBookmarks(effectiveQuery)
+        const bookmarks = await searchBookmarks(effectiveQuery, controller.signal)
         if (seq <= lastAppliedSeq.current) return
         lastAppliedSeq.current = seq
         const state = useStore.getState()
@@ -94,11 +101,15 @@ export function usePolling() {
         state.setInitialLoadComplete(true)
       }
     } catch (err) {
+      if (controller.signal.aborted) return
       if (err instanceof ApiError && err.status === 401) return
     } finally {
-      const s = useStore.getState()
-      s.setIsLoading(false)
-      s.setIsUserLoading(false)
+      // Don't clear loading if this request was aborted — the replacement owns it
+      if (!controller.signal.aborted) {
+        const s = useStore.getState()
+        s.setIsLoading(false)
+        s.setIsUserLoading(false)
+      }
     }
   }, [])
 
@@ -141,43 +152,10 @@ export function usePolling() {
   const lastPollRef = useRef(0)
 
   useEffect(() => {
-    // --- Visibility change: refetch on tab refocus with debounce ---
-    function handleVisibility() {
-      visibleRef.current = document.visibilityState === 'visible'
-      if (visibleRef.current) {
-        const elapsed = Date.now() - lastPollRef.current
-        const minGap = getSettings().pollIntervalNormal
-        if (elapsed >= minGap) {
-          fetchBookmarks()
-          fetchMetadata()
-        }
-        // Always restart polling when tab regains focus
-        schedulePoll()
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibility)
-
-    // --- Initial load ---
-    // Fetch metadata first (to get workspaces), then bookmarks
-    fetchMetadata().then(() => fetchBookmarks())
-
-    // --- Poll on dynamic interval ---
-    function schedulePoll() {
-      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
-      const interval = getPollInterval(visibleRef.current)
-      pollTimerRef.current = setTimeout(async () => {
-        await fetchMetadata()
-        lastPollRef.current = Date.now()
-
-        // ETags make this cheap (304 when unchanged)
-        fetchBookmarks()
-
-        schedulePoll()
-      }, interval)
-    }
-    schedulePoll()
-
-    // --- Subscribe to store changes for event-driven bookmark fetch ---
+    // --- Store subscription: sole entry point for bookmark fetches ---
+    // All triggers (query change, workspace switch, poll tick, visibility)
+    // funnel through store state changes which this subscription observes.
+    // Microtask batching coalesces rapid consecutive changes into one fetch.
     let prevQuery = useStore.getState().searchQuery
     let prevShowAll = useStore.getState().showAll
     let prevActiveWorkspaceId = useStore.getState().activeWorkspaceId
@@ -207,6 +185,46 @@ export function usePolling() {
         })
       }
     })
+
+    // --- Visibility change ---
+    function handleVisibility() {
+      visibleRef.current = document.visibilityState === 'visible'
+      if (visibleRef.current) {
+        const elapsed = Date.now() - lastPollRef.current
+        const minGap = getSettings().pollIntervalNormal
+        if (elapsed >= minGap) {
+          fetchMetadata()
+          // Bookmark fetch goes through the subscription via triggerRefetch
+          useStore.getState().triggerRefetch()
+        }
+        schedulePoll()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    // --- Initial load ---
+    fetchMetadata().then(() => {
+      // After metadata (workspaces) are loaded, trigger bookmark fetch
+      // through the subscription to maintain single pathway
+      useStore.getState().triggerRefetch()
+    })
+
+    // --- Poll on dynamic interval ---
+    function schedulePoll() {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+      const interval = getPollInterval(visibleRef.current)
+      pollTimerRef.current = setTimeout(async () => {
+        await fetchMetadata()
+        lastPollRef.current = Date.now()
+
+        // Bookmark fetch via subscription — coalesces with any
+        // metadata-triggered subscription fetch (e.g. workspace list change)
+        useStore.getState().triggerRefetch()
+
+        schedulePoll()
+      }, interval)
+    }
+    schedulePoll()
 
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current)

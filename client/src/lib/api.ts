@@ -225,7 +225,7 @@ const responseCache = new Map<string, unknown>()
 async function fetchApiWithEtag<T>(
   path: string,
   cacheKey: string,
-  options: { method?: string; body?: unknown } = {},
+  options: { method?: string; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -246,6 +246,7 @@ async function fetchApiWithEtag<T>(
     method: options.method ?? 'GET',
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    signal: options.signal,
   })
 
   if (res.status === 401) {
@@ -312,8 +313,8 @@ export function fileUrl(fileId: string): string {
 
 // --- Endpoint functions ---
 
-export function searchBookmarks(query: SearchQuery = {}): Promise<Bookmark[]> {
-  return fetchApiWithEtag('/api/bookmarks/search', 'bookmarks-search', { method: 'POST', body: query })
+export function searchBookmarks(query: SearchQuery = {}, signal?: AbortSignal): Promise<Bookmark[]> {
+  return fetchApiWithEtag('/api/bookmarks/search', 'bookmarks-search', { method: 'POST', body: query, signal })
 }
 
 export async function createBookmark(data: BookmarkCreate): Promise<Bookmark> {
