@@ -314,6 +314,26 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         if canonical_url.is_none() && meta_key == "og:url" {
             canonical_url = Some(meta_value.to_string());
         }
+
+        // parse title from OG/twitter meta tags (preferred over <title>)
+        if title.is_none()
+            && ["og:title", "twitter:title"]
+                .into_iter()
+                .any(|name| name == meta_key)
+        {
+            let val = meta_value.trim().to_string();
+            if !val.is_empty() {
+                title = Some(val);
+            }
+        }
+
+        // parse twitter:description
+        if description.is_none() && meta_key == "twitter:description" {
+            let val = meta_value.trim().to_string();
+            if !val.is_empty() {
+                description = Some(val);
+            }
+        }
     }
 
     // TODO: parse favicon urls. keep in mind, href could be relative.
@@ -326,6 +346,18 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         let link_rel = element.attr("rel").unwrap_or_default();
         let link_type = element.attr("type").unwrap_or_default();
         let link_sizes = element.attr("sizes").unwrap_or_default();
+
+        // Extract canonical URL from <link rel="canonical">
+        if canonical_url.is_none() && link_rel == "canonical" && !link_href.is_empty() {
+            let mut href = link_href.to_string();
+            if !href.starts_with("http") {
+                if let Ok(mut url_parsed) = reqwest::Url::parse(url) {
+                    url_parsed.set_path(&href);
+                    href = url_parsed.to_string();
+                }
+            }
+            canonical_url = Some(href);
+        }
 
         if link_rel.contains("icon") && !link_href.is_empty() {
             let mut href = link_href.to_string();
@@ -369,6 +401,22 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
 
     icon_url = icons.first().map(|icon| icon.0.clone());
 
+    // Parse JSON-LD structured data
+    let script_selector =
+        scraper::Selector::parse(r#"script[type="application/ld+json"]"#).unwrap();
+    for element in document.select(&script_selector) {
+        let json_text = element.text().collect::<String>();
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_text) {
+            extract_from_json_ld(
+                &json,
+                &mut title,
+                &mut description,
+                &mut image_url,
+                &mut canonical_url,
+            );
+        }
+    }
+
     // try to get favicon from duckduckgo
     if icon_url.is_none() {
         if let Ok(url_parsed) = reqwest::Url::parse(url) {
@@ -382,9 +430,13 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         }
     }
 
-    for element in head.select(&title_selector) {
-        let title_text = element.text().next().unwrap_or_default();
-        title = Some(title_text.to_string());
+    if title.is_none() {
+        for element in head.select(&title_selector) {
+            let title_text = element.text().next().unwrap_or_default();
+            if !title_text.is_empty() {
+                title = Some(title_text.to_string());
+            }
+        }
     }
 
     if let Some(ref img) = icon_url {
@@ -425,5 +477,209 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         image_url,
         icon_url,
         ..Default::default()
+    }
+}
+
+fn extract_from_json_ld(
+    json: &serde_json::Value,
+    title: &mut Option<String>,
+    description: &mut Option<String>,
+    image_url: &mut Option<String>,
+    canonical_url: &mut Option<String>,
+) {
+    // Handle @graph arrays
+    if let Some(graph) = json.get("@graph").and_then(|g| g.as_array()) {
+        for item in graph {
+            extract_from_json_ld(item, title, description, image_url, canonical_url);
+        }
+        return;
+    }
+    // Handle top-level arrays
+    if let Some(arr) = json.as_array() {
+        for item in arr {
+            extract_from_json_ld(item, title, description, image_url, canonical_url);
+        }
+        return;
+    }
+
+    // Extract fields — only fill None slots
+    if title.is_none() {
+        if let Some(name) = json
+            .get("name")
+            .or_else(|| json.get("headline"))
+            .and_then(|v| v.as_str())
+        {
+            let trimmed = name.trim();
+            if !trimmed.is_empty() {
+                *title = Some(trimmed.to_string());
+            }
+        }
+    }
+    if description.is_none() {
+        if let Some(desc) = json.get("description").and_then(|v| v.as_str()) {
+            let trimmed = desc.trim();
+            if !trimmed.is_empty() {
+                *description = Some(trimmed.to_string());
+            }
+        }
+    }
+    if image_url.is_none() {
+        if let Some(img) = json.get("image").or_else(|| json.get("thumbnailUrl")) {
+            if let Some(url_str) = img.as_str() {
+                *image_url = Some(url_str.to_string());
+            } else if let Some(url_str) = img.get("url").and_then(|v| v.as_str()) {
+                *image_url = Some(url_str.to_string());
+            } else if let Some(arr) = img.as_array() {
+                if let Some(first) = arr.first() {
+                    if let Some(url_str) = first.as_str() {
+                        *image_url = Some(url_str.to_string());
+                    } else if let Some(url_str) = first.get("url").and_then(|v| v.as_str()) {
+                        *image_url = Some(url_str.to_string());
+                    }
+                }
+            }
+        }
+    }
+    if canonical_url.is_none() {
+        if let Some(url_str) = json.get("url").and_then(|v| v.as_str()) {
+            let trimmed = url_str.trim();
+            if !trimmed.is_empty() {
+                *canonical_url = Some(trimmed.to_string());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn html_with_meta(meta_tags: &str, title_tag: &str) -> String {
+        format!(
+            r#"<html><head>{meta_tags}<title>{title_tag}</title></head><body></body></html>"#
+        )
+    }
+
+    #[test]
+    fn test_parse_og_title() {
+        let html = html_with_meta(
+            r#"<meta property="og:title" content="Real OG Title">"#,
+            "Generic Site Name",
+        );
+        let m = get_data_from_page(html, "https://example.com");
+        assert_eq!(m.title.as_deref(), Some("Real OG Title"));
+    }
+
+    #[test]
+    fn test_parse_twitter_title_fallback() {
+        let html = html_with_meta(
+            r#"<meta name="twitter:title" content="Twitter Title">"#,
+            "Generic Site Name",
+        );
+        let m = get_data_from_page(html, "https://example.com");
+        assert_eq!(m.title.as_deref(), Some("Twitter Title"));
+    }
+
+    #[test]
+    fn test_parse_twitter_description() {
+        let html = html_with_meta(
+            r#"<meta name="twitter:description" content="A twitter description">"#,
+            "Title",
+        );
+        let m = get_data_from_page(html, "https://example.com");
+        assert_eq!(m.description.as_deref(), Some("A twitter description"));
+    }
+
+    #[test]
+    fn test_title_tag_fallback() {
+        let html = html_with_meta("", "Fallback Title");
+        let m = get_data_from_page(html, "https://example.com");
+        assert_eq!(m.title.as_deref(), Some("Fallback Title"));
+    }
+
+    #[test]
+    fn test_og_title_priority_over_title_tag() {
+        let html = html_with_meta(
+            r#"<meta property="og:title" content="OG Title">"#,
+            "HTML Title",
+        );
+        let m = get_data_from_page(html, "https://example.com");
+        assert_eq!(m.title.as_deref(), Some("OG Title"));
+    }
+
+    #[test]
+    fn test_link_canonical() {
+        let html = r#"<html><head><link rel="canonical" href="https://example.com/canonical"></head><body></body></html>"#;
+        let m = get_data_from_page(html.to_string(), "https://example.com/page");
+        assert_eq!(m.canonical_url.as_deref(), Some("https://example.com/canonical"));
+    }
+
+    #[test]
+    fn test_og_url_priority_over_link_canonical() {
+        let html = r#"<html><head>
+            <meta property="og:url" content="https://example.com/og-url">
+            <link rel="canonical" href="https://example.com/link-canonical">
+        </head><body></body></html>"#;
+        let m = get_data_from_page(html.to_string(), "https://example.com/page");
+        assert_eq!(m.canonical_url.as_deref(), Some("https://example.com/og-url"));
+    }
+
+    #[test]
+    fn test_json_ld_article() {
+        let html = r#"<html><head>
+            <script type="application/ld+json">{"@type":"Article","headline":"JSON-LD Headline","description":"JSON-LD desc"}</script>
+        </head><body></body></html>"#;
+        let m = get_data_from_page(html.to_string(), "https://example.com");
+        assert_eq!(m.title.as_deref(), Some("JSON-LD Headline"));
+        assert_eq!(m.description.as_deref(), Some("JSON-LD desc"));
+    }
+
+    #[test]
+    fn test_json_ld_graph() {
+        let html = r#"<html><head>
+            <script type="application/ld+json">{"@graph":[{"@type":"WebPage","name":"Graph Title"}]}</script>
+        </head><body></body></html>"#;
+        let m = get_data_from_page(html.to_string(), "https://example.com");
+        assert_eq!(m.title.as_deref(), Some("Graph Title"));
+    }
+
+    #[test]
+    fn test_json_ld_fills_gaps() {
+        // og:title present, JSON-LD should NOT overwrite it
+        let html = r#"<html><head>
+            <meta property="og:title" content="OG Title">
+            <script type="application/ld+json">{"name":"JSON-LD Name","description":"JSON-LD desc"}</script>
+        </head><body></body></html>"#;
+        let m = get_data_from_page(html.to_string(), "https://example.com");
+        assert_eq!(m.title.as_deref(), Some("OG Title"));
+        assert_eq!(m.description.as_deref(), Some("JSON-LD desc"));
+    }
+
+    #[test]
+    fn test_json_ld_image_object() {
+        let html = r#"<html><head>
+            <script type="application/ld+json">{"image":{"url":"https://img.example.com/photo.jpg"}}</script>
+        </head><body></body></html>"#;
+        let m = get_data_from_page(html.to_string(), "https://example.com");
+        assert_eq!(m.image_url.as_deref(), Some("https://img.example.com/photo.jpg"));
+    }
+
+    #[test]
+    fn test_json_ld_image_array() {
+        let html = r#"<html><head>
+            <script type="application/ld+json">{"image":["https://img.example.com/first.jpg"]}</script>
+        </head><body></body></html>"#;
+        let m = get_data_from_page(html.to_string(), "https://example.com");
+        assert_eq!(m.image_url.as_deref(), Some("https://img.example.com/first.jpg"));
+    }
+
+    #[test]
+    fn test_json_ld_malformed_ignored() {
+        let html = r#"<html><head>
+            <script type="application/ld+json">not valid json{{{</script>
+            <title>Fallback</title>
+        </head><body></body></html>"#;
+        let m = get_data_from_page(html.to_string(), "https://example.com");
+        assert_eq!(m.title.as_deref(), Some("Fallback"));
     }
 }

@@ -1,3 +1,4 @@
+pub mod ddg;
 pub mod microlink;
 pub mod oembed;
 pub mod peekalink;
@@ -48,6 +49,7 @@ impl FetcherRegistry {
         registry.fetchers.push(Box::new(plain::PlainFetcher::new()));
         registry.fetchers.push(Box::new(microlink::MicrolinkFetcher::new()));
         registry.fetchers.push(Box::new(peekalink::PeekalinkFetcher::new()));
+        registry.fetchers.push(Box::new(ddg::DdgFetcher::new()));
 
         assert!(
             registry.fetchers.len() <= MAX_UNBOUNDED_FETCHERS,
@@ -131,13 +133,22 @@ fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&
     let mut merged = Metadata::default();
 
     for (_priority, name, m) in &results {
-        if merged.title.is_none() && m.title.is_some() {
-            merged.title.clone_from(&m.title);
-            merged.sources.insert("title".into(), name.to_string());
+        if m.title.is_some() {
+            let incoming_generic = is_generic_title(m.title.as_deref());
+            let current_generic = is_generic_title(merged.title.as_deref());
+            // Accept if: no title yet, OR current is generic and incoming is real
+            if merged.title.is_none() || (current_generic && !incoming_generic) {
+                merged.title.clone_from(&m.title);
+                merged.sources.insert("title".into(), name.to_string());
+            }
         }
-        if merged.description.is_none() && m.description.is_some() {
-            merged.description.clone_from(&m.description);
-            merged.sources.insert("description".into(), name.to_string());
+        if m.description.is_some() {
+            let current_empty = is_empty_description(merged.description.as_deref());
+            let incoming_empty = is_empty_description(m.description.as_deref());
+            if merged.description.is_none() || (current_empty && !incoming_empty) {
+                merged.description.clone_from(&m.description);
+                merged.sources.insert("description".into(), name.to_string());
+            }
         }
         if merged.keywords.is_none() && m.keywords.is_some() {
             merged.keywords.clone_from(&m.keywords);
@@ -277,8 +288,15 @@ fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&Scrap
 /// (common with JS-rendered SPAs like Reddit, Twitter, etc.).
 fn is_generic_title(title: Option<&str>) -> bool {
     let Some(t) = title else { return true };
-    let lower = t.to_lowercase();
-    // Known generic site titles returned by meta tags on JS-heavy sites
+    let trimmed = t.trim();
+    let lower = trimmed.to_lowercase();
+
+    // Too short to be meaningful
+    if trimmed.len() < 4 {
+        return true;
+    }
+
+    // Known generic site titles
     let generics = [
         "reddit - the heart of the internet",
         "reddit - dive into anything",
@@ -295,10 +313,50 @@ fn is_generic_title(title: Option<&str>) -> bool {
         "please wait...",
         "verify you are human",
         "page not found",
+        "404 not found",
+        "untitled",
+        "home",
+        "index",
     ];
-    generics.iter().any(|g| lower == *g)
-        || lower.starts_with("just a moment")
+    if generics.iter().any(|g| lower == *g) {
+        return true;
+    }
+
+    // Prefix patterns
+    if lower.starts_with("just a moment")
         || lower.starts_with("please enable")
+        || lower.starts_with("you are being redirected")
+        || lower.starts_with("checking your browser")
+        || lower.starts_with("one moment")
+    {
+        return true;
+    }
+
+    // Title is just a bare domain name
+    if lower.contains('.') && !lower.contains(' ') && !lower.contains('/')
+        && reqwest::Url::parse(&format!("https://{}", lower)).is_ok()
+    {
+        return true;
+    }
+
+    // Common error/block page indicators
+    if lower.contains("| 404")
+        || lower.contains("| page not found")
+        || lower.contains("| error")
+        || lower.contains("access denied")
+        || lower.contains("security check")
+    {
+        return true;
+    }
+
+    false
+}
+
+fn is_empty_description(desc: Option<&str>) -> bool {
+    match desc {
+        None => true,
+        Some(d) => d.trim().is_empty() || d.trim().len() < 10,
+    }
 }
 
 fn describe_fields(m: &Metadata) -> String {
@@ -311,4 +369,77 @@ fn describe_fields(m: &Metadata) -> String {
     if m.icon.is_some() { fields.push("icon"); }
     if m.canonical_url.is_some() { fields.push("canonical_url"); }
     fields.join(",")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metadata::types::Metadata;
+
+    fn meta_with_title(title: &str) -> Metadata {
+        Metadata {
+            title: Some(title.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_generic_title_overridden_in_merge() {
+        let results = vec![
+            (1, "Plain", meta_with_title("Reddit - Dive into anything")),
+            (5, "Microlink", meta_with_title("Actual Post Title")),
+        ];
+        let merged = merge_results(results, None);
+        assert_eq!(merged.title.as_deref(), Some("Actual Post Title"));
+    }
+
+    #[test]
+    fn test_generic_title_short() {
+        assert!(is_generic_title(Some("Hi")));
+        assert!(is_generic_title(Some("abc")));
+        assert!(!is_generic_title(Some("A Real Title")));
+    }
+
+    #[test]
+    fn test_generic_title_domain() {
+        assert!(is_generic_title(Some("example.com")));
+        assert!(is_generic_title(Some("www.reddit.com")));
+        assert!(!is_generic_title(Some("example.com is great")));
+    }
+
+    #[test]
+    fn test_generic_title_error_page() {
+        assert!(is_generic_title(Some("Something | 404")));
+        assert!(is_generic_title(Some("Oops | Page Not Found")));
+        assert!(is_generic_title(Some("Site | Error")));
+    }
+
+    #[test]
+    fn test_empty_description_replaced() {
+        let results = vec![
+            (1, "Plain", Metadata {
+                description: Some("short".to_string()),
+                ..Default::default()
+            }),
+            (5, "Microlink", Metadata {
+                description: Some("A much longer and more useful description of the page".to_string()),
+                ..Default::default()
+            }),
+        ];
+        let merged = merge_results(results, None);
+        assert_eq!(
+            merged.description.as_deref(),
+            Some("A much longer and more useful description of the page")
+        );
+    }
+
+    #[test]
+    fn test_real_title_not_overridden() {
+        let results = vec![
+            (1, "Plain", meta_with_title("Good Specific Title")),
+            (5, "DDG", meta_with_title("Different Title")),
+        ];
+        let merged = merge_results(results, None);
+        assert_eq!(merged.title.as_deref(), Some("Good Specific Title"));
+    }
 }
