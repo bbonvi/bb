@@ -312,13 +312,14 @@ async fn search(
             // Use alternate format to get full anyhow cause chain
             let full = format!("{:#}", e);
             if full.contains("invalid search query") {
-                // Extract only the parse-level message (last cause in chain)
-                let detail = e.chain().last()
+                // Extract the "invalid search query: <detail>" cause
+                let message = e.chain()
                     .map(|c| c.to_string())
+                    .find(|s| s.contains("invalid search query"))
                     .unwrap_or_else(|| full.clone());
-                AppError::InvalidKeyword {
-                    message: format!("Invalid search query: {}", detail),
-                }
+                // Capitalize first letter for consistency
+                let message = format!("I{}", &message[1..]);
+                AppError::InvalidKeyword { message }
             } else if full.contains("Semantic search is disabled") {
                 AppError::SemanticDisabled {
                     message: "Semantic search is disabled in configuration".to_string(),

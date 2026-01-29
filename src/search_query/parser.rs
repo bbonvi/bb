@@ -45,7 +45,7 @@ impl Parser {
         match self.advance() {
             Some(Token::RParen) => Ok(()),
             Some(tok) => bail!(
-                "expected closing parenthesis at position {}, got {:?}",
+                "expected ')' at position {}, got {}",
                 self.pos - 1,
                 tok
             ),
@@ -116,7 +116,7 @@ impl Parser {
                 let tok = self.advance().unwrap();
                 Ok(token_to_term(tok))
             }
-            Some(tok) => bail!("unexpected token at position {}: {:?}", self.pos, tok),
+            Some(tok) => bail!("unexpected {} at position {}", tok, self.pos),
             None => bail!("unexpected end of input"),
         }
     }
@@ -149,9 +149,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<SearchFilter> {
     let result = parser.parse_or()?;
     if parser.pos < parser.tokens.len() {
         bail!(
-            "unexpected token at position {}: {:?}",
-            parser.pos,
-            parser.tokens[parser.pos]
+            "unexpected {} at position {}",
+            parser.tokens[parser.pos],
+            parser.pos
         );
     }
     Ok(result)

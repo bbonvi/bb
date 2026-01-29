@@ -21,6 +21,22 @@ pub enum Token {
     RParen,
 }
 
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Word(w) => write!(f, "'{}'", w),
+            Token::QuotedString(s) => write!(f, "\"{}\"", s),
+            Token::PrefixedWord(_, w) => write!(f, "'{}'", w),
+            Token::PrefixedQuoted(_, s) => write!(f, "\"{}\"", s),
+            Token::And => write!(f, "'and'"),
+            Token::Or => write!(f, "'or'"),
+            Token::Not => write!(f, "'not'"),
+            Token::LParen => write!(f, "'('"),
+            Token::RParen => write!(f, "')'"),
+        }
+    }
+}
+
 pub fn tokenize(input: &str) -> Result<Vec<Token>> {
     let mut tokens = Vec::new();
     let chars: Vec<char> = input.chars().collect();
