@@ -232,7 +232,6 @@ export function Toolbar() {
         {workspacesAvailable && (
           <div className="relative shrink-0">
             <select
-              tabIndex={-1}
               value={activeWorkspaceId ?? ''}
               onChange={(e) => {
                 const v = e.target.value
