@@ -1,3 +1,4 @@
+use crate::config::ScrapeConfig;
 use crate::metadata::types::Metadata;
 use crate::metadata::fetchers::{MetadataFetcher, fetch_bytes};
 use serde::{Deserialize, Serialize};
@@ -161,7 +162,7 @@ impl PeekalinkFetcher {
 }
 
 impl MetadataFetcher for PeekalinkFetcher {
-    fn fetch(&self, url: &str) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
         let api_key = match std::env::var("PEEKALINK_API_KEY") {
             Ok(key) if !key.is_empty() => key,
             _ => {
@@ -187,23 +188,23 @@ impl MetadataFetcher for PeekalinkFetcher {
                     image: None,
                     icon: None,
                 };
-                
+
                 // fetch image and icon
                 if let Some(img_url) = m.image_url {
-                    if let Some(bytes) = fetch_bytes(&img_url) {
+                    if let Some(bytes) = fetch_bytes(&img_url, scrape_config) {
                         meta.image = Some(bytes);
                     }
                 }
                 if let Some(icon_url) = m.icon_url {
-                    if let Some(bytes) = fetch_bytes(&icon_url) {
+                    if let Some(bytes) = fetch_bytes(&icon_url, scrape_config) {
                         meta.icon = Some(bytes);
                     }
                 }
-                
+
                 return Ok(Some(meta));
             }
         }
-        
+
         Ok(None)
     }
     

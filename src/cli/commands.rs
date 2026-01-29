@@ -223,14 +223,18 @@ impl AddCommand {
             ..Default::default()
         };
 
+        let scrape_config = app_service.get_config()
+            .map(|c| c.read().unwrap().scrape.clone())
+            .ok();
         let add_opts = crate::app::backend::AddOpts {
             no_https_upgrade: self.options.no_https_upgrade,
             async_meta: self.options.async_meta,
             meta_opts: if self.options.no_meta {
                 None
             } else {
-                Some(MetaOptions { 
-                    no_headless: self.options.no_headless 
+                Some(MetaOptions {
+                    no_headless: self.options.no_headless,
+                    scrape_config,
                 })
             },
             skip_rules: false,

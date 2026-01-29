@@ -1,3 +1,4 @@
+use crate::config::ScrapeConfig;
 use crate::metadata::types::{Metadata, MetaOptions};
 use crate::metadata::fetchers::{MetadataFetcher, fetch_bytes};
 
@@ -10,20 +11,20 @@ impl PlainFetcher {
 }
 
 impl MetadataFetcher for PlainFetcher {
-    fn fetch(&self, url: &str) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
         // Try basic reqwest fetch first
-        if let Some(reqwest_result) = crate::scrape::fetch_page_with_reqwest(url) {
+        if let Some(reqwest_result) = crate::scrape::fetch_page_with_reqwest(url, scrape_config) {
             log::debug!("plain request successful");
             let mut meta = crate::scrape::get_data_from_page(reqwest_result.html.clone(), url);
 
             // Try fetching image if present
             if meta.image.is_none() {
-                meta.try_fetch_image();
+                meta.try_fetch_image(scrape_config);
             }
 
             // Try fetching icon if present
             if meta.icon.is_none() {
-                meta.try_fetch_icon();
+                meta.try_fetch_icon(scrape_config);
             }
 
             return Ok(Some(meta));
@@ -47,7 +48,7 @@ impl HeadlessFetcher {
         Self { opts }
     }
     
-    pub fn fetch_with_headless(&self, url: &str) -> anyhow::Result<Option<Metadata>> {
+    pub fn fetch_with_headless(&self, url: &str, scrape_config: Option<&crate::config::ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
         if self.opts.no_headless {
             return Ok(None);
         }
@@ -64,7 +65,7 @@ impl HeadlessFetcher {
                     // Try YouTube thumbnail first if no image
                     if meta.image.is_none() {
                         if let Some(y_img) = self.get_youtube_image_url(url) {
-                            if let Some(bytes) = fetch_bytes(&y_img) {
+                            if let Some(bytes) = fetch_bytes(&y_img, scrape_config) {
                                 meta.image = Some(bytes);
                                 meta.image_url = Some(y_img.clone());
                             }
@@ -78,7 +79,7 @@ impl HeadlessFetcher {
                     
                     // Try icon
                     if meta.icon.is_none() {
-                        meta.try_fetch_icon();
+                        meta.try_fetch_icon(scrape_config);
                     }
                     
                     return Ok(Some(meta));

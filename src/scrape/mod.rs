@@ -2,11 +2,67 @@
 pub mod headless;
 
 use reqwest::StatusCode;
-use std::{cmp::Ordering, error::Error, thread::sleep, time::Duration};
+use std::{cmp::Ordering, error::Error, net::IpAddr, thread::sleep, time::Duration};
 
+use crate::config::ScrapeConfig;
 use crate::metadata::Metadata;
 const USER_AGENT_DEFAULT: &str =
     "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0";
+
+fn is_ip_private(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+    }
+}
+
+fn is_private_ip(host: &str) -> bool {
+    use std::net::ToSocketAddrs;
+
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return is_ip_private(&ip);
+    }
+
+    if let Ok(addrs) = (host, 80).to_socket_addrs() {
+        for addr in addrs {
+            if is_ip_private(&addr.ip()) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn validate_url_policy(url_parsed: &reqwest::Url, config: &ScrapeConfig) -> bool {
+    if !config.allowed_schemes.iter().any(|s| s == url_parsed.scheme()) {
+        log::warn!("URL scheme '{}' not allowed", url_parsed.scheme());
+        return false;
+    }
+
+    let host = url_parsed.host_str().unwrap_or_default();
+
+    if config.blocked_hosts.iter().any(|h| h == host) {
+        log::warn!("Host '{}' is blocked", host);
+        return false;
+    }
+
+    if config.block_private_ips && is_private_ip(host) {
+        log::warn!("Host '{}' resolves to private IP (blocked by SSRF policy)", host);
+        return false;
+    }
+
+    true
+}
 
 fn get_error(error: &reqwest::Error) -> String {
     match error.source() {
@@ -18,7 +74,7 @@ fn get_error(error: &reqwest::Error) -> String {
     }
 }
 
-pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
+pub fn reqwest_with_retries(url: &str, scrape_config: Option<&ScrapeConfig>) -> Option<(StatusCode, Vec<u8>)> {
     let opt_proxy = std::env::var("OPT_PROXY").unwrap_or_default().to_string();
 
     let mut r = 0;
@@ -36,6 +92,16 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
             return None;
         }
     };
+    if let Some(config) = scrape_config {
+        if !validate_url_policy(&url_parsed, config) {
+            return None;
+        }
+    }
+
+    let accept_invalid_certs = scrape_config
+        .map(|c| c.accept_invalid_certs)
+        .unwrap_or(true);
+
     let host = url_parsed.host_str().unwrap_or_default();
     let path = url_parsed.path();
     let iden = format!("{host}{path}");
@@ -54,8 +120,8 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
 
         let mut client = reqwest::blocking::Client::builder()
             .user_agent(USER_AGENT_DEFAULT)
-            .danger_accept_invalid_certs(true)
-            .danger_accept_invalid_hostnames(true)
+            .danger_accept_invalid_certs(accept_invalid_certs)
+            .danger_accept_invalid_hostnames(accept_invalid_certs)
             .timeout(Duration::from_secs(10))
             .pool_idle_timeout(Duration::from_secs(10));
 
@@ -116,15 +182,15 @@ pub fn reqwest_with_retries(url: &str) -> Option<(StatusCode, Vec<u8>)> {
 pub struct ReqwestResult {
     pub html: String,
 }
-pub fn fetch_page_with_reqwest(url: &str) -> Option<ReqwestResult> {
-    reqwest_with_retries(url).map(|(_status, bytes)| ReqwestResult {
+pub fn fetch_page_with_reqwest(url: &str, scrape_config: Option<&ScrapeConfig>) -> Option<ReqwestResult> {
+    reqwest_with_retries(url, scrape_config).map(|(_status, bytes)| ReqwestResult {
         html: String::from_utf8_lossy(&bytes).to_string(),
     })
 }
 
-pub fn get_data_from_ddg(url: &str) -> Option<Metadata> {
+pub fn get_data_from_ddg(url: &str, scrape_config: Option<&ScrapeConfig>) -> Option<Metadata> {
     let ddg_url = format!("https://lite.duckduckgo.com/lite/?q={url}");
-    match reqwest_with_retries(&ddg_url) {
+    match reqwest_with_retries(&ddg_url, scrape_config) {
         Some((status, bytes)) => {
             if !status.is_success() {
                 return None;

@@ -1,3 +1,4 @@
+use crate::config::ScrapeConfig;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -18,22 +19,24 @@ pub struct Metadata {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MetaOptions {
     pub no_headless: bool,
+    #[serde(skip)]
+    pub scrape_config: Option<ScrapeConfig>,
 }
 
 impl Metadata {
     /// Try to fetch and set image bytes from image_url if present
-    pub fn try_fetch_image(&mut self) {
+    pub fn try_fetch_image(&mut self, scrape_config: Option<&ScrapeConfig>) {
         if let Some(ref img_url) = self.image_url {
-            if let Some(bytes) = crate::metadata::fetchers::fetch_bytes(img_url) {
+            if let Some(bytes) = crate::metadata::fetchers::fetch_bytes(img_url, scrape_config) {
                 self.image = Some(bytes);
             }
         }
     }
 
     /// Try to fetch and set icon bytes from icon_url if present
-    pub fn try_fetch_icon(&mut self) {
+    pub fn try_fetch_icon(&mut self, scrape_config: Option<&ScrapeConfig>) {
         if let Some(ref icon_url) = self.icon_url {
-            if let Some(bytes) = crate::metadata::fetchers::fetch_bytes(icon_url) {
+            if let Some(bytes) = crate::metadata::fetchers::fetch_bytes(icon_url, scrape_config) {
                 self.icon = Some(bytes);
             }
         }

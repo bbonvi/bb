@@ -83,8 +83,8 @@ pub fn handle_add(params: AddParams, app_service: AppService) -> Result<()> {
     add_command.execute(app_service).map_err(|e| anyhow::anyhow!(e))
 }
 
-pub fn handle_meta(url: String, _no_https_upgrade: bool, no_headless: bool) -> Result<()> {
-    let meta_opts = crate::metadata::MetaOptions { no_headless };
+pub fn handle_meta(url: String, _no_https_upgrade: bool, no_headless: bool, scrape_config: Option<crate::config::ScrapeConfig>) -> Result<()> {
+    let meta_opts = crate::metadata::MetaOptions { no_headless, scrape_config };
     let meta_command = MetaCommand::new(url, meta_opts)?;
     meta_command.execute().map_err(|e| anyhow::anyhow!(e))
 }

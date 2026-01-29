@@ -1,3 +1,4 @@
+use crate::config::ScrapeConfig;
 use crate::metadata::fetchers::{fetch_bytes, MetadataFetcher};
 use crate::metadata::types::Metadata;
 use serde::{Deserialize, Serialize};
@@ -93,7 +94,7 @@ impl MicrolinkFetcher {
 }
 
 impl MetadataFetcher for MicrolinkFetcher {
-    fn fetch(&self, url: &str) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
         let api_key = std::env::var("MICROLINK_API_KEY").ok();
         if api_key.is_none() {
             log::warn!(
@@ -121,12 +122,12 @@ impl MetadataFetcher for MicrolinkFetcher {
 
                 // fetch image and icon
                 if let Some(img_url) = m.image_url {
-                    if let Some(bytes) = fetch_bytes(&img_url) {
+                    if let Some(bytes) = fetch_bytes(&img_url, scrape_config) {
                         meta.image = Some(bytes);
                     }
                 }
                 if let Some(icon_url) = m.icon_url {
-                    if let Some(bytes) = fetch_bytes(&icon_url) {
+                    if let Some(bytes) = fetch_bytes(&icon_url, scrape_config) {
                         meta.icon = Some(bytes);
                     }
                 }

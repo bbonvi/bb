@@ -233,7 +233,12 @@ impl Task {
                         .first()
                         .ok_or_else(|| anyhow!("bookmark {bmark_id} not found"))?;
 
-                    let meta = AppLocal::fetch_metadata(&bmark.url, opts.clone())?;
+                    // Inject scrape_config from current config into opts
+                    let mut opts = opts.clone();
+                    let scrape_cfg = config.read().unwrap().scrape.clone();
+                    opts.meta_opts.scrape_config = Some(scrape_cfg);
+
+                    let meta = AppLocal::fetch_metadata(&bmark.url, opts)?;
 
                     let img_config = &config.read().unwrap().images;
                     let bmark = AppLocal::merge_metadata(

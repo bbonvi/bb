@@ -442,6 +442,9 @@ async fn create(
         create.icon_id = Some(icon_id);
     }
 
+    let scrape_config = app_service.get_config()
+        .map(|c| c.read().unwrap().scrape.clone())
+        .ok();
     let add_opts = AddOpts {
         no_https_upgrade: false,
         async_meta: payload.async_meta,
@@ -450,6 +453,7 @@ async fn create(
         } else {
             Some(MetaOptions {
                 no_headless: payload.no_headless,
+                scrape_config,
             })
         },
         skip_rules: false,
@@ -639,10 +643,14 @@ async fn refresh_metadata(
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 
+    let scrape_config = app_service.get_config()
+        .map(|c| c.read().unwrap().scrape.clone())
+        .ok();
     let opts = RefreshMetadataOpts {
         async_meta: payload.async_meta,
         meta_opts: MetaOptions {
             no_headless: payload.no_headless,
+            scrape_config,
         },
     };
 
