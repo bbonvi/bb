@@ -31,8 +31,11 @@ impl MetadataFetcher for WaybackFetcher {
         // Parse with ORIGINAL url for relative URL resolution (not archive.org)
         let mut meta = crate::scrape::get_data_from_page(html, url);
 
-        // Clear icon_url — archived pages have rewritten links to archive.org
+        // Clear URLs rewritten by archive.org to point at web.archive.org
         meta.icon_url = None;
+        meta.canonical_url = None;
+        meta.image_url = None;
+        meta.image = None;
 
         if meta.title.is_some() || meta.description.is_some() || meta.image_url.is_some() {
             Ok(Some(meta))
