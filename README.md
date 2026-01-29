@@ -163,6 +163,10 @@ bb backup
 # Create backup at specific path
 bb backup /path/to/backup.tar.gz
 
+# Pipe backup to stdout (auto-detected when stdout is not a terminal)
+bb backup > backup.tar.gz
+docker compose run --rm bb bb backup > backup.tar.gz
+
 # Restore from backup (prompts for confirmation)
 bb import /path/to/backup.tar.gz
 
