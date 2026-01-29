@@ -1090,3 +1090,66 @@ applyScript(() => {
         delete Object.getPrototypeOf(navigator).webdriver
     }
 });
+
+applyScript(() => {
+    utils.replaceGetterWithProxy(
+        Object.getPrototypeOf(navigator),
+        'deviceMemory',
+        utils.makeHandler().getterValue(8)
+    )
+});
+
+applyScript(() => {
+    utils.replaceGetterWithProxy(
+        Object.getPrototypeOf(navigator),
+        'maxTouchPoints',
+        utils.makeHandler().getterValue(0)
+    )
+});
+
+applyScript(() => {
+    const getParameter = WebGLRenderingContext.prototype.getParameter;
+    const handler = {
+        apply: function(target, ctx, args) {
+            const param = args[0];
+            const debugInfo = ctx.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                if (param === debugInfo.UNMASKED_VENDOR_WEBGL) {
+                    return 'Intel Inc.';
+                }
+                if (param === debugInfo.UNMASKED_RENDERER_WEBGL) {
+                    return 'Intel Iris OpenGL Engine';
+                }
+            }
+            return utils.cache.Reflect.apply(target, ctx, args);
+        }
+    };
+    utils.replaceWithProxy(WebGLRenderingContext.prototype, 'getParameter', handler);
+
+    // Also handle WebGL2
+    if (typeof WebGL2RenderingContext !== 'undefined') {
+        utils.replaceWithProxy(WebGL2RenderingContext.prototype, 'getParameter', handler);
+    }
+});
+
+applyScript(() => {
+    if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+        const Ctx = typeof AudioContext !== 'undefined' ? AudioContext : webkitAudioContext;
+        const origCreateOscillator = Ctx.prototype.createOscillator;
+        const origCreateDynamicsCompressor = Ctx.prototype.createDynamicsCompressor;
+
+        // Add tiny noise to audio output to prevent fingerprinting
+        const handler = {
+            apply: function(target, ctx, args) {
+                const result = utils.cache.Reflect.apply(target, ctx, args);
+                // Slightly perturb the frequency to vary the fingerprint
+                if (result.frequency) {
+                    const origValue = result.frequency.value;
+                    result.frequency.value = origValue + (Math.random() * 0.001 - 0.0005);
+                }
+                return result;
+            }
+        };
+        utils.replaceWithProxy(Ctx.prototype, 'createOscillator', handler);
+    }
+});

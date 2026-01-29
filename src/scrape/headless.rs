@@ -94,6 +94,7 @@ pub fn test_launch() {
 
 pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
     let opt_proxy = std::env::var("OPT_PROXY").unwrap_or_default();
+    // TODO: reuse HTTP client / browser instance across retries to reduce overhead
 
     let url_parsed = reqwest::Url::parse(url).unwrap();
     let host = url_parsed.host_str().unwrap_or_default();

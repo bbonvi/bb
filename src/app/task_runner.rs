@@ -8,6 +8,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use rand::random;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -70,9 +71,34 @@ pub fn start_queue(
                 thread_counter.fetch_add(1, Ordering::Relaxed);
                 set_status(id.clone(), Status::InProgress);
 
-                let status = task.run(bmark_mgr.clone(), storage_mgr.clone(), config.clone());
+                let max_retries = config.read().unwrap().task_queue_max_retries;
+                let mut attempt = 0u8;
 
-                set_status(id.clone(), status.clone());
+                loop {
+                    let status = task.run(bmark_mgr.clone(), storage_mgr.clone(), config.clone());
+
+                    match &status {
+                        Status::Error(msg) if attempt < max_retries && is_retryable_error(msg) => {
+                            attempt += 1;
+                            let delay_ms = 5000 * 2u64.pow(attempt as u32 - 1) + rand_jitter();
+                            log::info!(
+                                "task {}: retrying (attempt {}/{}) after error: {}, backoff {}ms",
+                                id,
+                                attempt,
+                                max_retries,
+                                msg,
+                                delay_ms
+                            );
+                            set_attempt(id.clone(), attempt);
+                            set_status(id.clone(), Status::Pending);
+                            sleep(Duration::from_millis(delay_ms));
+                        }
+                        _ => {
+                            set_status(id.clone(), status);
+                            break;
+                        }
+                    }
+                }
 
                 // remove task a bit later to give client an opportunity to react
                 std::thread::spawn(move || {
@@ -161,6 +187,66 @@ pub fn set_status(id: Eid, status: Status) {
     write_queue_dump(&queue_dump);
 }
 
+fn set_attempt(id: Eid, attempt: u8) {
+    let mut queue_dump = read_queue_dump();
+    if let Some(task_dump) = queue_dump.queue.iter_mut().find(|td| td.id == id) {
+        task_dump.attempt = attempt;
+    }
+    queue_dump.now = now();
+    write_queue_dump(&queue_dump);
+}
+
+
+fn is_retryable_error(msg: &str) -> bool {
+    let msg_lower = msg.to_lowercase();
+
+    // Check for retryable patterns
+    let retryable = msg_lower.contains("timeout")
+        || msg_lower.contains("timed out")
+        || msg_lower.contains("connection")
+        || msg_lower.contains("reset by peer")
+        || msg_lower.contains("500")
+        || msg_lower.contains("502")
+        || msg_lower.contains("503")
+        || msg_lower.contains("504");
+
+    // Exclude 4xx errors (client errors are generally not retryable)
+    let is_client_error = msg_lower.contains("400")
+        || msg_lower.contains("401")
+        || msg_lower.contains("403")
+        || msg_lower.contains("404")
+        || msg_lower.contains("405")
+        || msg_lower.contains("406")
+        || msg_lower.contains("407")
+        || msg_lower.contains("408")
+        || msg_lower.contains("409")
+        || msg_lower.contains("410")
+        || msg_lower.contains("411")
+        || msg_lower.contains("412")
+        || msg_lower.contains("413")
+        || msg_lower.contains("414")
+        || msg_lower.contains("415")
+        || msg_lower.contains("416")
+        || msg_lower.contains("417")
+        || msg_lower.contains("418")
+        || msg_lower.contains("421")
+        || msg_lower.contains("422")
+        || msg_lower.contains("423")
+        || msg_lower.contains("424")
+        || msg_lower.contains("425")
+        || msg_lower.contains("426")
+        || msg_lower.contains("428")
+        || msg_lower.contains("429")
+        || msg_lower.contains("431")
+        || msg_lower.contains("451");
+
+    retryable && !is_client_error
+}
+
+fn rand_jitter() -> u64 {
+    random::<u64>() % 2000
+}
+
 pub fn save_task(task: Task, status: Status) -> Eid {
     let eid = Eid::new();
 
@@ -168,6 +254,7 @@ pub fn save_task(task: Task, status: Status) -> Eid {
         id: eid.clone(),
         task,
         status,
+        attempt: 0,
     };
 
     let mut queue_dump = read_queue_dump();
@@ -199,6 +286,8 @@ pub struct TaskDump {
     pub id: Eid,
     pub task: Task,
     pub status: Status,
+    #[serde(default)]
+    pub attempt: u8,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

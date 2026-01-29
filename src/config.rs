@@ -6,6 +6,7 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 const TASK_QUEUE_MAX_THREADS: u16 = 4;
+const DEFAULT_TASK_QUEUE_MAX_RETRIES: u8 = 3;
 
 /// Default semantic search model
 const DEFAULT_SEMANTIC_MODEL: &str = "all-MiniLM-L6-v2";
@@ -147,6 +148,8 @@ fn default_image_quality() -> u8 {
 pub struct Config {
     #[serde(default = "task_queue_max_threads")]
     pub task_queue_max_threads: u16,
+    #[serde(default = "task_queue_max_retries")]
+    pub task_queue_max_retries: u8,
     #[serde(default)]
     pub rules: Vec<Rule>,
     #[serde(default)]
@@ -164,10 +167,15 @@ fn task_queue_max_threads() -> u16 {
     TASK_QUEUE_MAX_THREADS
 }
 
+fn task_queue_max_retries() -> u8 {
+    DEFAULT_TASK_QUEUE_MAX_RETRIES
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             task_queue_max_threads: TASK_QUEUE_MAX_THREADS,
+            task_queue_max_retries: DEFAULT_TASK_QUEUE_MAX_RETRIES,
             rules: Vec::new(),
             semantic_search: SemanticSearchConfig::default(),
             images: ImageConfig::default(),
@@ -187,6 +195,13 @@ impl Config {
             errors.push(format!(
                 "task_queue_max_threads cannot exceed 100, got {}",
                 self.task_queue_max_threads
+            ));
+        }
+
+        if self.task_queue_max_retries < 1 || self.task_queue_max_retries > 10 {
+            errors.push(format!(
+                "task_queue_max_retries must be between 1 and 10, got {}",
+                self.task_queue_max_retries
             ));
         }
 
