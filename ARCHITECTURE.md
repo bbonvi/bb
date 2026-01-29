@@ -87,7 +87,31 @@ pub trait AppBackend: Send + Sync {
 - Images and icons stored in `~/.local/share/bb/uploads/`
 - Atomic writes for crash safety
 
-### 3. Configuration (`src/config.rs`)
+### 3. Keyword Query Language (`src/search_query/`)
+
+Structured query parser for the `keyword` search field. Replaces simple whitespace-split matching with a full query language.
+
+```
+src/search_query/
+├── mod.rs      # Public API: parse() → SearchFilter, eval()
+├── lexer.rs    # Tokenizer: input string → Token stream
+├── parser.rs   # Recursive descent: Token stream → AST (SearchFilter)
+├── eval.rs     # Evaluates SearchFilter against a Bookmark
+└── tests.rs    # Unit tests
+```
+
+- **Field prefixes**: `#tag`, `.title`, `>description`, `:url`, bare = all fields
+- **Boolean operators**: `and`, `or`, `not` with standard precedence (`not` > `and` > `or`)
+- **Implicit AND**: space-separated terms are AND-joined
+- **Quoted phrases**: `."multi word term"`
+- **Parenthesized grouping**: `(#a or #b) and .title`
+- **Backslash escaping**: `\#literal` searches prefix characters literally
+
+Tag matching is exact + hierarchical (`#dev` matches tag `dev/rust`). All other fields use case-insensitive substring matching.
+
+Called from `BackendCsv::search()` when a `keyword` is present on the query.
+
+### 4. Configuration (`src/config.rs`)
 
 YAML config at `~/.local/share/bb/config.yaml`:
 ```yaml
@@ -102,7 +126,7 @@ semantic_search:
 
 Config validates on load; invalid config panics early.
 
-### 4. Workspace Storage (`src/workspaces.rs`)
+### 5. Workspace Storage (`src/workspaces.rs`)
 
 YAML-persisted workspace definitions at `~/.local/share/bb/workspaces.yaml`:
 - `WorkspaceStore` holds `Vec<Workspace>` in `Arc<RwLock<>>` (same concurrency pattern as config)
@@ -112,7 +136,7 @@ YAML-persisted workspace definitions at `~/.local/share/bb/workspaces.yaml`:
 - ID generation via `Eid` (ULID-based)
 - Workspace filtering is frontend-only; the backend stores filter definitions but does not evaluate them
 
-### 5. CLI Layer (`src/cli/`)
+### 6. CLI Layer (`src/cli/`)
 
 **handlers.rs** — Entry points called from `main.rs`:
 - `handle_search()`, `handle_add()`, `handle_rule()`, etc.
@@ -126,7 +150,7 @@ YAML-persisted workspace definitions at `~/.local/share/bb/workspaces.yaml`:
 - Semantic threshold in [0.0, 1.0]
 - Tag format validation (no spaces, max length)
 
-### 6. Web/API Layer (`src/web.rs`)
+### 7. Web/API Layer (`src/web.rs`)
 
 Daemon HTTP server (port 8080):
 
@@ -147,7 +171,7 @@ Daemon HTTP server (port 8080):
 
 Authentication via `BB_AUTH_TOKEN` env var; constant-time token comparison.
 
-### 7. Task Queue (`src/app/task_runner.rs`)
+### 8. Task Queue (`src/app/task_runner.rs`)
 
 Background metadata fetching for `--async-meta` flag:
 - Tasks persisted to `task-queue.json` for recovery
@@ -163,7 +187,7 @@ Background metadata fetching for `--async-meta` flag:
 ```
 1. CLI/API receives search query with semantic="machine learning"
 2. AppService extracts filters and semantic query
-3. Backend.search() applies non-semantic filters (tags, keywords, etc.)
+3. Backend.search() applies non-semantic filters (tags, keyword query language, etc.)
 4. If semantic query present:
    a. Ensure index reconciled (first search only)
    b. Generate query embedding
@@ -195,6 +219,7 @@ Background metadata fetching for `--async-meta` flag:
 | `src/app/local.rs` | Local backend implementation |
 | `src/app/remote.rs` | HTTP client backend |
 | `src/bookmarks.rs` | CSV bookmark storage |
+| `src/search_query/` | Keyword query language (lexer, parser, evaluator) |
 | `src/config.rs` | Configuration loading/validation |
 | `src/workspaces.rs` | Workspace CRUD and YAML persistence |
 | `src/web.rs` | HTTP API server |
@@ -409,6 +434,7 @@ Tests located in `src/tests/`:
 |------|---------|
 | `app.rs` | AppLocal CRUD and search |
 | `bookmarks.rs` | Keyword search |
+| `search_query/tests.rs` | Query language parsing and evaluation |
 | `rules.rs` | Rule matching |
 | `semantic.rs` | Semantic search (1800+ lines) |
 
