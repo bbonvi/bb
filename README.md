@@ -19,7 +19,7 @@
 
 - **Rules**: Create custom rules using YAML configuration. Define matching queries for titles, URLs, or descriptions, and apply actions based on those matches. For example, bb can automatically assign tag "dev" for every url containing "github.com".
 
-- **Scrape Metadata**: When you create a bookmark, bb attempts to fetch metadata from the page via a simple GET request. It extracts the title, description, and URL for page thumbnails (og:image metadata). If the request fails, bb will launch a headless chromium instance to retrieve the same information and take a screenshot of the page as well as favicon. Additionally, the chrome instance will attempt to bypass captchas.
+- **Scrape Metadata**: When you create a bookmark, bb attempts to fetch metadata from the page via a simple GET request. It extracts the title, description, and URL for page thumbnails (og:image metadata). If the request fails, bb will launch a headless chromium instance to retrieve the same information and take a screenshot of the page as well as favicon. Additionally, the chrome instance will attempt to bypass captchas. You can also upload custom cover images and favicons per bookmark via the Web UI.
 
 - **Web UI**: Manage your bookmarks through a user-friendly web interface built with Vite, React, and shadcn/ui. Stores screenshots and favicons for quick reference. Installable as a PWA with share target and protocol handler support — share URLs directly from your browser or OS into bb.
 
