@@ -107,11 +107,9 @@ pub fn fetch_page_with_chrome(url: &str) -> Option<ChromeResult> {
             return None;
         }
 
-        if r > 0 {
+        if r > 1 {
             log::debug!("{host}: retrying");
         }
-
-        r += 1;
 
         let proxy = if force_proxy {
             Some(opt_proxy.clone())

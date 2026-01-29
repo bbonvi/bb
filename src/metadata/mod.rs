@@ -1,5 +1,7 @@
 pub mod types;
 pub mod fetchers;
+pub mod normalize;
+pub mod image_validation;
 
 pub use types::{Metadata, MetaOptions};
 pub use fetchers::FetcherRegistry;
@@ -8,6 +10,7 @@ use anyhow::Result;
 
 /// Main entry point for fetching metadata from a URL
 pub fn fetch_meta(url: &str, opts: MetaOptions) -> Result<Metadata> {
+    let url = &normalize::normalize_url(url);
     let scrape_config = opts.scrape_config.as_ref();
     let registry = FetcherRegistry::new();
 

@@ -245,13 +245,8 @@ pub fn get_data_from_ddg_html(resp_text: String, url: &str) -> Option<Metadata> 
     Some(Metadata {
         title,
         description,
-        keywords: None,
-        canonical_url: None,
-        image_url: None,
         icon_url,
-        image: None,
-        icon: None,
-        dump: None,
+        ..Default::default()
     })
 }
 
@@ -274,17 +269,7 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
     let head = match document.select(&head_selector).next() {
         Some(h) => h,
         None => {
-            return Metadata {
-                title: None,
-                description: None,
-                keywords: None,
-                canonical_url: None,
-                image_url: None,
-                icon_url: None,
-                image: None,
-                icon: None,
-                dump: None,
-            };
+            return Metadata::default();
         }
     };
     for element in head.select(&meta_selector) {
@@ -439,8 +424,6 @@ pub fn get_data_from_page(resp_text: String, url: &str) -> Metadata {
         canonical_url,
         image_url,
         icon_url,
-        image: None,
-        icon: None,
-        dump: None,
+        ..Default::default()
     }
 }

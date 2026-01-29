@@ -235,6 +235,7 @@ impl AddCommand {
                 Some(MetaOptions {
                     no_headless: self.options.no_headless,
                     scrape_config,
+                    ..Default::default()
                 })
             },
             skip_rules: false,

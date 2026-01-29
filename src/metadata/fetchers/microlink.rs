@@ -106,18 +106,15 @@ impl MetadataFetcher for MicrolinkFetcher {
         log::info!("microlink result: {:#?}", mic_result);
 
         if let Some(m) = mic_result {
-            // require at least title and image_url
-            if m.title.is_some() && m.image_url.is_some() {
+            // Accept partial results — any useful field is sufficient
+            if m.title.is_some() || m.description.is_some() || m.image_url.is_some() || m.icon_url.is_some() {
                 let mut meta = Metadata {
                     title: m.title,
                     description: m.description,
                     canonical_url: m.canonical_url,
                     icon_url: m.icon_url.clone(),
                     image_url: m.image_url.clone(),
-                    keywords: None,
-                    dump: None,
-                    image: None,
-                    icon: None,
+                    ..Default::default()
                 };
 
                 // fetch image and icon
@@ -141,5 +138,9 @@ impl MetadataFetcher for MicrolinkFetcher {
 
     fn name(&self) -> &'static str {
         "Microlink"
+    }
+
+    fn priority(&self) -> u8 {
+        3 // Third priority
     }
 }

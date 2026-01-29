@@ -36,6 +36,10 @@ impl MetadataFetcher for PlainFetcher {
     fn name(&self) -> &'static str {
         "Plain"
     }
+
+    fn priority(&self) -> u8 {
+        2 // Second priority after oEmbed
+    }
 }
 
 /// Enhanced plain fetcher that can use headless browser if needed

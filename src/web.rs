@@ -454,6 +454,7 @@ async fn create(
             Some(MetaOptions {
                 no_headless: payload.no_headless,
                 scrape_config,
+                ..Default::default()
             })
         },
         skip_rules: false,
@@ -651,6 +652,7 @@ async fn refresh_metadata(
         meta_opts: MetaOptions {
             no_headless: payload.no_headless,
             scrape_config,
+            ..Default::default()
         },
     };
 
