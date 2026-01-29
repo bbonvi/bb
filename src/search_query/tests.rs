@@ -157,6 +157,19 @@ fn test_parentheses_grouping() {
     assert!(!matches("#video and (.spotify or #audio)", &bm).unwrap());
 }
 
+#[test]
+fn test_deeply_nested_parentheses() {
+    let bm = make_bookmark("Scala Akka Streams Guide", "", "https://doc.akka.io", &["jvm", "reactive"]);
+    // 3 levels deep: (#jvm and (#reactive and (.akka or (:lightbend)))) or #python
+    // #jvm ✓, #reactive ✓, .akka ✓ → true through left branch
+    assert!(matches("(#jvm and (#reactive and (.akka or (:lightbend)))) or #python", &bm).unwrap());
+    // flip innermost: .spring fails, :lightbend fails → inner false → whole left false, #python false
+    assert!(!matches("(#jvm and (#reactive and (.spring or (:lightbend)))) or #python", &bm).unwrap());
+    // match via outermost or
+    let bm2 = make_bookmark("Django REST", "", "", &["python"]);
+    assert!(matches("(#jvm and (#reactive and (.akka or (:lightbend)))) or #python", &bm2).unwrap());
+}
+
 // --- Backslash escaping ---
 
 #[test]
