@@ -719,3 +719,35 @@ fn empty_and_whitespace_keyword_returns_all() {
         .unwrap();
     assert_eq!(results_whitespace.len(), 0);
 }
+
+#[test]
+fn create_with_reordered_internal_list_uses_max_not_last() {
+    let (mgr, _tmp) = fresh_mgr();
+    // Create bookmarks with IDs 0, 1, 2
+    let b0 = mgr.create(BookmarkCreate { url: "https://a.com".into(), ..Default::default() }).unwrap();
+    let b1 = mgr.create(BookmarkCreate { url: "https://b.com".into(), ..Default::default() }).unwrap();
+    let b2 = mgr.create(BookmarkCreate { url: "https://c.com".into(), ..Default::default() }).unwrap();
+    assert_eq!(b0.id, 0);
+    assert_eq!(b1.id, 1);
+    assert_eq!(b2.id, 2);
+
+    // Manually reorder the internal list to [2, 1, 0] (e.g., from external manipulation)
+    {
+        let list_arc = mgr.list();
+        let mut list = list_arc.write().unwrap();
+        list.reverse();
+        assert_eq!(list.last().unwrap().id, 0); // last() is now 0, not 2
+    }
+
+    // Create a new bookmark.
+    // - Buggy approach: last().id + 1 = 0 + 1 = 1 → collision with existing ID 1!
+    // - Fixed approach: max(all_ids) + 1 = 2 + 1 = 3 → safe, no collision
+    let b3 = mgr.create(BookmarkCreate { url: "https://d.com".into(), ..Default::default() }).unwrap();
+    assert_eq!(b3.id, 3);
+
+    // Verify no collision: all IDs are unique
+    let all = mgr.search(SearchQuery::default()).unwrap();
+    let ids: Vec<u64> = all.iter().map(|b| b.id).collect();
+    let unique_count = ids.iter().collect::<std::collections::HashSet<_>>().len();
+    assert_eq!(ids.len(), unique_count);
+}

@@ -283,10 +283,9 @@ impl BookmarkManager for BackendCsv {
     }
 
     fn create(&self, bmark_create: BookmarkCreate) -> anyhow::Result<Bookmark> {
-        let id = if let Some(last_bookmark) = self.list.write().unwrap().last() {
-            last_bookmark.id + 1
-        } else {
-            0
+        let id = {
+            let list = self.list.write().unwrap();
+            list.iter().map(|b| b.id).max().map_or(0, |max_id| max_id + 1)
         };
 
         let mut bmark_create = bmark_create;
