@@ -181,6 +181,9 @@ pub enum AppError {
     #[error("{message}")]
     ModelUnavailable { message: String },
 
+    #[error("{message}")]
+    InvalidKeyword { message: String },
+
     #[error("{0}")]
     Workspace(#[from] WorkspaceError),
 
@@ -202,6 +205,9 @@ impl IntoResponse for AppError {
             }
             AppError::ModelUnavailable { message } => {
                 (StatusCode::SERVICE_UNAVAILABLE, "MODEL_UNAVAILABLE", message.clone())
+            }
+            AppError::InvalidKeyword { message } => {
+                (StatusCode::BAD_REQUEST, "INVALID_KEYWORD", message.clone())
             }
             AppError::Workspace(ref e) => {
                 let status = match e {
@@ -304,7 +310,11 @@ async fn search(
         .search_bookmarks(query, false)
         .map_err(|e| {
             let err_msg = e.to_string();
-            if err_msg.contains("Semantic search is disabled") {
+            if err_msg.contains("invalid search query") {
+                AppError::InvalidKeyword {
+                    message: err_msg,
+                }
+            } else if err_msg.contains("Semantic search is disabled") {
                 AppError::SemanticDisabled {
                     message: "Semantic search is disabled in configuration".to_string(),
                 }
@@ -838,6 +848,15 @@ mod tests {
         };
         let response = err.into_response();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn test_invalid_keyword_error_returns_400() {
+        let err = AppError::InvalidKeyword {
+            message: "invalid search query: unexpected token".to_string(),
+        };
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]

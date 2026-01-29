@@ -96,6 +96,8 @@ export function usePolling() {
         useStore.getState().setBookmarks([])
       }
 
+      useStore.getState().setSearchError(null)
+
       const state = useStore.getState()
       if (!state.initialLoadComplete) {
         state.setInitialLoadComplete(true)
@@ -103,6 +105,10 @@ export function usePolling() {
     } catch (err) {
       if (controller.signal.aborted) return
       if (err instanceof ApiError && err.status === 401) return
+      if (err instanceof ApiError && err.code === 'INVALID_KEYWORD') {
+        useStore.getState().setSearchError(err.message)
+        return
+      }
     } finally {
       // Don't clear loading if this request was aborted — the replacement owns it
       if (!controller.signal.aborted) {

@@ -103,6 +103,10 @@ export interface AppState {
   isUserLoading: boolean
   setIsUserLoading: (loading: boolean) => void
 
+  // Search error (e.g. invalid keyword expression)
+  searchError: string | null
+  setSearchError: (error: string | null) => void
+
   // Refetch trigger — incremented after mutations to force bookmark refetch
   refetchTrigger: number
   triggerRefetch: () => void
@@ -301,6 +305,10 @@ export const useStore = create<AppState>()((set, get) => ({
   setIsLoading: (isLoading) => set({ isLoading }),
   isUserLoading: false,
   setIsUserLoading: (isUserLoading) => set({ isUserLoading }),
+
+  // Search error
+  searchError: null,
+  setSearchError: (searchError) => set({ searchError }),
 
   // Refetch trigger
   refetchTrigger: 0,

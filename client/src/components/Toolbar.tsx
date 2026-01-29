@@ -51,6 +51,8 @@ export function Toolbar() {
   const setSearchQuery = useStore((s) => s.setSearchQuery)
   const totalCount = useStore((s) => s.totalCount)
   const semanticEnabled = useStore((s) => s.semanticEnabled)
+  const searchError = useStore((s) => s.searchError)
+  const setSearchError = useStore((s) => s.setSearchError)
 
   const viewMode = useStore((s) => s.viewMode)
   const setViewMode = useStore((s) => s.setViewMode)
@@ -74,6 +76,15 @@ export function Toolbar() {
     const hidden = new Set(hiddenTags)
     return tags.filter((t) => !hidden.has(t))
   }, [tags, hiddenTags])
+
+  // Clear search error when query changes
+  const searchQueryRef = useRef(searchQuery)
+  useEffect(() => {
+    if (searchQueryRef.current !== searchQuery) {
+      searchQueryRef.current = searchQuery
+      if (searchError) setSearchError(null)
+    }
+  }, [searchQuery, searchError, setSearchError])
 
   const SEARCH_DEBOUNCE_MS = 500
 
@@ -339,6 +350,13 @@ export function Toolbar() {
         </button>
 
       </div>
+
+      {/* ── Search error ── */}
+      {searchError && (
+        <div className="mx-2 mb-1 rounded-md bg-danger/10 px-3 py-1.5 text-xs text-danger sm:mx-3">
+          {searchError}
+        </div>
+      )}
 
       {/* ── Mobile controls row ── */}
       <div className="flex items-center gap-2 border-t border-white/[0.04] px-3 py-1.5 sm:hidden">
