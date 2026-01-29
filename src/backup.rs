@@ -224,6 +224,11 @@ pub fn import_backup(archive_path: Option<&Path>, skip_confirm: bool, base_path:
 }
 
 fn is_whitelisted(path: &str) -> bool {
+    // Reject path traversal and absolute paths
+    if path.starts_with('/') || path.contains("..") {
+        return false;
+    }
+
     // Check if it's a known file
     if BACKUP_FILES.contains(&path) {
         return true;
@@ -353,6 +358,55 @@ mod tests {
         builder
             .append_path_with_name(src.path().join("evil.sh"), "evil.sh")
             .unwrap();
+        let enc = builder.into_inner().unwrap();
+        enc.finish().unwrap();
+
+        let dest = TempDir::new().unwrap();
+        let result = import_backup(Some(archive_path.as_path()), true, dest.path());
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("does not contain any recognized"));
+    }
+
+    #[test]
+    fn test_is_whitelisted_rejects_path_traversal() {
+        assert!(!is_whitelisted("uploads/../../etc/passwd"));
+        assert!(!is_whitelisted("../etc/shadow"));
+        assert!(!is_whitelisted("uploads/../../../tmp/evil"));
+    }
+
+    #[test]
+    fn test_is_whitelisted_rejects_absolute_paths() {
+        assert!(!is_whitelisted("/etc/passwd"));
+        assert!(!is_whitelisted("/tmp/evil"));
+    }
+
+    #[test]
+    fn test_import_rejects_path_traversal_archive() {
+        // Build archive with raw header bytes to bypass tar crate's .. rejection
+        let tmp = TempDir::new().unwrap();
+        let archive_path = tmp.path().join("traversal.tar.gz");
+        let file = File::create(&archive_path).unwrap();
+        let encoder = GzEncoder::new(file, Compression::default());
+        let mut builder = Builder::new(encoder);
+
+        let data = b"root:x:0:0";
+        let mut header = tar::Header::new_gnu();
+        // Use a safe path for set_path, then overwrite the raw name bytes
+        header.set_path("uploads/placeholder").unwrap();
+        header.set_size(data.len() as u64);
+        header.set_mode(0o644);
+        header.set_entry_type(tar::EntryType::Regular);
+        // Overwrite path in raw header bytes with traversal path
+        let traversal_path = b"uploads/../../etc/passwd";
+        let raw = header.as_mut_bytes();
+        raw[..traversal_path.len()].copy_from_slice(traversal_path);
+        raw[traversal_path.len()] = 0; // null-terminate
+        header.set_cksum();
+        builder.append(&header, &data[..]).unwrap();
+
         let enc = builder.into_inner().unwrap();
         enc.finish().unwrap();
 
