@@ -162,11 +162,11 @@ fn main() -> anyhow::Result<()> {
             cli::handle_add(params, app_service)
         }
 
-        Command::Meta { url, meta_args } => {
+        Command::Meta { url, output_dir, meta_args } => {
             let scrape_config = config::Config::load_with(&paths.base_path)
                 .map(|c| c.scrape)
                 .ok();
-            cli::handle_meta(url, meta_args.no_https_upgrade, meta_args.no_headless, scrape_config)
+            cli::handle_meta(url, meta_args.no_headless, scrape_config, output_dir)
         }
 
         Command::Rule { action } => {

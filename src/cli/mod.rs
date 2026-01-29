@@ -100,11 +100,15 @@ pub enum Command {
         #[clap(flatten)]
         meta_args: MetaArgs,
     },
-    /// Query website meta data
+    /// Extract metadata from a URL without creating a bookmark (for testing/debugging)
     Meta {
-        /// A url
-        #[clap(allow_hyphen_values = true, hide = true)]
+        /// URL to extract metadata from
+        #[clap(allow_hyphen_values = true)]
         url: String,
+
+        /// Save images/icons to a directory (default: don't save)
+        #[clap(long, short = 'o')]
+        output_dir: Option<String>,
 
         #[clap(flatten)]
         meta_args: MetaArgs,

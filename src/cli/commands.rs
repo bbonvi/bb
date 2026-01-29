@@ -250,38 +250,73 @@ impl AddCommand {
     }
 }
 
-/// Command for metadata operations
+/// Command for metadata extraction (no bookmark creation)
 #[derive(Debug, Clone)]
 pub struct MetaCommand {
     pub url: String,
     pub options: MetaOptions,
+    pub output_dir: Option<String>,
 }
 
 impl MetaCommand {
-    pub fn new(url: String, options: MetaOptions) -> CliResult<Self> {
-        // Validate URL
+    pub fn new(url: String, options: MetaOptions, output_dir: Option<String>) -> CliResult<Self> {
         validate_url(&url)?;
-        
-        Ok(Self { url, options })
+        Ok(Self { url, options, output_dir })
     }
 
     pub fn execute(self) -> CliResult<()> {
+        eprintln!("Fetching metadata for: {}", self.url);
+        let start = std::time::Instant::now();
+
         let meta = crate::metadata::fetch_meta(&self.url, self.options)
             .map_err(|e| crate::cli::errors::CliError::metadata(e.to_string()))?;
 
-        if let Some(ref image) = meta.image {
-            std::fs::write("screenshot.png", image)
+        let elapsed = start.elapsed();
+
+        // Save images if output_dir specified
+        if let Some(ref dir) = self.output_dir {
+            std::fs::create_dir_all(dir)
                 .map_err(|e| crate::cli::errors::CliError::storage(e.to_string()))?;
+
+            if let Some(ref image) = meta.image {
+                let path = std::path::Path::new(dir).join("image.png");
+                std::fs::write(&path, image)
+                    .map_err(|e| crate::cli::errors::CliError::storage(e.to_string()))?;
+                eprintln!("  image: {} ({} bytes, valid={})", path.display(), image.len(), meta.image_valid);
+            }
+
+            if let Some(ref icon) = meta.icon {
+                let path = std::path::Path::new(dir).join("icon.png");
+                std::fs::write(&path, icon)
+                    .map_err(|e| crate::cli::errors::CliError::storage(e.to_string()))?;
+                eprintln!("  icon:  {} ({} bytes)", path.display(), icon.len());
+            }
         }
 
-        if let Some(ref icon) = meta.icon {
-            std::fs::write("icon.png", icon)
-                .map_err(|e| crate::cli::errors::CliError::storage(e.to_string()))?;
-        }
+        // Print summary to stderr
+        eprintln!("  title:       {}", meta.title.as_deref().unwrap_or("(none)"));
+        eprintln!("  description: {}", truncate(meta.description.as_deref().unwrap_or("(none)"), 80));
+        eprintln!("  canonical:   {}", meta.canonical_url.as_deref().unwrap_or("(none)"));
+        eprintln!("  image_url:   {}", meta.image_url.as_deref().unwrap_or("(none)"));
+        eprintln!("  image_valid: {}", meta.image_valid);
+        eprintln!("  icon_url:    {}", meta.icon_url.as_deref().unwrap_or("(none)"));
+        eprintln!("  image_bytes: {}", meta.image.as_ref().map_or(0, |b| b.len()));
+        eprintln!("  icon_bytes:  {}", meta.icon.as_ref().map_or(0, |b| b.len()));
+        eprintln!("  elapsed:     {:.2?}", elapsed);
 
+        // JSON to stdout (pipeable)
         println!("{}", serde_json::to_string_pretty(&meta)
             .map_err(|e| crate::cli::errors::CliError::invalid_input(e.to_string()))?);
+
         Ok(())
+    }
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..max])
     }
 }
 
