@@ -25,6 +25,8 @@
 
 - **Workspaces**: Organize bookmarks into filtered views. Each workspace defines tag whitelist/blacklist and an optional keyword filter query. Bookmarks matching the workspace filters appear automatically. Workspaces are persisted in `workspaces.yaml` and managed via the Web UI settings panel or the REST API. Drag-and-drop reordering is supported.
 
+- **Bulk Operations**: Edit or delete multiple bookmarks at once. Bulk actions apply to all bookmarks matching the current search query — add, remove, or overwrite tags, and update fields in batch. Available from the toolbar in the Web UI.
+
 - **Standalone CLI Tool or Daemon**: Run bb as a standalone CLI tool or deploy it as a daemon on a remote server. Use the bb-cli as a lightweight client to connect to the server over HTTP.
 
 - **Semantic Search** *(experimental)*: Find bookmarks by meaning rather than exact keywords. Currently inaccurate for most workloads — prefer keyword search for reliable results. Disabled by default.
