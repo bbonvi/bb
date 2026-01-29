@@ -191,9 +191,9 @@ Configuration options:
 When scraping metadata, bb executes the following stages:
 
 1. **URL Normalization**: Tracking parameters stripped (utm_*, fbclid, gclid, etc.), hosts lowercased, trailing slashes removed, protocol-relative URLs resolved
-2. **Parallel Fetching**: oEmbed, Plain HTML, Microlink, and Peekalink fetchers run concurrently via thread pool
+2. **Parallel Fetching**: oEmbed, Plain HTML, Microlink, Peekalink, and Iframely fetchers run concurrently via thread pool
 3. **oEmbed Support**: Checks URL against provider registry (cached from oembed.com/providers.json with hardcoded fallback for top 15 providers). Supports YouTube, Vimeo, Twitter, Spotify, SoundCloud, TikTok, etc.
-4. **Field Merging**: Results merged by priority (oEmbed > HTML > Microlink > Peekalink)
+4. **Field Merging**: Results merged by priority (oEmbed > HTML > Microlink > Peekalink > Iframely)
 5. **Image Validation**: Fetched images validated via magic byte detection (PNG/JPEG/WebP/GIF), decode check, minimum resolution >32x32. Rejects tracking pixels, HTML responses, corrupt data
 6. **Headless Chrome Fallback**: Launched only when no validated image is found. Includes stealth fingerprinting (deviceMemory, maxTouchPoints, WebGL vendor/renderer, AudioContext)
 7. **Retry Logic**: Failed tasks retried with exponential backoff (5s × 2^attempt + jitter) up to `task_queue_max_retries` for transient errors (5xx, timeout, connection); 4xx errors are terminal
@@ -387,5 +387,6 @@ BB_ADDR=http://localhost:8080 BB_AUTH_TOKEN=your-secret-token-here bb search
 | `CHROME_PATH`         | A path to chromium binary                             | `chromium`            | `/usr/sbin/chromium`    |
 | `EDITOR`              | Your default text editor                              | `vim`                 | `nvim`                  |
 | `SHELL`               | Shell to launch editor with                           | `/usr/sbin/bash`      | `/bin/bash`             |
+| `IFRAMELY_API_KEY`    | Iframely API key for rich metadata extraction         |                       | `abc123...`             |
 
 

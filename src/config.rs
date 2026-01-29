@@ -61,7 +61,7 @@ impl Default for ScrapeConfig {
 }
 
 pub fn default_fetcher_order() -> Vec<String> {
-    ["oEmbed", "Wayback", "Plain", "Microlink", "Peekalink", "DDG"]
+    ["oEmbed", "Wayback", "Plain", "Microlink", "Peekalink", "Iframely", "DDG"]
         .iter()
         .map(|s| s.to_string())
         .collect()

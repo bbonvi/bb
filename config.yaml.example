@@ -51,13 +51,14 @@ scrape:
 
   # Fetcher priority order (first = highest priority)
   # Remove an entry to disable that fetcher. Headless is not listed here (see always_headless).
-  # Default: [oEmbed, Wayback, Plain, Microlink, Peekalink, DDG]
+  # Default: [oEmbed, Wayback, Plain, Microlink, Peekalink, Iframely, DDG]
   # fetcher_order:
   #   - oEmbed
   #   - Wayback
   #   - Plain
   #   - Microlink
   #   - Peekalink
+  #   - Iframely
   #   - DDG
 
 rules:

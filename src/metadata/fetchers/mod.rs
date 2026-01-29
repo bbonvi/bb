@@ -1,4 +1,5 @@
 pub mod ddg;
+pub mod iframely;
 pub mod microlink;
 pub mod oembed;
 pub mod peekalink;
@@ -36,7 +37,7 @@ pub struct FetcherRegistry {
 }
 
 // Guard: switch to semaphore-bounded pool if >6 fetchers
-const MAX_UNBOUNDED_FETCHERS: usize = 7;
+const MAX_UNBOUNDED_FETCHERS: usize = 8;
 
 impl FetcherRegistry {
     pub fn new(opts: &MetaOptions) -> Self {
@@ -56,6 +57,7 @@ impl FetcherRegistry {
                 "Plain" => registry.fetchers.push(Box::new(plain::PlainFetcher::new())),
                 "Microlink" => registry.fetchers.push(Box::new(microlink::MicrolinkFetcher::new())),
                 "Peekalink" => registry.fetchers.push(Box::new(peekalink::PeekalinkFetcher::new())),
+                "Iframely" => registry.fetchers.push(Box::new(iframely::IframelyFetcher::new())),
                 "DDG" => registry.fetchers.push(Box::new(ddg::DdgFetcher::new())),
                 other => log::warn!("Unknown fetcher in config: {other}"),
             }

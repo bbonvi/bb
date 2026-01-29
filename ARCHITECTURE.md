@@ -214,7 +214,8 @@ src/metadata/
 │   ├── wayback.rs   # Wayback Machine (archive.org) snapshot fetcher
 │   ├── ddg.rs       # DuckDuckGo API client
 │   ├── microlink.rs # Microlink API client
-│   └── peekalink.rs # Peekalink API client
+│   ├── peekalink.rs # Peekalink API client
+│   └── iframely.rs  # Iframely API client
 ├── merge.rs         # Field-by-field priority merging with smart defaults
 ├── validate.rs      # Image validation (magic bytes, decode, resolution)
 ├── chrome.rs        # Headless Chrome fallback with stealth
@@ -235,6 +236,7 @@ URL
      ├─→ Plain HTML fetcher (og:title, twitter:*, meta tags, JSON-LD structured data, <link rel="canonical">)
      ├─→ Microlink API
      ├─→ Peekalink API
+     ├─→ Iframely API
      └─→ DDG API fetcher
  → merge_metadata(results)
      - Priority from config: scrape.fetcher_order (default: oEmbed > Wayback > Plain > Microlink > Peekalink > DDG)
@@ -271,6 +273,11 @@ URL
 - Strips icon URLs (rewritten by archive.org)
 - Useful for pages that block scrapers but have archived copies
 
+**Iframely Fetcher** (`fetchers/iframely.rs`):
+- Queries `iframe.ly/api/iframely?url=&api_key=` for rich metadata
+- Gated behind `IFRAMELY_API_KEY` env var; skipped when absent
+- Extracts title, description, canonical URL, thumbnail, and icon from structured response
+
 **DDG Fetcher** (`fetchers/ddg.rs`):
 - Runs in parallel with other fetchers
 - Not a post-failure fallback; contributes to merge pool with all other sources
@@ -278,7 +285,7 @@ URL
 
 **Configurable Fetcher Order**:
 - `scrape.fetcher_order` in config.yaml controls which fetchers run and their merge priority
-- Default: `[oEmbed, Wayback, Plain, Microlink, Peekalink, DDG]`
+- Default: `[oEmbed, Wayback, Plain, Microlink, Peekalink, Iframely, DDG]`
 - Remove an entry to disable that fetcher; reorder to change priority
 - Headless Chrome is excluded from this list (controlled by `always_headless`)
 
