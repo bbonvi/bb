@@ -99,13 +99,14 @@ impl FetcherRegistry {
 
         let merged = merge_results(results, scrape_config);
 
-        // Short-circuit if we have a validated image
-        if merged.has_valid_image() {
-            return Ok(Some(merged));
-        }
+        // Short-circuit only if we have ALL key fields: validated image,
+        // non-generic title, and a description. Missing or generic text
+        // fields warrant a headless fallback attempt.
+        let needs_headless = !merged.has_valid_image()
+            || merged.description.is_none()
+            || is_generic_title(merged.title.as_deref());
 
-        // Headless fallback if no valid image yet
-        if !opts.no_headless {
+        if needs_headless && !opts.no_headless {
             let headless_fetcher = plain::HeadlessFetcher::new(opts.clone());
             if let Ok(Some(m)) = headless_fetcher.fetch_with_headless(url, scrape_config) {
                 return Ok(Some(merge_two(merged, m, scrape_config)));
@@ -201,15 +202,21 @@ fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&
     merged
 }
 
-/// Merge overlay (from headless fallback) into base, filling only missing fields.
-/// Never overwrites existing non-None fields.
+/// Merge overlay (from headless fallback) into base.
+/// Fills missing fields. Additionally **overrides** generic/missing title and
+/// missing description — headless often produces better text for JS-rendered pages.
 fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&ScrapeConfig>) -> Metadata {
     let source = "Headless";
 
-    if base.title.is_none() && overlay.title.is_some() {
+    // Title: override if base is missing or generic, and overlay has something better
+    if overlay.title.is_some()
+        && !is_generic_title(overlay.title.as_deref())
+        && (base.title.is_none() || is_generic_title(base.title.as_deref()))
+    {
         base.title = overlay.title;
         base.sources.insert("title".into(), source.into());
     }
+    // Description: override if base is missing and overlay has one
     if base.description.is_none() && overlay.description.is_some() {
         base.description = overlay.description;
         base.sources.insert("description".into(), source.into());
@@ -265,6 +272,35 @@ fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&Scrap
 }
 
 /// Describe which fields are present in metadata (for logging)
+/// Detect titles that are site-wide defaults rather than page-specific.
+/// These indicate the lightweight fetchers failed to get real content
+/// (common with JS-rendered SPAs like Reddit, Twitter, etc.).
+fn is_generic_title(title: Option<&str>) -> bool {
+    let Some(t) = title else { return true };
+    let lower = t.to_lowercase();
+    // Known generic site titles returned by meta tags on JS-heavy sites
+    let generics = [
+        "reddit - the heart of the internet",
+        "reddit - dive into anything",
+        "just a moment...",
+        "twitter",
+        "x. it's what's happening",
+        "instagram",
+        "tiktok",
+        "loading...",
+        "redirecting...",
+        "403 forbidden",
+        "access denied",
+        "attention required!",
+        "please wait...",
+        "verify you are human",
+        "page not found",
+    ];
+    generics.iter().any(|g| lower == *g)
+        || lower.starts_with("just a moment")
+        || lower.starts_with("please enable")
+}
+
 fn describe_fields(m: &Metadata) -> String {
     let mut fields = Vec::new();
     if m.title.is_some() { fields.push("title"); }
