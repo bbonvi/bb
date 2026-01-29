@@ -166,7 +166,7 @@ fn main() -> anyhow::Result<()> {
             let scrape_config = config::Config::load_with(&paths.base_path)
                 .map(|c| c.scrape)
                 .ok();
-            cli::handle_meta(url, meta_args.no_headless, scrape_config, output_dir)
+            cli::handle_meta(url, meta_args.no_headless, meta_args.always_headless, scrape_config, output_dir)
         }
 
         Command::Rule { action } => {

@@ -11,6 +11,11 @@ pub struct MetaArgs {
     #[clap(long, default_value = "false")]
     pub no_headless: bool,
 
+    /// Always run headless Chrome in parallel with other fetchers
+    /// (overrides config.yaml scrape.always_headless)
+    #[clap(long, default_value = "false")]
+    pub always_headless: bool,
+
     /// Don't fetch meta at all
     #[clap(long, default_value = "false")]
     pub no_meta: bool,

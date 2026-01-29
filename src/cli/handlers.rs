@@ -83,7 +83,17 @@ pub fn handle_add(params: AddParams, app_service: AppService) -> Result<()> {
     add_command.execute(app_service).map_err(|e| anyhow::anyhow!(e))
 }
 
-pub fn handle_meta(url: String, no_headless: bool, scrape_config: Option<crate::config::ScrapeConfig>, output_dir: Option<String>) -> Result<()> {
+pub fn handle_meta(url: String, no_headless: bool, always_headless: bool, scrape_config: Option<crate::config::ScrapeConfig>, output_dir: Option<String>) -> Result<()> {
+    let scrape_config = if always_headless {
+        Some(scrape_config.map(|mut c| { c.always_headless = true; c })
+            .unwrap_or_else(|| {
+                let mut c = crate::config::ScrapeConfig::default();
+                c.always_headless = true;
+                c
+            }))
+    } else {
+        scrape_config
+    };
     let meta_opts = crate::metadata::MetaOptions { no_headless, scrape_config, ..Default::default() };
     let meta_command = MetaCommand::new(url, meta_opts, output_dir)?;
     meta_command.execute().map_err(|e| anyhow::anyhow!(e))
