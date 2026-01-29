@@ -25,7 +25,7 @@
 
 - **Standalone CLI Tool or Daemon**: Run bb as a standalone CLI tool or deploy it as a daemon on a remote server. Use the bb-cli as a lightweight client to connect to the server over HTTP.
 
-- **Semantic Search**: Find bookmarks by meaning rather than exact keywords. Query "machine learning resources" to find bookmarks about AI, neural networks, and deep learning—even if those exact words don't appear in the title or description.
+- **Semantic Search** *(experimental)*: Find bookmarks by meaning rather than exact keywords. Currently inaccurate for most workloads — prefer keyword search for reliable results. Disabled by default.
 
 ## Keyword Search Query Language
 
