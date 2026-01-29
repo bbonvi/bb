@@ -116,15 +116,27 @@ Called from `BackendCsv::search()` when a `keyword` is present on the query.
 YAML config at `~/.local/share/bb/config.yaml`:
 ```yaml
 task_queue_max_threads: 4
-hidden_by_default: []
 rules: []
 semantic_search:
   enabled: false
   model: "all-MiniLM-L6-v2"
   default_threshold: 0.35
+  semantic_weight: 0.6
+scrape:
+  accept_invalid_certs: false
+  allowed_schemes:
+    - http
+    - https
+  blocked_hosts: []
+  block_private_ips: true
 ```
 
-Config validates on load; invalid config panics early.
+Config validation returns `Result<(), Vec<String>>` for proper error propagation. Invalid configs fail early with descriptive messages listing all validation errors.
+
+**URL Policy Enforcement** (`ScrapeConfig`):
+- Scheme validation: only whitelisted schemes (default: `http`, `https`) are allowed
+- Host blocking: explicitly blocked hostnames are rejected
+- SSRF protection: private/loopback IP ranges blocked by default (127.0.0.1, 192.168.x.x, 10.x.x.x, 172.16.x.x, fc00::/7, etc.)
 
 ### 5. Workspace Storage (`src/workspaces.rs`)
 

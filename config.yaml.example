@@ -14,9 +14,6 @@ semantic_search:
   # Higher values require closer semantic matches
   default_threshold: 0.35
 
-  # Parallelism for embedding generation: "auto" or a positive integer (default: "auto")
-  embedding_parallelism: "auto"
-
   # Timeout for model download in seconds (default: 300)
   # Model (~23MB) is downloaded on first use
   download_timeout_secs: 300
@@ -25,6 +22,27 @@ semantic_search:
   # Controls balance between semantic (embedding) and lexical (keyword) ranking
   # 0.5 = equal weight, 0.6 = favor semantic, 1.0 = pure semantic
   semantic_weight: 0.6
+
+# URL scraping configuration
+# Controls policy enforcement for metadata fetching from URLs
+scrape:
+  # Accept invalid TLS certificates (default: false)
+  # Set to true only if you trust the network environment
+  accept_invalid_certs: false
+
+  # Allowed URL schemes (default: ["http", "https"])
+  # Only URLs with these schemes will be fetched
+  allowed_schemes:
+    - http
+    - https
+
+  # Blocked hostnames (default: [])
+  # Requests to these hosts will be rejected
+  blocked_hosts: []
+
+  # Block private/loopback IP ranges (default: true)
+  # Prevents SSRF attacks by rejecting 127.0.0.1, 192.168.x.x, 10.x.x.x, etc.
+  block_private_ips: true
 
 rules:
 - url: mail.proton.me

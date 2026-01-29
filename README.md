@@ -137,8 +137,8 @@ semantic_search:
   enabled: true                    # Enable/disable semantic search
   model: "all-MiniLM-L6-v2"       # Embedding model (default, ~23MB)
   default_threshold: 0.35          # Minimum similarity score (0.0-1.0)
-  embedding_parallelism: 4         # Concurrent embeddings (0 = auto)
   download_timeout_secs: 300       # Model download timeout
+  semantic_weight: 0.6             # Balance between semantic and lexical ranking
 ```
 
 **Available models**: `all-MiniLM-L6-v2` (default), `bge-small-en-v1.5`, `bge-base-en-v1.5`, `bge-large-en-v1.5` (and quantized variants).
@@ -149,6 +149,37 @@ semantic_search:
 - Models cached at `~/.local/share/bb/models/`
 - Combine with other filters: `bb search --sem "tutorials" --tags dev`
 - Web UI shows semantic input when feature is enabled
+
+## Scrape Configuration
+
+Controls URL fetching behavior for metadata scraping:
+
+```yaml
+scrape:
+  # Accept invalid TLS certificates (default: false)
+  accept_invalid_certs: false
+
+  # Allowed URL schemes for fetching (default: ["http", "https"])
+  allowed_schemes:
+    - http
+    - https
+
+  # Blocked hostnames (default: [])
+  blocked_hosts: []
+
+  # Block requests to private/loopback IP ranges (default: true)
+  # Prevents SSRF attacks by rejecting 127.0.0.1, 192.168.x.x, etc.
+  block_private_ips: true
+```
+
+Configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `accept_invalid_certs` | bool | `false` | Accept invalid TLS certificates when fetching URLs |
+| `allowed_schemes` | list | `["http", "https"]` | Allowed URL schemes (e.g., http, https, ftp) |
+| `blocked_hosts` | list | `[]` | Blocked hostnames — requests to these hosts will be rejected |
+| `block_private_ips` | bool | `true` | Block requests to private/loopback IP ranges for SSRF protection |
 
 ## Data Management
 
