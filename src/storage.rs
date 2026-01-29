@@ -26,33 +26,23 @@ impl BackendLocal {
 
 impl StorageManager for BackendLocal {
     fn exists(&self, ident: &str) -> bool {
-        let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
-
-        std::fs::metadata(&path).is_ok()
+        self.base_dir.join(ident).exists()
     }
 
     fn read(&self, ident: &str) -> std::io::Result<Vec<u8>> {
-        let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
-
-        std::fs::read(&path)
+        std::fs::read(self.base_dir.join(ident))
     }
 
     fn write(&self, ident: &str, data: &[u8]) -> std::io::Result<()> {
-        let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
-        let temp_path = format!(
-            "{}/{}-{ident}",
-            &self.base_dir.to_str().unwrap(),
-            Eid::new()
-        );
+        let path = self.base_dir.join(ident);
+        let temp_path = self.base_dir.join(format!("{}-{ident}", Eid::new()));
 
         std::fs::write(&temp_path, data)?;
-
         std::fs::rename(&temp_path, &path)
     }
 
     fn delete(&self, ident: &str) -> std::io::Result<()> {
-        let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
-        std::fs::remove_file(&path)
+        std::fs::remove_file(self.base_dir.join(ident))
     }
 
     fn list(&self) -> Vec<String> {

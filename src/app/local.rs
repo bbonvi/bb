@@ -161,11 +161,6 @@ impl AppBackend for AppLocal {
             ..Default::default()
         };
 
-        // querying manager directly because we need to avoid
-        // hidden_by_default functionality
-        // if let Some(b) = self.bmark_mgr.search(query)?.first() {
-        //     return Err(AppError::AlreadyExists(b.id));
-        // }
         log::info!("{:?}", query);
         if let Some(b) = self.search(query)?.first() {
             return Err(AppError::Other(anyhow::anyhow!(

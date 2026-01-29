@@ -100,7 +100,7 @@ pub fn reqwest_with_retries(url: &str, scrape_config: Option<&ScrapeConfig>) -> 
 
     let accept_invalid_certs = scrape_config
         .map(|c| c.accept_invalid_certs)
-        .unwrap_or(true);
+        .unwrap_or(false);
 
     let host = url_parsed.host_str().unwrap_or_default();
     let path = url_parsed.path();

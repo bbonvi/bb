@@ -684,17 +684,11 @@ impl AppService {
         Ok(())
     }
 
-    /// Validate configuration
+    /// Validate configuration using the full Config::validate() method
     fn validate_config(&self, config: &Config) -> Result<()> {
-        if config.task_queue_max_threads == 0 {
-            anyhow::bail!("Task queue max threads cannot be 0");
-        }
-
-        if config.task_queue_max_threads > 100 {
-            anyhow::bail!("Task queue max threads cannot exceed 100");
-        }
-
-        Ok(())
+        config.validate().map_err(|errors| {
+            anyhow::anyhow!("Invalid configuration:\n  - {}", errors.join("\n  - "))
+        })
     }
 }
 

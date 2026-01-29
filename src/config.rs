@@ -183,6 +183,11 @@ impl Config {
 
         if self.task_queue_max_threads == 0 {
             errors.push("task_queue_max_threads must be greater than 0".to_string());
+        } else if self.task_queue_max_threads > 100 {
+            errors.push(format!(
+                "task_queue_max_threads cannot exceed 100, got {}",
+                self.task_queue_max_threads
+            ));
         }
 
         // validate rules
