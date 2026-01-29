@@ -3,8 +3,8 @@ use std::{path::PathBuf, str::FromStr};
 use crate::eid::Eid;
 
 pub trait StorageManager: Send + Sync {
-    fn write(&self, ident: &str, data: &[u8]);
-    fn read(&self, ident: &str) -> Vec<u8>;
+    fn write(&self, ident: &str, data: &[u8]) -> std::io::Result<()>;
+    fn read(&self, ident: &str) -> std::io::Result<Vec<u8>>;
     fn exists(&self, ident: &str) -> bool;
     fn delete(&self, ident: &str) -> std::io::Result<()>;
     fn list(&self) -> Vec<String>;
@@ -16,10 +16,11 @@ pub struct BackendLocal {
 }
 
 impl BackendLocal {
-    pub fn new(storage_dir: &str) -> Self {
-        let path = PathBuf::from_str(storage_dir).unwrap();
-        std::fs::create_dir_all(&path).unwrap();
-        BackendLocal { base_dir: path }
+    pub fn new(storage_dir: &str) -> std::io::Result<Self> {
+        let path = PathBuf::from_str(storage_dir)
+            .expect("infallible PathBuf::from_str for &str");
+        std::fs::create_dir_all(&path)?;
+        Ok(BackendLocal { base_dir: path })
     }
 }
 
@@ -30,13 +31,13 @@ impl StorageManager for BackendLocal {
         std::fs::metadata(&path).is_ok()
     }
 
-    fn read(&self, ident: &str) -> Vec<u8> {
+    fn read(&self, ident: &str) -> std::io::Result<Vec<u8>> {
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
 
-        std::fs::read(&path).unwrap()
+        std::fs::read(&path)
     }
 
-    fn write(&self, ident: &str, data: &[u8]) {
+    fn write(&self, ident: &str, data: &[u8]) -> std::io::Result<()> {
         let path = format!("{}/{ident}", &self.base_dir.to_str().unwrap());
         let temp_path = format!(
             "{}/{}-{ident}",
@@ -44,9 +45,9 @@ impl StorageManager for BackendLocal {
             Eid::new()
         );
 
-        std::fs::write(&temp_path, data).unwrap();
+        std::fs::write(&temp_path, data)?;
 
-        std::fs::rename(&temp_path, &path).unwrap();
+        std::fs::rename(&temp_path, &path)
     }
 
     fn delete(&self, ident: &str) -> std::io::Result<()> {

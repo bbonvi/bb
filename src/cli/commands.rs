@@ -338,7 +338,8 @@ impl RuleCommand {
                     comment: None,
                 };
                 config.rules.insert(0, rule);
-                config.save();
+                config.save()
+                    .map_err(|e| crate::cli::errors::CliError::storage(e.to_string()))?;
             }
             RuleAction::Delete => {
                 return Err(crate::cli::errors::CliError::not_supported("Delete rule"));
@@ -595,7 +596,14 @@ impl CompressCommand {
                 continue;
             }
 
-            let data = storage.read(image_id);
+            let data = match storage.read(image_id) {
+                Ok(d) => d,
+                Err(e) => {
+                    warn!(image_id, error = %e, "failed to read image");
+                    stats.failed_to_read += 1;
+                    continue;
+                }
+            };
             if data.is_empty() {
                 warn!(image_id, "image file empty");
                 stats.failed_to_read += 1;
@@ -725,7 +733,7 @@ impl CompressCommand {
         };
 
         // Write new file
-        storage.write(&new_id, &result.data);
+        storage.write(&new_id, &result.data)?;
 
         // Update bookmark references
         for &bookmark_id in bookmark_ids {

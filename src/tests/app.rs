@@ -21,10 +21,11 @@ pub fn create_app() -> (AppLocal, tempfile::TempDir) {
     );
     let storage_mgr = Arc::new(storage::BackendLocal::new(
         tmp.path().join("uploads").to_str().unwrap(),
-    ));
+    ).expect("failed to create storage"));
 
     let (task_tx, _) = mpsc::channel::<Task>();
-    let config = Arc::new(RwLock::new(crate::config::Config::load_with(&config_path)));
+    let config = Arc::new(RwLock::new(crate::config::Config::load_with(&config_path)
+        .expect("failed to load config")));
 
     let handle = std::thread::spawn(move || {});
 

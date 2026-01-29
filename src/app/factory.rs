@@ -44,7 +44,7 @@ impl AppFactory {
         paths: &AppPaths,
         config: Arc<RwLock<Config>>,
     ) -> Result<Box<dyn AppBackend>> {
-        let storage_mgr = storage::BackendLocal::new(&paths.uploads_path);
+        let storage_mgr = storage::BackendLocal::new(&paths.uploads_path)?;
         Ok(Box::new(AppLocal::new(
             config,
             &paths.bookmarks_path,
@@ -54,8 +54,8 @@ impl AppFactory {
 
     /// Create a local application instance
     pub fn create_local_app(paths: &AppPaths) -> Result<AppLocal> {
-        let config = Arc::new(RwLock::new(Config::load_with(&paths.base_path)));
-        let storage = storage::BackendLocal::new(&paths.uploads_path);
+        let config = Arc::new(RwLock::new(Config::load_with(&paths.base_path)?));
+        let storage = storage::BackendLocal::new(&paths.uploads_path)?;
 
         Ok(AppLocal::new(config, &paths.bookmarks_path, storage))
     }
@@ -79,7 +79,7 @@ impl AppFactory {
 
     /// Create configuration with validation
     pub fn create_config(base_path: &str) -> Result<Arc<RwLock<Config>>> {
-        let config = Config::load_with(base_path);
+        let config = Config::load_with(base_path)?;
         Self::validate_config(&config)?;
         
         Ok(Arc::new(RwLock::new(config)))

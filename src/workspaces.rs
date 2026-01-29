@@ -54,16 +54,19 @@ pub struct WorkspaceStore {
 
 impl WorkspaceStore {
     pub fn load(base_path: &str) -> Result<Self, WorkspaceError> {
-        let store = storage::BackendLocal::new(base_path);
+        let store = storage::BackendLocal::new(base_path)
+            .map_err(|e| WorkspaceError::Storage(e.to_string()))?;
 
         if !store.exists(WORKSPACES_FILE) {
             let empty: Vec<Workspace> = vec![];
             let yaml = serde_yml::to_string(&empty)
                 .map_err(|e| WorkspaceError::Storage(e.to_string()))?;
-            store.write(WORKSPACES_FILE, yaml.as_bytes());
+            store.write(WORKSPACES_FILE, yaml.as_bytes())
+                .map_err(|e| WorkspaceError::Storage(e.to_string()))?;
         }
 
-        let data = store.read(WORKSPACES_FILE);
+        let data = store.read(WORKSPACES_FILE)
+            .map_err(|e| WorkspaceError::Storage(e.to_string()))?;
         let yaml_str = String::from_utf8(data)
             .map_err(|e| WorkspaceError::Storage(e.to_string()))?;
         let workspaces: Vec<Workspace> = serde_yml::from_str(&yaml_str)
@@ -76,10 +79,12 @@ impl WorkspaceStore {
     }
 
     fn save(&self) -> Result<(), WorkspaceError> {
-        let store = storage::BackendLocal::new(&self.base_path);
+        let store = storage::BackendLocal::new(&self.base_path)
+            .map_err(|e| WorkspaceError::Storage(e.to_string()))?;
         let yaml = serde_yml::to_string(&self.workspaces)
             .map_err(|e| WorkspaceError::Storage(e.to_string()))?;
-        store.write(WORKSPACES_FILE, yaml.as_bytes());
+        store.write(WORKSPACES_FILE, yaml.as_bytes())
+            .map_err(|e| WorkspaceError::Storage(e.to_string()))?;
         Ok(())
     }
 

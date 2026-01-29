@@ -89,7 +89,8 @@ impl AppLocal {
 impl AppBackend for AppLocal {
     fn update_config(&self, config: Config) -> anyhow::Result<(), AppError> {
         *self.config.write().unwrap() = config;
-        self.config().write().unwrap().save();
+        self.config().write().unwrap().save()
+            .map_err(|e| AppError::Other(e))?;
         Ok(())
     }
 
@@ -414,7 +415,7 @@ impl AppLocal {
             match images::compress_image(image, img_config.max_size, img_config.quality) {
                 Ok(compressed) => {
                     let image_id = format!("{}.webp", Eid::new());
-                    storage_mgr.write(&image_id, &compressed.data);
+                    storage_mgr.write(&image_id, &compressed.data)?;
                     bmark_update.image_id = Some(image_id);
                 }
                 Err(e) => {
@@ -425,7 +426,7 @@ impl AppLocal {
                         .unwrap_or("png")
                         .to_string();
                     let image_id = format!("{}.{}", Eid::new(), filetype);
-                    storage_mgr.write(&image_id, image);
+                    storage_mgr.write(&image_id, image)?;
                     bmark_update.image_id = Some(image_id);
                 }
             }
@@ -440,7 +441,7 @@ impl AppLocal {
 
             let icon_id = format!("{}.{}", Eid::new(), filetype);
 
-            storage_mgr.write(&icon_id, icon);
+            storage_mgr.write(&icon_id, icon)?;
             bmark_update.icon_id = Some(icon_id.to_string());
         };
 

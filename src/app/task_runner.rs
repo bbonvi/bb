@@ -95,12 +95,30 @@ pub fn start_queue(
 }
 
 pub fn read_queue_dump() -> QueueDump {
-    let store = storage::BackendLocal::new("./");
+    let store = match storage::BackendLocal::new("./") {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("failed to initialize queue storage: {e}");
+            return QueueDump {
+                queue: vec![],
+                now: now(),
+            };
+        }
+    };
 
     let filename = "task-queue.json";
 
     if store.exists(filename) {
-        serde_json::from_slice(&store.read(filename)).unwrap()
+        match store.read(filename) {
+            Ok(data) => serde_json::from_slice(&data).unwrap(),
+            Err(e) => {
+                log::error!("failed to read queue dump: {e}");
+                QueueDump {
+                    queue: vec![],
+                    now: now(),
+                }
+            }
+        }
     } else {
         QueueDump {
             queue: vec![],
@@ -110,12 +128,20 @@ pub fn read_queue_dump() -> QueueDump {
 }
 
 pub fn write_queue_dump(queue_dump: &QueueDump) {
-    let store = storage::BackendLocal::new("./");
+    let store = match storage::BackendLocal::new("./") {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("failed to initialize queue storage: {e}");
+            return;
+        }
+    };
 
     let filename = "task-queue.json";
 
     let queue_dump_str = serde_json::to_string_pretty(&queue_dump).unwrap();
-    store.write(filename, queue_dump_str.as_bytes());
+    if let Err(e) = store.write(filename, queue_dump_str.as_bytes()) {
+        log::error!("failed to write queue dump: {e}");
+    }
 }
 
 pub fn remove_task(id: Eid) {

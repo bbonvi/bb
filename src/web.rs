@@ -34,7 +34,8 @@ struct SharedState {
 }
 
 async fn start_app(app_service: AppService, base_path: &str) {
-    let storage_mgr = Arc::new(storage::BackendLocal::new(&format!("{base_path}/uploads")));
+    let storage_mgr = Arc::new(storage::BackendLocal::new(&format!("{base_path}/uploads"))
+        .expect("failed to initialize uploads storage"));
     let workspace_store = WorkspaceStore::load(base_path)
         .expect("failed to load workspace store");
     let shared_state = Arc::new(RwLock::new(SharedState {
@@ -425,7 +426,8 @@ async fn create(
             .context("Failed to compress image")?;
 
         let image_id = format!("{}.webp", Eid::new());
-        state.storage_mgr.write(&image_id, &compressed.data);
+        state.storage_mgr.write(&image_id, &compressed.data)
+            .context("Failed to write image")?;
         create.image_id = Some(image_id);
     }
 
@@ -435,7 +437,8 @@ async fn create(
             .decode(icon_b64)
             .context("Failed to decode base64 icon data")?;
         let icon_id = format!("{}.png", Eid::new());
-        state.storage_mgr.write(&icon_id, &icon_data);
+        state.storage_mgr.write(&icon_id, &icon_data)
+            .context("Failed to write icon")?;
         create.icon_id = Some(icon_id);
     }
 
@@ -537,7 +540,8 @@ async fn update(
             .context("Failed to compress image")?;
 
         let image_id = format!("{}.webp", Eid::new());
-        state.storage_mgr.write(&image_id, &compressed.data);
+        state.storage_mgr.write(&image_id, &compressed.data)
+            .context("Failed to write image")?;
         update.image_id = Some(image_id);
     }
 
@@ -547,7 +551,8 @@ async fn update(
             .decode(icon_b64)
             .context("Failed to decode base64 icon data")?;
         let icon_id = format!("{}.png", Eid::new());
-        state.storage_mgr.write(&icon_id, &icon_data);
+        state.storage_mgr.write(&icon_id, &icon_data)
+            .context("Failed to write icon")?;
         update.icon_id = Some(icon_id);
     }
 
@@ -975,8 +980,8 @@ mod tests {
         struct MockStorageManager;
 
         impl StorageManager for MockStorageManager {
-            fn write(&self, _: &str, _: &[u8]) {}
-            fn read(&self, _: &str) -> Vec<u8> { vec![] }
+            fn write(&self, _: &str, _: &[u8]) -> std::io::Result<()> { Ok(()) }
+            fn read(&self, _: &str) -> std::io::Result<Vec<u8>> { Ok(vec![]) }
             fn exists(&self, _: &str) -> bool { false }
             fn delete(&self, _: &str) -> std::io::Result<()> { Ok(()) }
             fn list(&self) -> Vec<String> { vec![] }

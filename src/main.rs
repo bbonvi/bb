@@ -176,8 +176,8 @@ fn main() -> anyhow::Result<()> {
 
         Command::Compress { dry_run, yes } => {
             let _lock = acquire_cli_lock(base_path)?;
-            let config = config::Config::load_with(&paths.base_path);
-            let storage = storage::BackendLocal::new(&paths.uploads_path);
+            let config = config::Config::load_with(&paths.base_path)?;
+            let storage = storage::BackendLocal::new(&paths.uploads_path)?;
             let bmark_mgr = std::sync::Arc::new(
                 bookmarks::BackendCsv::load(&paths.bookmarks_path)?
             );
