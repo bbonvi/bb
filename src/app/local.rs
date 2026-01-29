@@ -73,7 +73,9 @@ impl AppLocal {
         let bmark_mgr = Arc::new(bookmarks::BackendCsv::load(path).unwrap());
         let storage_mgr = Arc::new(storage_mgr);
 
-        bmark_mgr.save();
+        if let Err(e) = bmark_mgr.save() {
+            log::warn!("Failed to re-save bookmarks on load: {e}");
+        }
 
         Self {
             bmark_mgr,

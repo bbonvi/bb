@@ -241,28 +241,27 @@ impl BackendCsv {
         Ok(mgr)
     }
 
-    pub fn save(&self) {
+    pub fn save(&self) -> anyhow::Result<()> {
         let bmarks = self.list.write().unwrap();
 
         let temp_path = format!("{}-tmp", &self.path);
-        let mut csv_wrt = csv::Writer::from_path(&temp_path).unwrap();
-        csv_wrt.write_record(CSV_HEADERS).unwrap();
+        let mut csv_wrt = csv::Writer::from_path(&temp_path)?;
+        csv_wrt.write_record(CSV_HEADERS)?;
         for bmark in bmarks.iter() {
-            csv_wrt
-                .write_record([
-                    &bmark.id.to_string(),
-                    &bmark.url,
-                    &bmark.title,
-                    &bmark.description,
-                    &bmark.tags.join(","),
-                    &bmark.image_id.clone().unwrap_or_default(),
-                    &bmark.icon_id.clone().unwrap_or_default(),
-                ])
-                .unwrap();
+            csv_wrt.write_record([
+                &bmark.id.to_string(),
+                &bmark.url,
+                &bmark.title,
+                &bmark.description,
+                &bmark.tags.join(","),
+                &bmark.image_id.clone().unwrap_or_default(),
+                &bmark.icon_id.clone().unwrap_or_default(),
+            ])?;
         }
-        csv_wrt.flush().unwrap();
-        std::fs::rename(&temp_path, &self.path).unwrap();
+        csv_wrt.flush()?;
+        std::fs::rename(&temp_path, &self.path)?;
         self.version.fetch_add(1, Ordering::SeqCst);
+        Ok(())
     }
 
     pub fn version(&self) -> u64 {
@@ -306,7 +305,7 @@ impl BookmarkManager for BackendCsv {
 
         self.list.write().unwrap().push(bmark.clone());
 
-        self.save();
+        self.save()?;
 
         Ok(bmark)
     }
@@ -321,7 +320,7 @@ impl BookmarkManager for BackendCsv {
         drop(bmarks);
 
         if result.is_some() {
-            self.save();
+            self.save()?;
         }
 
         Ok(())
@@ -376,7 +375,7 @@ impl BookmarkManager for BackendCsv {
         let result = bmark.clone();
         drop(bmarks);
 
-        self.save();
+        self.save()?;
 
         Ok(result)
     }
@@ -395,7 +394,7 @@ impl BookmarkManager for BackendCsv {
 
         drop(bmarks);
 
-        self.save();
+        self.save()?;
 
         Ok(count)
     }
@@ -453,7 +452,7 @@ impl BookmarkManager for BackendCsv {
 
         drop(bmarks);
 
-        self.save();
+        self.save()?;
 
         Ok(count)
     }
