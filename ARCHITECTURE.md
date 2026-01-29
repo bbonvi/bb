@@ -210,10 +210,11 @@ src/metadata/
 ├── normalize.rs     # URL normalization (tracking params, case, trailing slash)
 ├── oembed.rs        # oEmbed provider registry and fetcher
 ├── fetchers/        # Parallel metadata sources
-│   ├── html.rs      # Plain HTML parser (og:*, meta tags)
+│   ├── html.rs      # Plain HTML parser (og:*, meta tags, JSON-LD)
+│   ├── ddg.rs       # DuckDuckGo API client (parallel, lowest priority)
 │   ├── microlink.rs # Microlink API client
 │   └── peekalink.rs # Peekalink API client
-├── merge.rs         # Field-by-field priority merging
+├── merge.rs         # Field-by-field priority merging with smart defaults
 ├── validate.rs      # Image validation (magic bytes, decode, resolution)
 ├── chrome.rs        # Headless Chrome fallback with stealth
 └── error.rs         # FetchError types (Retryable/Terminal)
@@ -229,12 +230,15 @@ URL
      - Resolve protocol-relative URLs (//example.com → https://example.com)
  → thread::scope() parallel fetch:
      ├─→ oEmbed fetcher (checks provider registry)
-     ├─→ Plain HTML fetcher (og:*, meta tags)
+     ├─→ Plain HTML fetcher (og:title, twitter:*, meta tags, JSON-LD structured data, <link rel="canonical">)
      ├─→ Microlink API
-     └─→ Peekalink API
+     ├─→ Peekalink API
+     └─→ DDG API fetcher (priority 10, lowest)
  → merge_metadata(results)
-     - Priority: oEmbed > HTML > Microlink > Peekalink
-     - Field-by-field selection (first non-empty wins)
+     - Priority: oEmbed > HTML > Microlink > Peekalink > DDG
+     - Smart title fallback: og:title > twitter:title > JSON-LD > <title> tag
+     - Smart description: generic/empty descriptions overridden by real content from lower-priority fetchers
+     - Title validity: rejects site-wide defaults, error pages, bare domains, short generic strings
  → validate_image(image_url)
      - Magic byte detection (PNG/JPEG/WebP/GIF)
      - Image decode check (image-rs)
@@ -246,11 +250,28 @@ URL
      - Screenshot + favicon extraction
 ```
 
+**HTML Parsing** (`get_data_from_page()`):
+- Extracts `og:title`, `twitter:title`, `twitter:description` meta tags
+- Parses `<link rel="canonical">` for canonical URL
+- Extracts JSON-LD structured data from `<script type="application/ld+json">`
+- JSON-LD helper handles @graph arrays, top-level arrays, and extracts: name, headline, description, image (string/object/array), url fields
+- Title priority: og:title > twitter:title > JSON-LD > `<title>` tag
+
 **oEmbed Support**:
 - Provider registry cached from oembed.com/providers.json (5-minute TTL)
 - Hardcoded fallback for top 15 providers (YouTube, Vimeo, Twitter, Spotify, etc.)
 - URL scheme matching via regex patterns
 - Direct API calls to provider endpoints
+
+**DDG Fetcher** (`fetchers/ddg.rs`):
+- Runs in parallel with other fetchers (priority 10, lowest)
+- Not a post-failure fallback; contributes to merge pool with all other sources
+- Provides additional title/description coverage for generic or missing content
+
+**Smart Merge Logic**:
+- Title merging: generic/auto-generated titles (site-wide defaults, error page titles, bare domains, short strings <3 chars) are discarded in favor of real titles from lower-priority sources
+- Description merging: empty or very short descriptions are overridden by meaningful content from lower-priority fetchers
+- Enables downstream fetchers to improve upon upstream stubs
 
 **Image Validation Gate**:
 - Magic byte detection for format verification (not Content-Type, which can lie)
