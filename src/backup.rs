@@ -122,7 +122,23 @@ fn append_dir_recursive<W: Write>(
     Ok(())
 }
 
-pub fn import_backup(archive_path: &Path, skip_confirm: bool) -> Result<()> {
+pub fn import_backup(archive_path: Option<&Path>, skip_confirm: bool) -> Result<()> {
+    let _temp_file: Option<tempfile::NamedTempFile>;
+    let archive_path = match archive_path {
+        Some(p) => p.to_path_buf(),
+        None if !io::stdin().is_terminal() => {
+            let mut tmp = tempfile::NamedTempFile::new()
+                .context("Failed to create temp file for stdin")?;
+            io::copy(&mut io::stdin().lock(), &mut tmp)
+                .context("Failed to read archive from stdin")?;
+            let path = tmp.path().to_path_buf();
+            _temp_file = Some(tmp);
+            path
+        }
+        None => anyhow::bail!("No archive path provided. Pipe an archive to stdin or pass a path."),
+    };
+    let archive_path = archive_path.as_path();
+
     let paths = AppFactory::get_paths()?;
     let base_path = Path::new(&paths.base_path);
 

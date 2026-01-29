@@ -190,7 +190,7 @@ fn main() -> anyhow::Result<()> {
 
         Command::Import { path, yes } => {
             let _lock = acquire_cli_lock()?;
-            backup::import_backup(&path, yes)
+            backup::import_backup(path.as_deref(), yes)
         }
     }
 }

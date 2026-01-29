@@ -131,8 +131,8 @@ pub enum Command {
     },
     /// Import data from a backup archive
     Import {
-        /// Path to the backup archive
-        path: std::path::PathBuf,
+        /// Path to the backup archive (reads from stdin if omitted and input is piped)
+        path: Option<std::path::PathBuf>,
 
         /// Skip confirmation prompt
         #[clap(short, long)]

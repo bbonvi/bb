@@ -172,6 +172,10 @@ bb import /path/to/backup.tar.gz
 
 # Restore without confirmation
 bb import /path/to/backup.tar.gz --yes
+
+# Pipe backup into import (auto-detected when stdin is piped)
+cat backup.tar.gz | bb import
+docker compose run --rm -i bb bb import < backup.tar.gz
 ```
 
 **Included in backups:**
