@@ -1418,20 +1418,10 @@ mod tests {
             assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         }
 
-        #[tokio::test]
-        async fn test_workspace_create_invalid_regex() {
-            let app = workspace_api_router();
-            let req = axum::http::Request::builder()
-                .method("POST")
-                .uri("/api/workspaces")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    r#"{"name":"Bad","filters":{"url_pattern":"[bad"}}"#,
-                ))
-                .unwrap();
-            let resp = app.oneshot(req).await.unwrap();
-            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        }
+        // Note: WorkspaceFilters has no regex/url_pattern field.
+        // The keyword validator uses a normalizing parser that accepts all input,
+        // so invalid-keyword rejection is not testable here. Name validation
+        // (empty, too long) and duplicate-name rejection are covered by other tests.
 
         #[tokio::test]
         async fn test_workspace_update_not_found() {

@@ -7,181 +7,159 @@ use crate::app::{backend::AppBackend, local::AppLocal};
 use crate::bookmarks;
 use crate::storage;
 
-pub fn create_app() -> AppLocal {
-    let _ = std::fs::remove_file("bookmarks-test.csv");
-    let _ = std::fs::remove_file("config-test.yaml");
+/// Creates an isolated AppLocal using a unique temp directory.
+/// Each test gets its own directory so parallel tests never collide,
+/// and no real data is touched.
+pub fn create_app() -> (AppLocal, tempfile::TempDir) {
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let csv_path = tmp.path().join("bookmarks.csv");
+    let config_path = tmp.path().to_str().unwrap().to_string();
 
-    let bmark_mgr = Arc::new(bookmarks::BackendCsv::load("bookmarks-test.csv").unwrap());
-    let uploads_path = std::env::var("BB_UPLOADS_PATH").unwrap_or(String::from("./uploads"));
-    let storage_mgr = Arc::new(storage::BackendLocal::new(&uploads_path));
+    let bmark_mgr = Arc::new(
+        bookmarks::BackendCsv::load(csv_path.to_str().unwrap())
+            .expect("failed to create bookmark csv"),
+    );
+    let storage_mgr = Arc::new(storage::BackendLocal::new(
+        tmp.path().join("uploads").to_str().unwrap(),
+    ));
 
     let (task_tx, _) = mpsc::channel::<Task>();
+    let config = Arc::new(RwLock::new(crate::config::Config::load_with(&config_path)));
 
-    let config = Arc::new(RwLock::new(crate::config::Config::load_with("config-test")));
+    let handle = std::thread::spawn(move || {});
 
-    let handle = std::thread::spawn({
-        let _ = bmark_mgr.clone();
-        let _ = storage_mgr.clone();
-        let _ = config.clone();
-
-        move || {
-            // AppLocal::start_queue(task_rx, bmark_mgr, storage_mgr, config);
-        }
-    });
-
-    AppLocal::new_with(
+    let app = AppLocal::new_with(
         bmark_mgr,
         storage_mgr,
         Arc::new(task_tx),
         Some(handle),
         config,
-    )
+    );
+    (app, tmp)
+}
+
+fn default_add_opts() -> crate::app::backend::AddOpts {
+    crate::app::backend::AddOpts {
+        no_https_upgrade: false,
+        async_meta: false,
+        meta_opts: None,
+        skip_rules: false,
+    }
 }
 
 #[test]
 pub fn test_create_bookmark() {
-    let app = create_app();
+    let (app, _tmp) = create_app();
     let bmark_create = bookmarks::BookmarkCreate {
         url: "https://example.com/lmao-what".to_string(),
         title: Some("lmao what".to_string()),
         ..Default::default()
     };
 
-    let opts = crate::app::backend::AddOpts {
-        no_https_upgrade: false,
-        async_meta: false,
-        meta_opts: None,
-        skip_rules: false,
-    };
-
-    let bookmark = app.create(bmark_create, opts).unwrap();
-
+    let bookmark = app.create(bmark_create, default_add_opts()).unwrap();
     assert_eq!(&bookmark.url, "https://example.com/lmao-what");
 }
 
 #[test]
 pub fn test_bookmark_create() {
-    let app = create_app();
-
-    let opts = crate::app::backend::AddOpts {
-        no_https_upgrade: false,
-        async_meta: false,
-        meta_opts: None,
-        skip_rules: false,
-    };
-
+    let (app, _tmp) = create_app();
     let bmark_create = bookmarks::BookmarkCreate {
         url: "https://example.com/2".to_string(),
         title: Some("lmao what2".to_string()),
         ..Default::default()
     };
 
-    let bookmark = app.create(bmark_create.clone(), opts.clone()).unwrap();
-
+    let bookmark = app.create(bmark_create, default_add_opts()).unwrap();
     assert_eq!(&bookmark.url, "https://example.com/2");
     assert_eq!(&bookmark.title, "lmao what2");
 }
 
 #[test]
 pub fn test_bookmark_search() {
-    let app = create_app();
-
-    let opts = crate::app::backend::AddOpts {
-        no_https_upgrade: false,
-        async_meta: false,
-        meta_opts: None,
-        skip_rules: false,
-    };
+    let (app, _tmp) = create_app();
+    let opts = default_add_opts();
 
     for b in 0..10 {
         let bmark_create = bookmarks::BookmarkCreate {
             url: format!("https://example.com/{b}"),
             title: Some(format!("very cool title #{b}")),
-            tags: Some(vec![format!("all"), format!("tag{b}")]),
+            tags: Some(vec!["all".to_string(), format!("tag{b}")]),
             ..Default::default()
         };
-
-        app.create(bmark_create.clone(), opts.clone()).unwrap();
+        app.create(bmark_create, opts.clone()).unwrap();
     }
 
+    // search by id
     {
         let query = bookmarks::SearchQuery {
             id: Some(0),
             ..Default::default()
         };
-
         assert_eq!(app.search(query).unwrap().len(), 1);
     }
 
+    // search by id + tag (intersection)
     {
         let query = bookmarks::SearchQuery {
             id: Some(0),
             tags: Some(vec!["all".to_string()]),
             ..Default::default()
         };
-
         assert_eq!(app.search(query).unwrap().len(), 1);
     }
 
+    // search by id + non-matching tag
     {
         let query = bookmarks::SearchQuery {
             id: Some(0),
             tags: Some(vec!["tag5".to_string()]),
             ..Default::default()
         };
-
         assert_eq!(app.search(query).unwrap().len(), 0);
     }
 
+    // search by id + matching tag
     {
         let query = bookmarks::SearchQuery {
             id: Some(0),
             tags: Some(vec!["tag0".to_string()]),
             ..Default::default()
         };
-
         assert_eq!(app.search(query).unwrap().len(), 1);
     }
 
+    // search by tag only — all 10 bookmarks
     {
         let query = bookmarks::SearchQuery {
             tags: Some(vec!["all".to_string()]),
             ..Default::default()
         };
-
         assert_eq!(app.search(query).unwrap().len(), 10);
     }
 
+    // search by two tags (AND) — exactly one
     {
         let query = bookmarks::SearchQuery {
             tags: Some(vec!["all".to_string(), "tag5".to_string()]),
             ..Default::default()
         };
-
         assert_eq!(app.search(query).unwrap().len(), 1);
     }
 }
 
 #[test]
 pub fn test_bookmark_update() {
-    let app = create_app();
-
-    let opts = crate::app::backend::AddOpts {
-        no_https_upgrade: false,
-        async_meta: false,
-        meta_opts: None,
-        skip_rules: false,
-    };
+    let (app, _tmp) = create_app();
+    let opts = default_add_opts();
 
     for b in 0..10 {
         let bmark_create = bookmarks::BookmarkCreate {
             url: format!("https://example.com/{b}"),
             title: Some(format!("very cool title #{b}")),
-            tags: Some(vec![format!("all"), format!("tag{b}")]),
+            tags: Some(vec!["all".to_string(), format!("tag{b}")]),
             ..Default::default()
         };
-
-        app.create(bmark_create.clone(), opts.clone()).unwrap();
+        app.create(bmark_create, opts.clone()).unwrap();
     }
 
     let bmark_update = bookmarks::BookmarkUpdate {
@@ -199,29 +177,25 @@ pub fn test_bookmark_update() {
             title: Some("yeah".to_string()),
             ..Default::default()
         };
-
         assert_eq!(app.search(query).unwrap().len(), 2);
     }
 }
 
 #[test]
 pub fn test_bookmark_dedup() {
-    let app = create_app();
+    let (app, _tmp) = create_app();
     let bmark_create = bookmarks::BookmarkCreate {
         url: "https://example.com/".to_string(),
         ..Default::default()
     };
+    let opts = default_add_opts();
 
-    let opts = crate::app::backend::AddOpts {
-        no_https_upgrade: false,
-        async_meta: false,
-        meta_opts: None,
-        skip_rules: false,
-    };
+    // first create succeeds
+    app.create(bmark_create.clone(), opts.clone()).unwrap();
 
-    let _ = app.create(bmark_create.clone(), opts.clone()).unwrap();
-
+    // duplicate URL is rejected
     assert!(app.create(bmark_create.clone(), opts.clone()).is_err());
 
-    assert!(app.create(bmark_create, opts).is_ok());
+    // third attempt with same URL is still rejected
+    assert!(app.create(bmark_create, opts).is_err());
 }

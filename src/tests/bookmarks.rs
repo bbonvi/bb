@@ -3,9 +3,9 @@ use crate::bookmarks::BookmarkManager;
 
 #[test]
 pub fn test_keyword_search() {
-    let mgr = bookmarks::BackendCsv::load("test-bookmarks.csv")
-        .unwrap()
-        .wipe_database();
+    let tmp = tempfile::tempdir().expect("failed to create temp dir");
+    let csv_path = tmp.path().join("bookmarks.csv");
+    let mgr = bookmarks::BackendCsv::load(csv_path.to_str().unwrap()).unwrap();
 
     // Create test bookmarks
     mgr.create(bookmarks::BookmarkCreate {
@@ -73,7 +73,7 @@ pub fn test_keyword_search() {
             ..Default::default()
         })
         .unwrap();
-    assert_eq!(results.len(), 1); // Rust Programming Guide has both keywords
+    assert_eq!(results.len(), 1);
     assert_eq!(results[0].title, "Rust Programming Guide");
 
     // Test multi-keyword with tag and text
@@ -83,7 +83,7 @@ pub fn test_keyword_search() {
             ..Default::default()
         })
         .unwrap();
-    assert_eq!(results.len(), 1); // Python has "python" in title and "programming" tag
+    assert_eq!(results.len(), 1);
     assert_eq!(results[0].title, "Python Tutorial");
 
     // Test multi-keyword where not all keywords match
@@ -93,7 +93,7 @@ pub fn test_keyword_search() {
             ..Default::default()
         })
         .unwrap();
-    assert_eq!(results.len(), 0); // No bookmark has both "python" and "javascript"
+    assert_eq!(results.len(), 0);
 
     // Test keyword search by URL
     let results = mgr
@@ -105,14 +105,14 @@ pub fn test_keyword_search() {
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].title, "Python Tutorial");
 
-    // Test keyword search by tag with # prefix
+    // Test keyword search by tag
     let results = mgr
         .search(bookmarks::SearchQuery {
             keyword: Some("programming".to_string()),
             ..Default::default()
         })
         .unwrap();
-    assert_eq!(results.len(), 2); // Both Rust and Python have programming tag
+    assert_eq!(results.len(), 2);
     assert!(results.iter().any(|b| b.title == "Rust Programming Guide"));
     assert!(results.iter().any(|b| b.title == "Python Tutorial"));
 
