@@ -309,17 +309,22 @@ async fn search(
     let bookmarks = app_service
         .search_bookmarks(query, false)
         .map_err(|e| {
-            let err_msg = e.to_string();
-            if err_msg.contains("invalid search query") {
+            // Use alternate format to get full anyhow cause chain
+            let full = format!("{:#}", e);
+            if full.contains("invalid search query") {
+                // Extract only the parse-level message (last cause in chain)
+                let detail = e.chain().last()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| full.clone());
                 AppError::InvalidKeyword {
-                    message: err_msg,
+                    message: format!("Invalid search query: {}", detail),
                 }
-            } else if err_msg.contains("Semantic search is disabled") {
+            } else if full.contains("Semantic search is disabled") {
                 AppError::SemanticDisabled {
                     message: "Semantic search is disabled in configuration".to_string(),
                 }
-            } else if err_msg.contains("model") && err_msg.contains("unavailable")
-                || err_msg.contains("Failed to initialize")
+            } else if full.contains("model") && full.contains("unavailable")
+                || full.contains("Failed to initialize")
             {
                 AppError::ModelUnavailable {
                     message: "Semantic search model is unavailable".to_string(),
