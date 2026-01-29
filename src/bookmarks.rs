@@ -544,43 +544,16 @@ impl BookmarkManager for BackendCsv {
                 }
             };
 
-            // Keyword search - matches across title, description, url, and tags
+            // Keyword search — structured query language with field prefixes,
+            // boolean operators, quoted phrases, and parenthesized grouping.
             if let Some(keyword) = &query.keyword {
-                // For non-exact mode, split by whitespace and check each keyword
-                let keywords: Vec<&str> = keyword.split_whitespace().collect();
-
-                // A bookmark matches if ALL keywords are found in ANY field
-                let mut keywords_match = true;
-
-                for keyword in keywords {
-                    // Check if this keyword starts with # for tag search
-                    if bmark_tags.iter().any(|tag| tag.contains(keyword)) {
+                let keyword = keyword.trim();
+                if !keyword.is_empty() {
+                    let filter = crate::search_query::parse(keyword)
+                        .map_err(|e| anyhow::anyhow!("invalid search query: {}", e))?;
+                    if !crate::search_query::eval(&filter, bookmark) {
                         continue;
                     }
-
-                    // Check title
-                    if bookmark.title.to_lowercase().contains(keyword) {
-                        continue;
-                    }
-
-                    // Check description
-                    if bookmark.description.to_lowercase().contains(keyword) {
-                        continue;
-                    }
-
-                    // Check URL
-                    if bookmark.url.to_lowercase().contains(keyword) {
-                        continue;
-                    }
-
-                    // If we reach here, the keyword was not found in any field
-                    keywords_match = false;
-                    break;
-                }
-
-                if !keywords_match {
-                    continue;
-                } else {
                     has_match = true;
                 }
             };

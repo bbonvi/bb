@@ -27,6 +27,52 @@
 
 - **Semantic Search**: Find bookmarks by meaning rather than exact keywords. Query "machine learning resources" to find bookmarks about AI, neural networks, and deep learning—even if those exact words don't appear in the title or description.
 
+## Keyword Search Query Language
+
+The `keyword` field supports a structured query language with field prefixes, boolean operators, quoted phrases, and grouping.
+
+### Field Prefixes
+
+| Prefix | Field | Example |
+|--------|-------|---------|
+| `#` | tags | `#video` — exact tag match + hierarchical (`#programming` matches `programming/rust`) |
+| `.` | title | `.youtube` — substring, case-insensitive |
+| `>` | description | `>tutorial` — substring, case-insensitive |
+| `:` | url | `:github.com` — substring, case-insensitive |
+| (none) | all fields | `video` — substring across title, description, url, tags |
+
+### Quoted Phrases
+
+Group multiple words into a single term: `."a youtube video"`, `>"car video"`, `"rust programming"`.
+
+### Boolean Operators
+
+- `and` — both must match (implicit when terms are space-separated)
+- `or` — either must match
+- `not` — negates the following term/group
+- Precedence: `not` > `and` > `or`
+- To search reserved words literally, quote them: `"and"`, `"or"`, `"not"`
+
+### Parentheses
+
+Group sub-expressions: `(#video and .youtube) or (#audio and .spotify)`
+
+### Backslash Escaping
+
+Search prefix characters literally: `\#hashtag`, `\:colon`, `\.dot`, `\>arrow`
+
+### Examples
+
+```
+video cars                        → all-fields "video" AND "cars"
+#video                            → tag exactly "video" (or hierarchical child)
+.youtube                          → title contains "youtube"
+."a youtube video"                → title contains "a youtube video"
+:github.com                       → url contains "github.com"
+not #archived                     → exclude bookmarks tagged "archived"
+(#video and .youtube) or #audio   → grouped boolean query
+```
+
 ## Semantic Search
 
 bb includes local semantic search powered by [fastembed](https://github.com/Anush008/fastembed-rs) and ONNX models. Embeddings are generated locally—no external API calls.
