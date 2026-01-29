@@ -5,13 +5,11 @@
 
 **bb** is a CLI based bookmark manager designed for people who like to collect shit only to never revisit it again. It supports image previews and comes with a  simple webui. **bb** can be ran as a standalone CLI utility or deployed as a daemon on a remote server. Additionally, **bb** scrapes the web pages for you in order to retrieve metadata. 
 
-![](https://github.com/bbonvi/bb/blob/main/screenshots/shot1.png?raw=true)
-![](https://github.com/bbonvi/bb/blob/main/screenshots/shot2.png?raw=true)
+![Main view](https://github.com/user-attachments/assets/bc86ff85-d9ca-4baa-b5f5-f139664a0421)
 
 **This project is heavily work-in-progress!**
 
 ***bb** is inspired by [buku](https://github.com/jarun/buku).*
-
 
 ## Features
 
@@ -59,6 +57,12 @@ The Web UI settings panel (gear icon) has two sections:
   - **Globally ignored tags** — bookmarks with these tags are completely hidden everywhere in the UI. Useful for archiving or soft-deleting without removing data.
 
 - **Workspaces** — create, edit, reorder, and delete workspaces. Each workspace defines tag whitelists/blacklists and an optional keyword filter.
+
+![List view](https://github.com/user-attachments/assets/5d92eea4-d097-49c5-af8d-4bd25a7c6069)
+![Bookmark detail](https://github.com/user-attachments/assets/7ab2c129-1922-4360-97c7-fedb77c2cb04)
+![Settings](https://github.com/user-attachments/assets/b76abb51-62b2-49f8-946e-6e8dcec12b7d)
+![Create bookmark](https://github.com/user-attachments/assets/b1b7325a-e9aa-4198-9eec-f3ca490ba963)
+![CLI](https://github.com/bbonvi/bb/blob/main/screenshots/shot1.png?raw=true)
 
 ## Keyword Search Query Language
 
