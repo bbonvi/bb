@@ -29,29 +29,6 @@
 ![Create bookmark](https://github.com/user-attachments/assets/b1b7325a-e9aa-4198-9eec-f3ca490ba963)
 ![CLI](https://github.com/bbonvi/bb/blob/main/screenshots/shot1.png?raw=true)
 
-### Web UI Tips
-
-- **Paste a URL anywhere** to instantly open the create bookmark modal with the URL pre-filled (as long as focus isn't in a text field).
-- **Ctrl+N** opens the create bookmark modal.
-- **Ctrl+Enter** saves edits in the detail modal.
-- **Left/Right arrow keys** navigate between bookmarks in the detail view.
-- **Click any tag** to add it as a search filter.
-- **Double-click the delete button** to confirm deletion (first click arms, second executes).
-- **Drag & drop or paste images** onto the cover or favicon area in edit mode to upload custom images.
-- **URL parameters are persisted** — any query parameters in the URL are applied on load. Supported params: `workspace`, `keyword`, `tags`, `title`, `url`, `description`, `semantic`, `all`. For example, `/?workspace=Dev&keyword=rust&tags=lang` opens the Dev workspace with "rust" in the keyword field and "lang" as a tag filter. Bookmark this URL to always start with a specific view.
-- **`?action=create`** — opens the create bookmark modal on page load. Combine with other params to pre-fill fields: `/?action=create&url=https://example.com&title=Example&tags=reading` opens the modal with those values already populated.
-
-### Settings
-
-The Web UI settings panel (gear icon) has two sections:
-
-- **Preferences**
-  - **Show catch-all workspace** — display a "---" option in the workspace selector to view all bookmarks regardless of workspace.
-  - **Polling intervals** — configure how often the UI refreshes data in the background (separate intervals for normal, busy, and hidden-tab states).
-  - **Globally ignored tags** — bookmarks with these tags are completely hidden everywhere in the UI. Useful for archiving or soft-deleting without removing data.
-
-- **Workspaces** — create, edit, reorder, and delete workspaces. Each workspace defines tag whitelists/blacklists and an optional keyword filter.
-
 ## Keyword Search Query Language
 
 The `keyword` field supports a structured query language with field prefixes, boolean operators, quoted phrases, and grouping.
@@ -98,6 +75,29 @@ rust async                        → bookmarks mentioning both "rust" and "asyn
 (#python or #rust) .tutorial      → tutorials tagged python or rust
 not #read :arxiv.org              → unread papers from arxiv
 ```
+
+## Web UI Tips
+
+- **Paste a URL anywhere** to instantly open the create bookmark modal with the URL pre-filled (as long as focus isn't in a text field).
+- **Ctrl+N** opens the create bookmark modal.
+- **Ctrl+Enter** saves edits in the detail modal.
+- **Left/Right arrow keys** navigate between bookmarks in the detail view.
+- **Click any tag** to add it as a search filter.
+- **Double-click the delete button** to confirm deletion (first click arms, second executes).
+- **Drag & drop or paste images** onto the cover or favicon area in edit mode to upload custom images.
+- **URL parameters are persisted** — any query parameters in the URL are applied on load. Supported params: `workspace`, `keyword`, `tags`, `title`, `url`, `description`, `semantic`, `all`. For example, `/?workspace=Dev&keyword=rust&tags=lang` opens the Dev workspace with "rust" in the keyword field and "lang" as a tag filter. Bookmark this URL to always start with a specific view.
+- **`?action=create`** — opens the create bookmark modal on page load. Combine with other params to pre-fill fields: `/?action=create&url=https://example.com&title=Example&tags=reading` opens the modal with those values already populated.
+
+## Settings
+
+The Web UI settings panel (gear icon) has two sections:
+
+- **Preferences**
+  - **Show catch-all workspace** — display a "---" option in the workspace selector to view all bookmarks regardless of workspace.
+  - **Polling intervals** — configure how often the UI refreshes data in the background (separate intervals for normal, busy, and hidden-tab states).
+  - **Globally ignored tags** — bookmarks with these tags are completely hidden everywhere in the UI. Useful for archiving or soft-deleting without removing data.
+
+- **Workspaces** — create, edit, reorder, and delete workspaces. Each workspace defines tag whitelists/blacklists and an optional keyword filter.
 
 ## Semantic Search
 
