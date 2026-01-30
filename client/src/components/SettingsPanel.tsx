@@ -137,14 +137,13 @@ export default function SettingsPanel() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4" onClick={() => setOpen(false)}>
       <div
-        className="flex w-full max-w-4xl flex-col rounded-xl border border-white/[0.08] bg-bg shadow-2xl"
-        style={{ height: 'min(80vh, 680px)' }}
+        className="flex h-full w-full flex-col bg-bg sm:h-auto sm:max-h-[85vh] sm:max-w-5xl sm:rounded-xl sm:border sm:border-white/[0.08] sm:shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-5">
           <h2 className="text-sm font-semibold text-text">Settings</h2>
           <button
             onClick={() => setOpen(false)}
@@ -155,12 +154,12 @@ export default function SettingsPanel() {
         </div>
 
         {/* Body */}
-        <div className="flex min-h-0 flex-1">
-          {/* Sidebar — simple navigation */}
-          <div className="flex w-40 shrink-0 flex-col border-r border-white/[0.06] py-2">
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          {/* Navigation — horizontal tabs on mobile, vertical sidebar on desktop */}
+          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/[0.06] px-2 py-2 sm:w-40 sm:flex-col sm:overflow-x-visible sm:border-b-0 sm:border-r">
             <button
               onClick={() => setSelectedView('preferences')}
-              className={`mx-2 mb-1 flex items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+              className={`flex shrink-0 items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
                 selectedView === 'preferences'
                   ? 'bg-hi-dim text-text'
                   : 'text-text-muted hover:bg-surface-hover hover:text-text'
@@ -171,7 +170,7 @@ export default function SettingsPanel() {
             {workspacesAvailable && (
               <button
                 onClick={() => setSelectedView('workspaces')}
-                className={`mx-2 flex items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                className={`flex shrink-0 items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
                   selectedView === 'workspaces'
                     ? 'bg-hi-dim text-text'
                     : 'text-text-muted hover:bg-surface-hover hover:text-text'
@@ -182,7 +181,7 @@ export default function SettingsPanel() {
             )}
             <button
               onClick={() => setSelectedView('rules')}
-              className={`mx-2 mt-1 flex items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+              className={`flex shrink-0 items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
                 selectedView === 'rules'
                   ? 'bg-hi-dim text-text'
                   : 'text-text-muted hover:bg-surface-hover hover:text-text'
@@ -193,7 +192,7 @@ export default function SettingsPanel() {
           </div>
 
           {/* Main content */}
-          <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-5 py-4">
+          <div className="flex min-w-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-5">
             {error && (
               <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">{error}</div>
             )}
@@ -233,7 +232,7 @@ export default function SettingsPanel() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-white/[0.06] px-5 py-3">
+        <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-3 sm:px-5">
           {token && (
             <button
               onClick={handleLogout}
@@ -281,9 +280,9 @@ function WorkspaceManager({
   }, [workspaces, selectedId])
 
   return (
-    <div className="flex min-h-0 flex-1 gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
       {/* Workspace list */}
-      <div className="flex w-44 shrink-0 flex-col rounded-lg border border-white/[0.06] bg-surface/30">
+      <div className="flex max-h-40 shrink-0 flex-col rounded-lg border border-white/[0.06] bg-surface/30 sm:max-h-none sm:w-44">
         <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
           <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim">Workspaces</span>
           <button
@@ -731,9 +730,9 @@ function RulesManager() {
   const selectedRule = selectedIndex !== null ? rules[selectedIndex] : null
 
   return (
-    <div className="flex min-h-0 flex-1 gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
       {/* Rule list */}
-      <div className="flex w-44 shrink-0 flex-col rounded-lg border border-white/[0.06] bg-surface/30">
+      <div className="flex max-h-40 shrink-0 flex-col rounded-lg border border-white/[0.06] bg-surface/30 sm:max-h-none sm:w-44">
         <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
           <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim">Rules</span>
           <button
