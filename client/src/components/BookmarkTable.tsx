@@ -2,7 +2,7 @@ import { useRef, useMemo, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
-import { Favicon, TagChip, CardActions } from './bookmark-parts'
+import { Favicon, TagChip, CardActions, FetchingIndicator } from './bookmark-parts'
 import { ViewEmptyState } from './BookmarkGrid'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import type { Bookmark } from '@/lib/api'
@@ -82,6 +82,7 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
           <Favicon iconId={bookmark.icon_id} />{' '}
           {bookmark.title || bookmark.url}
         </a>
+        {bookmark.fetching && <FetchingIndicator />}
       </div>
 
       {/* URL */}

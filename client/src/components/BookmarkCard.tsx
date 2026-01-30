@@ -2,7 +2,7 @@ import { memo } from 'react'
 import type { Bookmark } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
-import { Thumbnail, Favicon, UrlDisplay, Tags, Description, CardActions } from './bookmark-parts'
+import { Thumbnail, Favicon, UrlDisplay, Tags, Description, CardActions, FetchingIndicator } from './bookmark-parts'
 
 interface BookmarkCardProps {
   bookmark: Bookmark
@@ -32,6 +32,7 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
         </a>
 
         <UrlDisplay url={bookmark.url} />
+        {bookmark.fetching && <FetchingIndicator />}
         <Tags tags={bookmark.tags} hiddenTags={hiddenTags} />
         <Description text={bookmark.description} />
       </div>

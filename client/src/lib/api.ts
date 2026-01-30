@@ -11,6 +11,7 @@ export interface Bookmark {
   url: string
   image_id: string | null
   icon_id: string | null
+  fetching?: boolean
 }
 
 export interface SearchQuery {

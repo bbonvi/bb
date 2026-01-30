@@ -2,7 +2,7 @@ import { useRef, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
-import { Favicon, Thumbnail, UrlDisplay, Tags, Description, CardActions } from './bookmark-parts'
+import { Favicon, Thumbnail, UrlDisplay, Tags, Description, CardActions, FetchingIndicator } from './bookmark-parts'
 import { ViewEmptyState } from './BookmarkGrid'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import type { Bookmark } from '@/lib/api'
@@ -84,6 +84,7 @@ const ListCard = memo(function ListCard({ bookmark }: { bookmark: Bookmark }) {
         </a>
 
         <UrlDisplay url={bookmark.url} />
+        {bookmark.fetching && <FetchingIndicator />}
         <Tags tags={bookmark.tags} hiddenTags={hiddenTags} />
         <Description text={bookmark.description} lineClamp={2} />
       </div>

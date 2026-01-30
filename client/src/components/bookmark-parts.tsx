@@ -84,6 +84,16 @@ export function Favicon({
   )
 }
 
+// ─── Fetching indicator ─────────────────────────────────────────────
+export function FetchingIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-text-dim">
+      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-text-dim" />
+      Fetching metadata&hellip;
+    </span>
+  )
+}
+
 // ─── URL display ───────────────────────────────────────────────────
 export function UrlDisplay({ url }: { url: string }) {
   return (

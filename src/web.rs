@@ -23,7 +23,10 @@ use axum::{
 };
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashSet,
+    sync::{Arc, RwLock},
+};
 use tokio::signal;
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -261,6 +264,14 @@ pub struct ListBookmarksRequest {
     pub limit: Option<usize>,
 }
 
+#[derive(Serialize)]
+struct BookmarkResponse {
+    #[serde(flatten)]
+    bookmark: Bookmark,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    fetching: bool,
+}
+
 async fn search(
     State(state): State<Arc<RwLock<SharedState>>>,
     headers: HeaderMap,
@@ -340,7 +351,31 @@ async fn search(
             }
         })?;
 
-    let mut response = axum::Json(bookmarks).into_response();
+    // Enrich with fetching status from task queue
+    let fetching_ids: HashSet<u64> = task_runner::read_queue_dump()
+        .queue
+        .iter()
+        .filter_map(|td| match (&td.task, &td.status) {
+            (
+                task_runner::Task::FetchMetadata { bmark_id, .. },
+                task_runner::Status::Pending | task_runner::Status::InProgress,
+            ) => Some(*bmark_id),
+            _ => None,
+        })
+        .collect();
+
+    let enriched: Vec<BookmarkResponse> = bookmarks
+        .into_iter()
+        .map(|b| {
+            let fetching = fetching_ids.contains(&b.id);
+            BookmarkResponse {
+                bookmark: b,
+                fetching,
+            }
+        })
+        .collect();
+
+    let mut response = axum::Json(enriched).into_response();
     response.headers_mut().insert(
         "etag",
         etag.parse().unwrap(),
