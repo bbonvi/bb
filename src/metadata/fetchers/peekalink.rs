@@ -173,7 +173,6 @@ impl MetadataFetcher for PeekalinkFetcher {
         };
 
         let peek_result = Self::peekalink(url, &api_key);
-        log::info!("peekalink result: {:#?}", peek_result);
 
         if let Some(m) = peek_result {
             // Accept partial results — any useful field is sufficient
