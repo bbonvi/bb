@@ -13,15 +13,15 @@
 
 ## Features
 
-- **Tags**: Categorize bookmarks with tags. Tags are hierarchical — use `/` to create nested categories (e.g. `dev/rust`, `dev/python`). Searching for a parent tag matches all children: filtering by `dev` also matches `dev/rust` and `dev/python`. This applies to both tag filters and the `#` keyword prefix.
+- **Tags**: Categorize bookmarks with tags. Tags are hierarchical — use `/` to create nested categories (e.g. `dev/rust`, `dev/python`). Searching for a parent tag matches all children: filtering by `dev` also matches `dev/rust` and `dev/python`. This applies to both tag filters and the `#` query prefix.
 - **Rules**: Create custom rules using YAML configuration. Define matching queries for titles, URLs, or descriptions, and apply actions based on those matches. For example, bb can automatically assign tag "dev" for every url containing "github.com".
 - **Scrape Metadata**: When you create a bookmark, bb fetches metadata through a multi-stage pipeline: URLs are normalized (tracking params stripped, hosts lowercased), then bb fans out parallel requests to oEmbed, Plain HTML, Microlink, and Peekalink fetchers. Results are merged field-by-field by priority. Images are validated via magic byte detection, decode check, and minimum resolution (>32x32) to filter out tracking pixels and corrupt data. Headless Chrome is used as fallback when no validated image is found. The Chrome instance includes fingerprint spoofing (deviceMemory, maxTouchPoints, WebGL vendor/renderer, AudioContext) to bypass bot detection. Failed metadata tasks are retried up to 3 times (configurable) with exponential backoff (5s × 2^attempt + jitter) for transient errors (5xx, timeout); 4xx errors are terminal. You can also upload custom cover images and favicons per bookmark via the Web UI.
 - **Web UI**: Manage your bookmarks through a user-friendly web interface built with Vite, React, and shadcn/ui. Stores screenshots and favicons for quick reference. Installable as a PWA with share target and protocol handler support — share URLs directly from your browser or OS into bb.
-- **Workspaces**: Organize bookmarks into filtered views. Each workspace defines tag whitelist/blacklist and an optional keyword filter query. Bookmarks matching the workspace filters appear automatically. Workspaces are persisted in `workspaces.yaml` and managed via the Web UI settings panel or the REST API. Drag-and-drop reordering is supported.
+- **Workspaces**: Organize bookmarks into filtered views. Each workspace defines tag whitelist/blacklist and an optional filter query. Bookmarks matching the workspace filters appear automatically. Workspaces are persisted in `workspaces.yaml` and managed via the Web UI settings panel or the REST API. Drag-and-drop reordering is supported.
 - **Bulk Operations**: Edit or delete multiple bookmarks at once. Bulk actions apply to all bookmarks matching the current search query — add, remove, or overwrite tags, and update fields in batch. Available from the toolbar in the Web UI.
 - **Editor Mode**: Use `bb add --editor` to open your `$EDITOR` with a structured template for filling in URL, title, tags, and description. Leave a field as `-` to skip auto-fill for that field. Works with any editor — vim, nvim, nano, etc.
 - **Standalone CLI Tool or Daemon**: Run bb as a standalone CLI tool or deploy it as a daemon on a remote server. Use the bb-cli as a lightweight client to connect to the server over HTTP.
-- **Semantic Search** *(experimental)*: Find bookmarks by meaning rather than exact keywords. Currently inaccurate for most workloads — prefer keyword search for reliable results. Disabled by default.
+- **Semantic Search** *(experimental)*: Find bookmarks by meaning rather than exact text matches. Currently inaccurate for most workloads — prefer text search for reliable results. Disabled by default.
 
 ![List view](https://github.com/user-attachments/assets/5d92eea4-d097-49c5-af8d-4bd25a7c6069)
 ![Bookmark detail](https://github.com/user-attachments/assets/7ab2c129-1922-4360-97c7-fedb77c2cb04)
@@ -29,9 +29,9 @@
 ![Create bookmark](https://github.com/user-attachments/assets/b1b7325a-e9aa-4198-9eec-f3ca490ba963)
 ![CLI](https://github.com/bbonvi/bb/blob/main/screenshots/shot1.png?raw=true)
 
-## Keyword Search Query Language
+## Search Query Language
 
-The `keyword` field supports a structured query language with field prefixes, boolean operators, quoted phrases, and grouping.
+The `query` field supports a structured query language with field prefixes, boolean operators, quoted phrases, and grouping.
 
 ### Field Prefixes
 
@@ -85,7 +85,7 @@ not #read :arxiv.org              → unread papers from arxiv
 - **Click any tag** to add it as a search filter.
 - **Double-click the delete button** to confirm deletion (first click arms, second executes).
 - **Drag & drop or paste images** onto the cover or favicon area in edit mode to upload custom images.
-- **URL parameters are persisted** — any query parameters in the URL are applied on load. Supported params: `workspace`, `keyword`, `tags`, `title`, `url`, `description`, `semantic`, `all`. For example, `/?workspace=Dev&keyword=rust&tags=lang` opens the Dev workspace with "rust" in the keyword field and "lang" as a tag filter. Bookmark this URL to always start with a specific view.
+- **URL parameters are persisted** — any query parameters in the URL are applied on load. Supported params: `workspace`, `query`, `tags`, `title`, `url`, `description`, `semantic`, `all`. For example, `/?workspace=Dev&query=rust&tags=lang` opens the Dev workspace with "rust" in the query field and "lang" as a tag filter. Bookmark this URL to always start with a specific view.
 - **`?action=create`** — opens the create bookmark modal on page load. Combine with other params to pre-fill fields: `/?action=create&url=https://example.com&title=Example&tags=reading` opens the modal with those values already populated.
 
 ## Settings
@@ -97,7 +97,7 @@ The Web UI settings panel (gear icon) has two sections:
   - **Polling intervals** — configure how often the UI refreshes data in the background (separate intervals for normal, busy, and hidden-tab states).
   - **Globally ignored tags** — bookmarks with these tags are completely hidden everywhere in the UI. Useful for archiving or soft-deleting without removing data.
 
-- **Workspaces** — create, edit, reorder, and delete workspaces. Each workspace defines tag whitelists/blacklists and an optional keyword filter.
+- **Workspaces** — create, edit, reorder, and delete workspaces. Each workspace defines tag whitelists/blacklists and an optional filter query.
 
 ## Semantic Search
 
@@ -126,7 +126,7 @@ bb includes local semantic search powered by [fastembed](https://github.com/Anus
 2. Embeddings are stored in `vectors.bin` alongside your bookmarks
 3. Hybrid search combines two ranking methods:
    - **Semantic ranking** — cosine similarity between query and bookmark embeddings
-   - **Lexical ranking** — keyword matching against title, description, and tags
+   - **Lexical ranking** — text matching against title, description, and tags
 4. Results are merged using Reciprocal Rank Fusion (RRF) — items appearing in both rankings get boosted
 5. Other search criteria (tags, title filters) are applied before semantic ranking
 

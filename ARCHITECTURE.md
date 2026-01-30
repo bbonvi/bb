@@ -87,9 +87,9 @@ pub trait AppBackend: Send + Sync {
 - Images and icons stored in `~/.local/share/bb/uploads/`
 - Atomic writes for crash safety
 
-### 3. Keyword Query Language (`src/search_query/`)
+### 3. Search Query Language (`src/search_query/`)
 
-Structured query parser for the `keyword` search field. Replaces simple whitespace-split matching with a full query language.
+Structured query parser for the `query` search field. Replaces simple whitespace-split matching with a full query language.
 
 ```
 src/search_query/
@@ -109,7 +109,7 @@ src/search_query/
 
 Tag matching is exact + hierarchical (`#dev` matches tag `dev/rust`). All other fields use case-insensitive substring matching.
 
-Called from `BackendCsv::search()` when a `keyword` is present on the query.
+Called from `BackendCsv::search()` when a `query` field is present on the search request.
 
 ### 4. Configuration (`src/config.rs`)
 
@@ -165,9 +165,9 @@ YAML-persisted workspace definitions at `~/.local/share/bb/workspaces.yaml`:
 - `WorkspaceStore` holds `Vec<Workspace>` in `Arc<RwLock<>>` (same concurrency pattern as config)
 - Atomic writes via `BackendLocal::write`
 - Auto-creates empty file on first load
-- Validation: name non-empty/trimmed/max 100 chars, keyword query must parse, no duplicate names (case-insensitive)
+- Validation: name non-empty/trimmed/max 100 chars, query must parse, no duplicate names (case-insensitive)
 - ID generation via `Eid` (ULID-based)
-- Workspace filtering uses server-side keyword search; the client translates tag whitelist/blacklist + keyword into a keyword query string
+- Workspace filtering uses server-side query search; the client translates tag whitelist/blacklist + query into a search query string
 
 ### 6. CLI Layer (`src/cli/`)
 
@@ -338,7 +338,7 @@ URL
 ```
 1. CLI/API receives search query with semantic="machine learning"
 2. AppService extracts filters and semantic query
-3. Backend.search() applies non-semantic filters (tags, keyword query language, etc.)
+3. Backend.search() applies non-semantic filters (tags, search query language, etc.)
 4. If semantic query present:
    a. Ensure index reconciled (first search only)
    b. Generate query embedding
@@ -370,7 +370,7 @@ URL
 | `src/app/local.rs` | Local backend implementation |
 | `src/app/remote.rs` | HTTP client backend |
 | `src/bookmarks.rs` | CSV bookmark storage |
-| `src/search_query/` | Keyword query language (lexer, parser, evaluator) |
+| `src/search_query/` | Search query language (lexer, parser, evaluator) |
 | `src/config.rs` | Configuration loading/validation |
 | `src/metadata/` | Metadata fetching pipeline (oEmbed, HTML, validation, Chrome fallback) |
 | `src/workspaces.rs` | Workspace CRUD and YAML persistence |
@@ -382,7 +382,7 @@ URL
 
 ## Semantic Search Architecture
 
-The semantic search subsystem enables finding bookmarks by meaning rather than exact keywords.
+The semantic search subsystem enables finding bookmarks by meaning rather than exact text matches.
 
 ### Module Structure
 
@@ -586,7 +586,7 @@ Tests located in `src/tests/`:
 | File | Purpose |
 |------|---------|
 | `app.rs` | AppLocal CRUD and search |
-| `bookmarks.rs` | Keyword search |
+| `bookmarks.rs` | Search query |
 | `search_query/tests.rs` | Query language parsing and evaluation |
 | `rules.rs` | Rule matching |
 | `semantic.rs` | Semantic search (1800+ lines) |

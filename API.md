@@ -33,7 +33,7 @@ Search for bookmarks with optional semantic ranking.
   "title": "search term",
   "description": "search term",
   "tags": "tag1,tag2",
-  "keyword": "general search",
+  "query": "general search",
   "exact": false,
   "semantic": "find by meaning",
   "threshold": 0.35,
@@ -103,7 +103,7 @@ List all workspaces.
     "filters": {
       "tag_whitelist": ["dev", "rust"],
       "tag_blacklist": ["internal"],
-      "keyword": null
+      "query": null
     },
     "view_prefs": {
       "mode": "grid",
@@ -124,7 +124,7 @@ Create a new workspace.
   "filters": {
     "tag_whitelist": ["dev"],
     "tag_blacklist": [],
-    "keyword": ":example.dev"
+    "query": ":example.dev"
   },
   "view_prefs": {
     "mode": "grid",
@@ -142,7 +142,7 @@ Returns the created workspace object (same shape as list items).
 
 | Status | Condition |
 |--------|-----------|
-| 400 | Empty/whitespace name, name > 100 chars, invalid keyword query, duplicate name (case-insensitive) |
+| 400 | Empty/whitespace name, name > 100 chars, invalid query, duplicate name (case-insensitive) |
 
 ### `PUT /api/workspaces/:id`
 
@@ -234,7 +234,7 @@ Search bookmark
 * `-t`, `--title <TITLE>` — Bookmark title
 * `-d`, `--description <DESCRIPTION>` — Bookmark description
 * `-g`, `--tags <TAGS>` — Bookmark tags
-* `-k`, `--keyword <KEYWORD>` — Keyword search across title, description, url, and tags (use #tag for tag search)
+* `-k`, `--query <QUERY>` — Search query across title, description, url, and tags (use #tag for tag search)
 * `-i`, `--id <ID>` — id
 * `-e`, `--exact` — Exact search. False by default
 
