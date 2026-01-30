@@ -274,7 +274,7 @@ export default function BookmarkDetailModal() {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) setDetailModalId(null) }}>
       <DialogContent
-        className="flex h-[min(78vh,780px)] w-full max-w-2xl flex-col gap-0 overflow-hidden bg-surface p-0"
+        className="flex h-[min(78vh,780px)] w-full max-w-3xl flex-col gap-0 overflow-hidden bg-surface p-0"
         showCloseButton={false}
       >
         {bookmark && (
@@ -410,7 +410,7 @@ export default function BookmarkDetailModal() {
                                     .filter(([, v]) => v !== null && v !== false)
                                   if (entries.length === 0) return '\u2014'
                                   return (
-                                    <details className="inline">
+                                    <details>
                                       <summary className="cursor-pointer">
                                         {entries.map(([k]) => k).join(', ')}
                                       </summary>
