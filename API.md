@@ -366,6 +366,7 @@ Create new rule
 * `--title <TITLE>` — A regex matching bookmark title
 * `--description <DESCRIPTION>` — A regex matching bookmark description
 * `--tags <TAGS>` — A list of tags bookmark will be matched by (all tags has to match)
+* `--query <QUERY>` — A search query string evaluated via the search query language (supports `#tag`, `.title`, `>desc`, `:url`, `and`, `or`, `not`, quoted phrases, parens). AND-ed with other conditions
 
 
 

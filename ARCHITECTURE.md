@@ -116,7 +116,7 @@ Called from `BackendCsv::search()` when a `query` field is present on the search
 Configuration is split into two files:
 
 - **`config.yaml`** — User settings (effectively read-only at runtime). Contains `task_queue_max_threads`, `task_queue_max_retries`, `semantic_search`, `images`, `scrape`.
-- **`rules.yaml`** — Automated rules (machine-managed via `RulesConfig`). Separated to preserve user comments in `config.yaml`, since rules are the only frequently mutated data.
+- **`rules.yaml`** — Automated rules (machine-managed via `RulesConfig`). Separated to preserve user comments in `config.yaml`, since rules are the only frequently mutated data. Rules support regex conditions on URL/title/description, tag matching, and an optional `query` condition evaluated via the search query language (`src/search_query/`).
 
 On first load after upgrade, rules are automatically migrated from `config.yaml` to `rules.yaml`.
 
@@ -145,6 +145,10 @@ rules:
   action: !UpdateBookmark
     tags:
     - example
+- query: "#work and :github.com"
+  action: !UpdateBookmark
+    tags:
+    - dev
 ```
 
 Config validation returns `Result<(), Vec<String>>` for proper error propagation. Invalid configs fail early with descriptive messages listing all validation errors.
