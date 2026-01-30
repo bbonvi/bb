@@ -60,10 +60,5 @@ export default defineConfig({
         '**/package-lock.json',
       ],
     },
-    hmr: {
-      host: 'localhost',
-      port: 3000,
-      clientPort: 3000,
-    },
   },
 })
