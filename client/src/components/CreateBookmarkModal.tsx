@@ -159,6 +159,12 @@ export default function CreateBookmarkModal() {
       <DialogContent
         className="flex w-full max-w-lg flex-col gap-0 overflow-hidden bg-surface p-0"
         showCloseButton={false}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault()
+            handleSubmit()
+          }
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
