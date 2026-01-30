@@ -471,10 +471,18 @@ impl std::fmt::Debug for BookmarkCreateRequest {
     }
 }
 
+#[derive(Serialize)]
+struct CreateBookmarkResponse {
+    #[serde(flatten)]
+    bookmark: Bookmark,
+    report: Option<crate::metadata::MetadataReport>,
+}
+
 async fn create(
     State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<BookmarkCreateRequest>,
-) -> Result<axum::Json<Bookmark>, AppError> {
+) -> Result<axum::Json<CreateBookmarkResponse>, AppError> {
+    let (bookmark, report) = tokio::task::spawn_blocking(move || {
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 
@@ -543,11 +551,14 @@ async fn create(
         skip_rules: false,
     };
 
-    let bookmark = app_service
+    app_service
         .create_bookmark(create, add_opts)
-        .context("Failed to create bookmark")?;
+        .context("Failed to create bookmark")
+    })
+    .await
+    .map_err(|e| AppError::Other(anyhow::anyhow!("task join error: {e}")))??;
 
-    Ok(axum::Json(bookmark))
+    Ok(axum::Json(CreateBookmarkResponse { bookmark, report }))
 }
 
 #[derive(Deserialize)]
@@ -1197,7 +1208,7 @@ mod tests {
         }
 
         impl AppBackend for MockBackend {
-            fn create(&self, _: BookmarkCreate, _: AddOpts) -> Result<Bookmark, BackendError> {
+            fn create(&self, _: BookmarkCreate, _: AddOpts) -> Result<(Bookmark, Option<crate::metadata::MetadataReport>), BackendError> {
                 unimplemented!()
             }
 

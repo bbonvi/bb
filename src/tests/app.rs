@@ -57,7 +57,7 @@ pub fn test_create_bookmark() {
         ..Default::default()
     };
 
-    let bookmark = app.create(bmark_create, default_add_opts()).unwrap();
+    let (bookmark, _report) = app.create(bmark_create, default_add_opts()).unwrap();
     assert_eq!(&bookmark.url, "https://example.com/lmao-what");
 }
 
@@ -70,7 +70,7 @@ pub fn test_bookmark_create() {
         ..Default::default()
     };
 
-    let bookmark = app.create(bmark_create, default_add_opts()).unwrap();
+    let (bookmark, _) = app.create(bmark_create, default_add_opts()).unwrap();
     assert_eq!(&bookmark.url, "https://example.com/2");
     assert_eq!(&bookmark.title, "lmao what2");
 }
@@ -206,7 +206,7 @@ pub fn test_bookmark_dedup() {
 #[test]
 fn merge_metadata_without_force_skips_existing_fields() {
     let (app, _tmp) = create_app();
-    let bmark = app.create(
+    let (bmark, _) = app.create(
         bookmarks::BookmarkCreate {
             url: "https://example.com".into(),
             title: Some("Old Title".into()),
@@ -239,7 +239,7 @@ fn merge_metadata_without_force_skips_existing_fields() {
 #[test]
 fn merge_metadata_with_force_overwrites_existing_fields() {
     let (app, _tmp) = create_app();
-    let bmark = app.create(
+    let (bmark, _) = app.create(
         bookmarks::BookmarkCreate {
             url: "https://example.com".into(),
             title: Some("Old Title".into()),

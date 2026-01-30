@@ -242,7 +242,7 @@ impl AddCommand {
             skip_rules: false,
         };
 
-        let bmark = app_service.create_bookmark(bmark_create, add_opts)
+        let (bmark, _report) = app_service.create_bookmark(bmark_create, add_opts)
             .map_err(|e| crate::cli::errors::CliError::database(e.to_string()))?;
         
         println!("{}", serde_json::to_string_pretty(&bmark)

@@ -162,7 +162,7 @@ impl AppBackend for AppLocal {
         &self,
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
-    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
+    ) -> anyhow::Result<(bookmarks::Bookmark, Option<MetadataReport>), AppError> {
         let url = bmark_create.url.clone();
 
         let query = bookmarks::SearchQuery {
@@ -197,47 +197,43 @@ impl AppBackend for AppLocal {
                 );
             } else {
                 // attempt to fetch and merge metadata
-                let with_meta = {
-                    let (meta, _report) = Self::fetch_metadata(
-                        &url,
-                        FetchMetadataOpts {
-                            no_https_upgrade: opts.no_https_upgrade,
-                            meta_opts,
-                            ..Default::default()
-                        },
-                    )?;
+                let (meta, report) = Self::fetch_metadata(
+                    &url,
+                    FetchMetadataOpts {
+                        no_https_upgrade: opts.no_https_upgrade,
+                        meta_opts,
+                        ..Default::default()
+                    },
+                )?;
 
-                    let img_config = &self.config.read().unwrap().images;
-                    let bmark = Self::merge_metadata(
-                        bmark.clone(),
-                        meta,
-                        self.storage_mgr.clone(),
-                        self.bmark_mgr.clone(),
-                        img_config,
-                        false,
-                    )?;
-
-                    Ok(bmark) as anyhow::Result<bookmarks::Bookmark>
-                };
+                let img_config = &self.config.read().unwrap().images;
+                let with_meta = Self::merge_metadata(
+                    bmark.clone(),
+                    meta,
+                    self.storage_mgr.clone(),
+                    self.bmark_mgr.clone(),
+                    img_config,
+                    false,
+                );
 
                 // apply rules
                 if !opts.skip_rules {
                     let rules_guard = self.rules_config.read().unwrap();
                     let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules_guard.rules())?;
-                    return Ok(with_meta.map(|_| with_rules)?);
+                    return Ok((with_meta.map(|_| with_rules)?, Some(report)));
                 }
 
-                return Ok(with_meta?);
+                return Ok((with_meta?, Some(report)));
             }
         } else if !opts.skip_rules {
             // if no metadata apply Rules.
             let rules_guard = self.rules_config.read().unwrap();
-            return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules_guard.rules())?);
+            return Ok((Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules_guard.rules())?, None));
         }
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
 
-        Ok(bmark)
+        Ok((bmark, None))
     }
 
     fn update(

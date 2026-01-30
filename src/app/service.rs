@@ -160,7 +160,7 @@ impl AppService {
     }
 
     /// Create a new bookmark with validation and business rules
-    pub fn create_bookmark(&self, create: BookmarkCreate, opts: AddOpts) -> Result<Bookmark> {
+    pub fn create_bookmark(&self, create: BookmarkCreate, opts: AddOpts) -> Result<(Bookmark, Option<crate::metadata::MetadataReport>)> {
         // Validate bookmark creation
         self.validate_bookmark_creation(&create)?;
 
@@ -168,7 +168,7 @@ impl AppService {
         self.check_duplicate_bookmark(&create.url)?;
 
         // Create the bookmark
-        let bookmark = self
+        let (bookmark, report) = self
             .backend
             .create(create, opts)
             .context("Failed to create bookmark")?;
@@ -176,7 +176,7 @@ impl AppService {
         // Index for semantic search (best-effort, don't fail create on embedding error)
         self.index_bookmark_for_semantic(&bookmark);
 
-        Ok(bookmark)
+        Ok((bookmark, report))
     }
 
     /// Index a bookmark for semantic search.
@@ -723,7 +723,7 @@ mod tests {
     }
 
     impl AppBackend for MockBackend {
-        fn create(&self, _: BookmarkCreate, _: AddOpts) -> anyhow::Result<Bookmark, AppError> {
+        fn create(&self, _: BookmarkCreate, _: AddOpts) -> anyhow::Result<(Bookmark, Option<crate::metadata::MetadataReport>), AppError> {
             unimplemented!()
         }
 

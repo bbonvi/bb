@@ -10,7 +10,7 @@ pub trait AppBackend: Send + Sync {
         &self,
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
-    ) -> anyhow::Result<bookmarks::Bookmark, AppError>;
+    ) -> anyhow::Result<(bookmarks::Bookmark, Option<MetadataReport>), AppError>;
 
     fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<Option<MetadataReport>, AppError>;
 

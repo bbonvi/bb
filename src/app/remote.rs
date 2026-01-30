@@ -141,7 +141,14 @@ impl AppBackend for AppRemote {
         &self,
         bmark_create: bookmarks::BookmarkCreate,
         opts: AddOpts,
-    ) -> anyhow::Result<bookmarks::Bookmark, AppError> {
+    ) -> anyhow::Result<(bookmarks::Bookmark, Option<crate::metadata::MetadataReport>), AppError> {
+        #[derive(Deserialize, Clone)]
+        struct CreateResponse {
+            #[serde(flatten)]
+            bookmark: bookmarks::Bookmark,
+            report: Option<crate::metadata::MetadataReport>,
+        }
+
         let resp = self
             .post("/api/bookmarks/create")
             .json(&json!({
@@ -155,7 +162,8 @@ impl AppBackend for AppRemote {
             }))
             .send()?;
 
-        Ok(handle_response(resp)?)
+        let parsed: CreateResponse = handle_response(resp)?;
+        Ok((parsed.bookmark, parsed.report))
     }
 
     fn update(

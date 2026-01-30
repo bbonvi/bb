@@ -231,7 +231,7 @@ mod backend_integration {
     }
 
     impl AppBackend for FilterableMockBackend {
-        fn create(&self, _: BookmarkCreate, _: AddOpts) -> Result<Bookmark, AppError> {
+        fn create(&self, _: BookmarkCreate, _: AddOpts) -> Result<(Bookmark, Option<crate::metadata::MetadataReport>), AppError> {
             unimplemented!()
         }
 
@@ -866,7 +866,7 @@ mod index_maintenance {
     }
 
     impl AppBackend for CreateMockBackend {
-        fn create(&self, create: BookmarkCreate, _: AddOpts) -> Result<Bookmark, AppError> {
+        fn create(&self, create: BookmarkCreate, _: AddOpts) -> Result<(Bookmark, Option<crate::metadata::MetadataReport>), AppError> {
             let id = self.next_id.fetch_add(1, Ordering::SeqCst);
 
             let bookmark = Bookmark {
@@ -880,7 +880,7 @@ mod index_maintenance {
             };
 
             self.bookmarks.write().unwrap().push(bookmark.clone());
-            Ok(bookmark)
+            Ok((bookmark, None))
         }
 
         fn search(&self, _: SearchQuery) -> Result<Vec<Bookmark>, AppError> {
@@ -959,7 +959,7 @@ mod index_maintenance {
         };
         let opts = AddOpts::default();
 
-        let bookmark = service.create_bookmark(create, opts).expect("Create failed");
+        let (bookmark, _) = service.create_bookmark(create, opts).expect("Create failed");
         assert_eq!(bookmark.id, 1);
 
         // Verify: bookmark was indexed
@@ -1067,7 +1067,7 @@ mod index_maintenance {
             icon_id: None,
         };
 
-        let bookmark = service.create_bookmark(create, opts).expect("Create failed");
+        let (bookmark, _) = service.create_bookmark(create, opts).expect("Create failed");
         assert_eq!(bookmark.id, 1);
 
         // Verify: bookmark was NOT indexed (no content to embed)
@@ -1218,7 +1218,7 @@ mod index_maintenance {
     }
 
     impl AppBackend for UpdateableMockBackend {
-        fn create(&self, create: BookmarkCreate, _: AddOpts) -> Result<Bookmark, AppError> {
+        fn create(&self, create: BookmarkCreate, _: AddOpts) -> Result<(Bookmark, Option<crate::metadata::MetadataReport>), AppError> {
             let id = self.next_id.fetch_add(1, Ordering::SeqCst);
 
             let bookmark = Bookmark {
@@ -1232,7 +1232,7 @@ mod index_maintenance {
             };
 
             self.bookmarks.write().unwrap().push(bookmark.clone());
-            Ok(bookmark)
+            Ok((bookmark, None))
         }
 
         fn update(&self, id: u64, update: BookmarkUpdate) -> Result<Bookmark, AppError> {
@@ -1334,7 +1334,7 @@ mod index_maintenance {
             image_id: None,
             icon_id: None,
         };
-        let bookmark = service
+        let (bookmark, _) = service
             .create_bookmark(create, AddOpts::default())
             .expect("Create failed");
         let id = bookmark.id;
@@ -1400,7 +1400,7 @@ mod index_maintenance {
             image_id: None,
             icon_id: None,
         };
-        let bookmark = service
+        let (bookmark, _) = service
             .create_bookmark(create, AddOpts::default())
             .expect("Create failed");
         let id = bookmark.id;
