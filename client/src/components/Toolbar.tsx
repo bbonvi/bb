@@ -158,7 +158,7 @@ export function Toolbar() {
   const showFilters = filtersOpen || hasAdvancedFilters
 
   return (
-    <header className="sticky top-0 z-40 bg-bg">
+    <header className="sticky top-0 z-40 glass-toolbar border-b border-white/[0.04]">
       {/* ── Search row ── */}
       <div className="flex items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
         {/* Logo */}
@@ -445,7 +445,7 @@ const FilterField = memo(function FilterField({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`h-7 w-full sm:w-28 rounded-md border bg-transparent px-2 text-sm outline-none transition-colors ${
+        className={`h-7 w-full sm:w-28 rounded-md border bg-surface px-2 text-sm outline-none transition-colors ${
           value
             ? 'border-hi/20 text-text'
             : 'border-white/[0.06] text-text placeholder:text-text-dim'
