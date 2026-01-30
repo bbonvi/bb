@@ -76,6 +76,11 @@ export function BookmarkGrid() {
     virtualizer.scrollToIndex(newRow, { align: 'start' })
   }, [columns, virtualizer])
 
+  // Invalidate cached row measurements when bookmarks change (e.g. new bookmark added)
+  useEffect(() => {
+    virtualizer.measure()
+  }, [rows, virtualizer])
+
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
   return (
