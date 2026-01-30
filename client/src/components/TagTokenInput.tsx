@@ -310,18 +310,18 @@ export function TagTokenInput({
             handleChipClick(i)
           }}
         >
-          {tag}
           <button
             onMouseDown={(e) => {
               e.preventDefault()
               e.stopPropagation()
               removeAtIdx(i)
             }}
-            className="ml-0.5 text-text-dim transition-colors hover:text-danger"
+            className="mr-0.5 text-text-dim transition-colors hover:text-danger"
             tabIndex={-1}
           >
             <X className="h-2.5 w-2.5" />
           </button>
+          {tag}
         </span>,
       )
     }
