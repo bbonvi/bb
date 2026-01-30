@@ -226,25 +226,35 @@ export default function BookmarkDetailModal() {
     }
   }, [bookmark, bookmarks, setBookmarks, setDetailModalId])
 
+  const setFetchingOptimistic = useCallback((id: number, fetching: boolean) => {
+    const state = useStore.getState()
+    state.setBookmarks(state.bookmarks.map((b) => (b.id === id ? { ...b, fetching } : b)))
+  }, [])
+
   const handleRefreshMetadata = useCallback(async () => {
     if (!bookmark) return
     const targetId = bookmark.id
     setRefreshing(true)
+    setFetchingOptimistic(targetId, true)
+    markDirty(targetId)
     setError(null)
     try {
       const { report } = await refreshMetadata(targetId, { async_meta: false })
       setReportForBookmark(targetId, report)
+      clearDirty(targetId)
       triggerRefetch()
     } catch (e) {
+      clearDirty(targetId)
       if (useStore.getState().detailModalId === targetId) {
         setError(e instanceof Error ? e.message : 'Failed to refresh metadata')
       }
     } finally {
+      setFetchingOptimistic(targetId, false)
       if (useStore.getState().detailModalId === targetId) {
         setRefreshing(false)
       }
     }
-  }, [bookmark, triggerRefetch, setReportForBookmark])
+  }, [bookmark, triggerRefetch, setReportForBookmark, setFetchingOptimistic, markDirty, clearDirty])
 
   // Keyboard: arrows for nav, Ctrl+Enter to save, Escape to discard edit first
   useEffect(() => {
