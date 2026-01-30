@@ -395,25 +395,7 @@ export default function BookmarkDetailModal() {
                               ? Object.entries(f.fields).filter(([, v]) => v !== null && v !== false)
                               : []
                             return (
-                              <FetcherRow key={i} fieldEntries={fieldEntries}>
-                                <td className="py-1 pr-2">{f.name}</td>
-                                <td className="py-1 pr-2">
-                                  <span className={
-                                    f.status.status === 'Success' ? 'text-green-600' :
-                                    f.status.status === 'Skip' ? 'text-yellow-600' :
-                                    'text-red-600'
-                                  }>
-                                    {f.status.status}
-                                    {(f.status.status === 'Error' || f.status.status === 'Skip') && f.status.detail && `: ${f.status.detail}`}
-                                  </span>
-                                </td>
-                                <td className="py-1 pr-2">{f.duration_ms}ms</td>
-                                <td className="py-1">
-                                  {fieldEntries.length > 0
-                                    ? fieldEntries.map(([k]) => k).join(', ')
-                                    : '\u2014'}
-                                </td>
-                              </FetcherRow>
+                              <FetcherRow key={i} fetcher={f} fieldEntries={fieldEntries} />
                             )
                           })}
                         </tbody>
@@ -655,10 +637,10 @@ function EditForm({
 
 // Fetcher table row with expandable field values in a full-width row below
 function FetcherRow({
-  children,
+  fetcher: f,
   fieldEntries,
 }: {
-  children: React.ReactNode
+  fetcher: import('@/lib/api').FetcherReport
   fieldEntries: [string, unknown][]
 }) {
   const [open, setOpen] = useState(false)
@@ -670,17 +652,33 @@ function FetcherRow({
         className={`border-b border-white/[0.03] ${expandable ? 'cursor-pointer hover:bg-white/[0.02]' : ''}`}
         onClick={expandable ? () => setOpen((o) => !o) : undefined}
       >
-        {children}
+        <td className="py-1 pr-2">{f.name}</td>
+        <td className="py-1 pr-2">
+          <span className={
+            f.status.status === 'Success' ? 'text-green-600' :
+            f.status.status === 'Skip' ? 'text-yellow-600' :
+            'text-red-600'
+          }>
+            {f.status.status}
+            {(f.status.status === 'Error' || f.status.status === 'Skip') && f.status.detail && `: ${f.status.detail}`}
+          </span>
+        </td>
+        <td className="py-1 pr-2">{f.duration_ms}ms</td>
+        <td className="py-1">
+          {expandable
+            ? <>{open ? '\u25BC' : '\u25B6'} {fieldEntries.map(([k]) => k).join(', ')}</>
+            : '\u2014'}
+        </td>
       </tr>
       {open && (
-        <tr className="border-b border-white/[0.03]">
+        <tr className="border-b border-white/[0.03] bg-white/[0.01]">
           <td colSpan={4} className="py-1.5 pl-4">
             <dl className="space-y-0.5 text-text-muted">
               {fieldEntries.map(([k, v]) => (
                 <div key={k} className="flex gap-1.5">
                   <dt className="shrink-0 font-medium">{k}:</dt>
-                  <dd className="truncate" title={String(v)}>
-                    {typeof v === 'string' ? (v.length > 80 ? v.slice(0, 80) + '\u2026' : v) : String(v)}
+                  <dd className="break-all">
+                    {String(v)}
                   </dd>
                 </div>
               ))}
