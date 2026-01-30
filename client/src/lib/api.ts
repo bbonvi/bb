@@ -90,8 +90,9 @@ export interface Rule {
   title?: string
   description?: string
   tags?: string[]
+  query?: string
   comment?: string
-  action: { update: { title?: string; description?: string; tags?: string[] } }
+  action: { UpdateBookmark: { title?: string; description?: string; tags?: string[] } }
 }
 
 export interface TaskDump {
@@ -441,4 +442,14 @@ export function deleteWorkspace(id: string): Promise<void> {
 
 export function reorderWorkspaces(ids: string[]): Promise<void> {
   return fetchApi('/api/workspaces/reorder', { method: 'POST', body: { ids } })
+}
+
+// --- Rules endpoints ---
+
+export function fetchRules(): Promise<Rule[]> {
+  return fetchApi('/api/rules')
+}
+
+export function updateRules(rules: Rule[]): Promise<Rule[]> {
+  return fetchApi('/api/rules', { method: 'POST', body: rules })
 }

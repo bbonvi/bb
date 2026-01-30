@@ -9,10 +9,12 @@ import {
   deleteWorkspace as apiDeleteWorkspace,
   reorderWorkspaces as apiReorderWorkspaces,
   fetchWorkspaces,
+  fetchRules,
+  updateRules,
   searchBookmarks,
   searchBookmarksUncached,
 } from '@/lib/api'
-import type { Workspace } from '@/lib/api'
+import type { Workspace, Rule } from '@/lib/api'
 import { DeleteButton } from './bookmark-parts'
 import { buildWorkspaceQuery } from '@/lib/workspaceFilters'
 import {
@@ -34,7 +36,7 @@ import { CSS } from '@dnd-kit/utilities'
 
 // ─── Settings Panel (Modal) ──────────────────────────────────────
 
-type SettingsView = 'preferences' | 'workspaces'
+type SettingsView = 'preferences' | 'workspaces' | 'rules'
 
 export default function SettingsPanel() {
   const open = useStore((s) => s.settingsOpen)
@@ -178,6 +180,16 @@ export default function SettingsPanel() {
                 Workspaces
               </button>
             )}
+            <button
+              onClick={() => setSelectedView('rules')}
+              className={`mx-2 mt-1 flex items-center rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                selectedView === 'rules'
+                  ? 'bg-hi-dim text-text'
+                  : 'text-text-muted hover:bg-surface-hover hover:text-text'
+              }`}
+            >
+              Rules
+            </button>
           </div>
 
           {/* Main content */}
@@ -214,6 +226,8 @@ export default function SettingsPanel() {
                   }
                 }}
               />
+            ) : selectedView === 'rules' ? (
+              <RulesManager />
             ) : null}
           </div>
         </div>
@@ -650,6 +664,361 @@ function WorkspaceEditor({
         </p>
       </div>
 
+    </div>
+  )
+}
+
+// ─── Rules Manager ────────────────────────────────────────────────
+
+function RulesManager() {
+  const [rules, setRules] = useState<Rule[]>([])
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchRules()
+      .then((r) => {
+        setRules(r)
+        if (r.length > 0) setSelectedIndex(0)
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load rules'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function saveRules(updated: Rule[]) {
+    try {
+      const result = await updateRules(updated)
+      setRules(result)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save rules')
+    }
+  }
+
+  async function handleAdd() {
+    const newRule: Rule = { action: { UpdateBookmark: {} } }
+    const updated = [...rules, newRule]
+    await saveRules(updated)
+    setSelectedIndex(updated.length - 1)
+  }
+
+  async function handleDelete(index: number) {
+    const updated = rules.filter((_, i) => i !== index)
+    await saveRules(updated)
+    if (updated.length === 0) {
+      setSelectedIndex(null)
+    } else if (selectedIndex !== null && selectedIndex >= updated.length) {
+      setSelectedIndex(updated.length - 1)
+    }
+  }
+
+  function handleUpdateRule(index: number, patch: Partial<Rule>) {
+    const updated = rules.map((r, i) => (i === index ? { ...r, ...patch } : r))
+    setRules(updated)
+    saveRules(updated)
+  }
+
+  function ruleLabel(rule: Rule, index: number): string {
+    return rule.comment || rule.url || rule.title || rule.query || `Rule ${index + 1}`
+  }
+
+  if (loading) {
+    return <div className="flex h-full items-center justify-center text-sm text-text-dim">Loading rules...</div>
+  }
+
+  const selectedRule = selectedIndex !== null ? rules[selectedIndex] : null
+
+  return (
+    <div className="flex min-h-0 flex-1 gap-4">
+      {/* Rule list */}
+      <div className="flex w-44 shrink-0 flex-col rounded-lg border border-white/[0.06] bg-surface/30">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim">Rules</span>
+          <button
+            onClick={handleAdd}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+            title="Add rule"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto py-1">
+          {rules.map((rule, i) => (
+            <button
+              key={i}
+              onClick={() => setSelectedIndex(i)}
+              className={`flex w-full items-center truncate px-3 py-1.5 text-left text-xs transition-colors ${
+                selectedIndex === i
+                  ? 'bg-hi-dim text-text'
+                  : 'text-text-muted hover:bg-surface-hover hover:text-text'
+              }`}
+            >
+              {ruleLabel(rule, i)}
+            </button>
+          ))}
+          {rules.length === 0 && (
+            <div className="px-3 py-4 text-xs text-text-dim">No rules yet</div>
+          )}
+        </div>
+      </div>
+
+      {/* Rule editor */}
+      <div className="min-w-0 flex-1">
+        {error && (
+          <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">{error}</div>
+        )}
+        {selectedRule && selectedIndex !== null ? (
+          <RuleEditor
+            key={selectedIndex}
+            rule={selectedRule}
+            onUpdate={(patch) => handleUpdateRule(selectedIndex, patch)}
+            onDelete={() => handleDelete(selectedIndex)}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-text-dim">
+            {rules.length === 0 ? 'Add a rule to get started' : 'Select a rule'}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Rule Editor ──────────────────────────────────────────────────
+
+function RuleEditor({
+  rule,
+  onUpdate,
+  onDelete,
+}: {
+  rule: Rule
+  onUpdate: (patch: Partial<Rule>) => void
+  onDelete: () => void
+}) {
+  const [url, setUrl] = useState(rule.url ?? '')
+  const [title, setTitle] = useState(rule.title ?? '')
+  const [description, setDescription] = useState(rule.description ?? '')
+  const [query, setQuery] = useState(rule.query ?? '')
+  const [comment, setComment] = useState(rule.comment ?? '')
+  const [actionTitle, setActionTitle] = useState(rule.action.UpdateBookmark.title ?? '')
+  const [actionDesc, setActionDesc] = useState(rule.action.UpdateBookmark.description ?? '')
+
+  function saveField(patch: Partial<Rule>) {
+    onUpdate(patch)
+  }
+
+  function saveActionField(field: 'title' | 'description', value: string) {
+    onUpdate({
+      action: {
+        UpdateBookmark: {
+          ...rule.action.UpdateBookmark,
+          [field]: value || undefined,
+        },
+      },
+    })
+  }
+
+  const conditionTags = rule.tags ?? []
+  const actionTags = rule.action.UpdateBookmark.tags ?? []
+
+  function addConditionTag(tag: string) {
+    const trimmed = tag.trim()
+    if (!trimmed || conditionTags.includes(trimmed)) return
+    onUpdate({ tags: [...conditionTags, trimmed] })
+  }
+
+  function removeConditionTag(tag: string) {
+    const updated = conditionTags.filter((t) => t !== tag)
+    onUpdate({ tags: updated.length > 0 ? updated : undefined })
+  }
+
+  function addActionTag(tag: string) {
+    const trimmed = tag.trim()
+    if (!trimmed || actionTags.includes(trimmed)) return
+    onUpdate({
+      action: {
+        UpdateBookmark: {
+          ...rule.action.UpdateBookmark,
+          tags: [...actionTags, trimmed],
+        },
+      },
+    })
+  }
+
+  function removeActionTag(tag: string) {
+    const updated = actionTags.filter((t) => t !== tag)
+    onUpdate({
+      action: {
+        UpdateBookmark: {
+          ...rule.action.UpdateBookmark,
+          tags: updated.length > 0 ? updated : undefined,
+        },
+      },
+    })
+  }
+
+  const inputClass = 'h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim'
+  const labelClass = 'mb-1 block text-[11px] font-medium uppercase tracking-wider text-text-dim'
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Comment */}
+      <div>
+        <label className={labelClass}>Comment</label>
+        <input
+          type="text"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          onBlur={() => saveField({ comment: comment || undefined })}
+          className={inputClass}
+          placeholder="Optional note about this rule"
+        />
+      </div>
+
+      {/* Conditions */}
+      <div>
+        <h4 className="mb-2 text-xs font-semibold text-text">Conditions</h4>
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className={labelClass}>URL pattern</label>
+            <input
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onBlur={() => saveField({ url: url || undefined })}
+              className={inputClass}
+              placeholder="e.g. github.com/*"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Title pattern</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => saveField({ title: title || undefined })}
+              className={inputClass}
+              placeholder="e.g. *tutorial*"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Description pattern</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={() => saveField({ description: description || undefined })}
+              className={inputClass}
+              placeholder="e.g. *rust*"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Search query</label>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onBlur={() => saveField({ query: query || undefined })}
+              className={`${inputClass} font-mono`}
+              placeholder="Supports: #tag, t:title, d:desc, u:url, AND, OR, NOT, quotes, parens"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Required tags</label>
+            <SimpleTagInput tags={conditionTags} onAdd={addConditionTag} onRemove={removeConditionTag} placeholder="Enter to add tag" />
+          </div>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div>
+        <h4 className="mb-2 text-xs font-semibold text-text">Actions</h4>
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className={labelClass}>Set title</label>
+            <input
+              type="text"
+              value={actionTitle}
+              onChange={(e) => setActionTitle(e.target.value)}
+              onBlur={() => saveActionField('title', actionTitle)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Set description</label>
+            <input
+              type="text"
+              value={actionDesc}
+              onChange={(e) => setActionDesc(e.target.value)}
+              onBlur={() => saveActionField('description', actionDesc)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Append tags</label>
+            <SimpleTagInput tags={actionTags} onAdd={addActionTag} onRemove={removeActionTag} placeholder="Enter to add tag" />
+          </div>
+        </div>
+      </div>
+
+      {/* Delete */}
+      <div className="pt-2">
+        <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-8 w-8" />
+      </div>
+    </div>
+  )
+}
+
+// ─── Simple Tag Input ─────────────────────────────────────────────
+
+function SimpleTagInput({
+  tags,
+  onAdd,
+  onRemove,
+  placeholder,
+}: {
+  tags: string[]
+  onAdd: (tag: string) => void
+  onRemove: (tag: string) => void
+  placeholder: string
+}) {
+  const [input, setInput] = useState('')
+
+  return (
+    <div>
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            onAdd(input)
+            setInput('')
+          }
+        }}
+        className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim"
+        placeholder={placeholder}
+      />
+      {tags.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="flex items-center gap-1 rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-text-muted"
+            >
+              <button
+                onClick={() => onRemove(tag)}
+                className="text-text-dim transition-colors hover:text-danger"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
