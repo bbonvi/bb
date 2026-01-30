@@ -49,6 +49,10 @@ scrape:
   # Enable for sites that heavily rely on JS rendering (e.g. SPAs).
   always_headless: false
 
+  # Test Chrome launch on daemon startup (default: true)
+  # Set to false to skip the startup Chrome validation check.
+  test_chrome_on_startup: true
+
   # Fetcher priority order (first = highest priority)
   # Remove an entry to disable that fetcher. Headless is not listed here (see always_headless).
   # Default: [oEmbed, Wayback, Plain, Microlink, Peekalink, Iframely, DDG]

@@ -97,9 +97,14 @@ fn run() -> anyhow::Result<()> {
             let mut app_mgr = app::AppFactory::create_local_app(&paths)?;
 
             #[cfg(feature = "headless")]
-            log::debug!("Testing headless chrome launch...");
-            scrape::headless::test_launch();
-            log::debug!("launched chrome successfully");
+            {
+                let cfg = config::Config::load_with(&paths.base_path).unwrap_or_default();
+                if cfg.scrape.test_chrome_on_startup {
+                    log::debug!("Testing headless chrome launch...");
+                    scrape::headless::test_launch();
+                    log::debug!("launched chrome successfully");
+                }
+            }
 
             log::debug!("Starting queue processor...");
             app_mgr.run_queue();

@@ -42,6 +42,10 @@ pub struct ScrapeConfig {
     #[serde(default)]
     pub always_headless: bool,
 
+    /// Test Chrome launch on daemon startup (default: true)
+    #[serde(default = "default_test_chrome_on_startup")]
+    pub test_chrome_on_startup: bool,
+
     /// Fetcher priority order. Position = priority (first = highest).
     /// Absent or empty = default order.
     #[serde(default = "default_fetcher_order")]
@@ -56,9 +60,14 @@ impl Default for ScrapeConfig {
             blocked_hosts: Vec::new(),
             block_private_ips: true,
             always_headless: false,
+            test_chrome_on_startup: true,
             fetcher_order: default_fetcher_order(),
         }
     }
+}
+
+fn default_test_chrome_on_startup() -> bool {
+    true
 }
 
 pub fn default_fetcher_order() -> Vec<String> {
