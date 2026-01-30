@@ -53,12 +53,12 @@ scrape:
   # Remove an entry to disable that fetcher. Headless is not listed here (see always_headless).
   # Default: [oEmbed, Wayback, Plain, Microlink, Peekalink, Iframely, DDG]
   # fetcher_order:
+  #   - Iframely
+  #   - Plain
   #   - oEmbed
   #   - Wayback
-  #   - Plain
   #   - Microlink
   #   - Peekalink
-  #   - Iframely
   #   - DDG
 
 # Rules are stored separately in rules.yaml (managed automatically)
