@@ -23,7 +23,7 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
           setDetailModalId(bookmark.id)
         }
       }}
-      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface transition-[border-color] duration-150 cursor-default no-underline ${
+      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface transition-[border-color] duration-150 no-underline ${
         bookmark.fetching
           ? 'fetching-glow'
           : 'border-white/[0.06] hover:border-white/[0.15]'
