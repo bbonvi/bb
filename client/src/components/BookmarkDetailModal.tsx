@@ -134,6 +134,7 @@ export default function BookmarkDetailModal() {
       setEditing(false)
     }
     setError(null)
+    setRefreshing(false)
     setPendingCover(null)
     setPendingIcon(null)
     setCoverPreview(null)
