@@ -22,7 +22,14 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
       }`}
     >
       <CardActions bookmarkId={bookmark.id} />
-      <Thumbnail bookmark={bookmark} className="h-36 w-full rounded-t-lg" />
+      <div className="relative">
+        <Thumbnail bookmark={bookmark} className="h-36 w-full rounded-t-lg" />
+        {bookmark.fetching && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-t-lg bg-black/50">
+            <FetchingIndicator />
+          </div>
+        )}
+      </div>
       <div className="flex flex-col gap-1.5 p-3">
         <a
           href={bookmark.url}
@@ -36,7 +43,6 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
         </a>
 
         <UrlDisplay url={bookmark.url} />
-        {bookmark.fetching && <FetchingIndicator />}
         <Tags tags={bookmark.tags} hiddenTags={hiddenTags} />
         <Description text={bookmark.description} />
       </div>
