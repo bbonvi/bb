@@ -47,8 +47,7 @@ export default function CreateBookmarkModal() {
   const initialDescription = useStore((s) => s.createModalInitialDescription)
   const initialTags = useStore((s) => s.createModalInitialTags)
   const openCreateModal = useStore((s) => s.openCreateModal)
-  const bookmarks = useStore((s) => s.bookmarks)
-  const setBookmarks = useStore((s) => s.setBookmarks)
+  const triggerRefetch = useStore((s) => s.triggerRefetch)
 
   const [form, setForm] = useState<CreateForm>(emptyForm)
   const [submitting, setSubmitting] = useState(false)
@@ -118,25 +117,8 @@ export default function CreateBookmarkModal() {
     setSubmitting(true)
     setError(null)
 
-    // Optimistic insert with temporary negative ID
-    const tempId = -(Date.now())
-    const placeholder = {
-      id: tempId,
-      url,
-      title: form.title.trim() || url,
-      description: form.description.trim(),
-      tags: form.tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean),
-      image_id: null,
-      icon_id: null,
-    }
-    setBookmarks([placeholder, ...bookmarks])
-    setOpen(false)
-
     try {
-      const created = await createBookmark({
+      await createBookmark({
         url,
         title: form.title.trim() || undefined,
         description: form.description.trim() || undefined,
@@ -145,23 +127,14 @@ export default function CreateBookmarkModal() {
         async_meta: form.async_meta || undefined,
         no_headless: form.no_headless || undefined,
       })
-      // Replace placeholder with real bookmark
-      setBookmarks(
-        useStore
-          .getState()
-          .bookmarks.map((b) => (b.id === tempId ? created : b)),
-      )
+      setOpen(false)
+      triggerRefetch()
     } catch (e) {
-      // Remove placeholder on failure, reopen modal with error
-      setBookmarks(
-        useStore.getState().bookmarks.filter((b) => b.id !== tempId),
-      )
       setError(e instanceof Error ? e.message : 'Failed to create bookmark')
-      setOpen(true)
     } finally {
       setSubmitting(false)
     }
-  }, [form, bookmarks, setBookmarks, setOpen])
+  }, [form, setOpen, triggerRefetch])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
