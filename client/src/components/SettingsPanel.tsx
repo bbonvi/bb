@@ -1078,7 +1078,7 @@ function TagListEditor({
     }
     setInput('')
     setShowSuggestions(false)
-    setHighlightIdx(-1)
+    setHighlightIdx(0)
   }, [onAdd, setInput])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -1094,27 +1094,23 @@ function TagListEditor({
         setHighlightIdx(i => (i <= 0 ? suggestions.length - 1 : i - 1))
         return
       }
-      if ((e.key === 'Tab' || e.key === 'Enter') && highlightIdx >= 0) {
+      if (e.key === 'Tab' || e.key === 'Enter') {
         e.preventDefault()
-        commitTag(suggestions[highlightIdx])
+        commitTag(suggestions[highlightIdx] ?? suggestions[0])
         return
       }
       if (e.key === 'Escape') {
         setShowSuggestions(false)
-        setHighlightIdx(-1)
+        setHighlightIdx(0)
         return
       }
     }
 
-    // Commit on Enter/Tab (no suggestion highlighted)
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      if (input.trim()) {
-        e.preventDefault()
-        commitTag(input)
-        return
-      }
-      // Tab with empty input: let it pass through for normal tab behavior
-      if (e.key === 'Tab') return
+    // No suggestions visible — Enter commits raw text, Tab passes through
+    if (e.key === 'Enter' && input.trim()) {
+      e.preventDefault()
+      commitTag(input)
+      return
     }
 
     // Backspace-to-delete: staged delete pattern
@@ -1138,7 +1134,7 @@ function TagListEditor({
     } else {
       setInput(cleaned)
       setShowSuggestions(true)
-      setHighlightIdx(-1)
+      setHighlightIdx(0)
       setStagedDelete(false)
     }
   }, [commitTag, setInput])
@@ -1178,7 +1174,7 @@ function TagListEditor({
           type="text"
           value={input}
           onChange={handleChange}
-          onFocus={() => setShowSuggestions(true)}
+          onFocus={() => { setShowSuggestions(true); setHighlightIdx(0) }}
           onBlur={() => {
             setTimeout(() => setShowSuggestions(false), 150)
             setStagedDelete(false)
