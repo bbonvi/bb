@@ -271,7 +271,15 @@ URL
      - Launch headless Chrome
      - Stealth fingerprinting (deviceMemory, maxTouchPoints, WebGL, AudioContext)
      - Screenshot + favicon extraction
+ → MetadataReport returned alongside Metadata
+     - Per-fetcher: name, priority, status (Success/Skip/Error), duration_ms, fields returned
+     - Field decisions: which fetcher won each field and why (first available, replaced generic, etc.)
+     - Headless fallback info: triggered, reason, status, fields overridden
+     - Total pipeline duration_ms
 ```
+
+**Metadata Report** (`types.rs`):
+The `MetadataReport` struct captures full diagnostics from the fetch pipeline. Returned by the sync `refresh_metadata` API endpoint (`POST /api/bookmarks/refresh_metadata`) as `{ report: MetadataReport | null }`. For async fetches, the report is logged at info level and discarded. The frontend shows the report in a collapsible "Fetch Report" panel in the bookmark detail modal.
 
 **HTML Parsing** (`get_data_from_page()`):
 - Extracts `og:title`, `twitter:title`, `twitter:description` meta tags

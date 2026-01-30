@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 
-use crate::{bookmarks, config::{Config, RulesConfig}, metadata::MetaOptions};
+use crate::{bookmarks, config::{Config, RulesConfig}, metadata::{MetaOptions, MetadataReport}};
 
 use super::errors::AppError;
 
@@ -12,7 +12,7 @@ pub trait AppBackend: Send + Sync {
         opts: AddOpts,
     ) -> anyhow::Result<bookmarks::Bookmark, AppError>;
 
-    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError>;
+    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<Option<MetadataReport>, AppError>;
 
     fn update(
         &self,

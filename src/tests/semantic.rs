@@ -235,7 +235,7 @@ mod backend_integration {
             unimplemented!()
         }
 
-        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<(), AppError> {
+        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<Option<crate::metadata::MetadataReport>, AppError> {
             unimplemented!()
         }
 
@@ -888,7 +888,7 @@ mod index_maintenance {
             Ok(Vec::new())
         }
 
-        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<(), AppError> {
+        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<Option<crate::metadata::MetadataReport>, AppError> {
             unimplemented!()
         }
 
@@ -1270,7 +1270,7 @@ mod index_maintenance {
             }
         }
 
-        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<(), AppError> {
+        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<Option<crate::metadata::MetadataReport>, AppError> {
             unimplemented!()
         }
 

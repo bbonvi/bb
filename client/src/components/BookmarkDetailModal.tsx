@@ -9,7 +9,7 @@ import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { updateBookmark, deleteBookmark, refreshMetadata, toBase64, fileUrl } from '@/lib/api'
-import type { Bookmark } from '@/lib/api'
+import type { Bookmark, MetadataReport } from '@/lib/api'
 import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone, FetchingIndicator } from './bookmark-parts'
 import { TagTokenInput } from '@/components/TagTokenInput'
 import {
@@ -51,6 +51,7 @@ export default function BookmarkDetailModal() {
   // Local preview URLs for display
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [iconPreview, setIconPreview] = useState<string | null>(null)
+  const [fetchReport, setFetchReport] = useState<MetadataReport | null>(null)
 
   // Find the bookmark by ID from the full bookmarks array (not display — may be reversed/shuffled)
   const bookmark = useMemo(
@@ -131,6 +132,7 @@ export default function BookmarkDetailModal() {
       setEditing(false)
     }
     setError(null)
+    setFetchReport(null)
     setPendingCover(null)
     setPendingIcon(null)
     setCoverPreview(null)
@@ -201,7 +203,8 @@ export default function BookmarkDetailModal() {
     setRefreshing(true)
     setError(null)
     try {
-      await refreshMetadata(bookmark.id, { async_meta: true })
+      const { report } = await refreshMetadata(bookmark.id, { async_meta: false })
+      setFetchReport(report)
       triggerRefetch()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to refresh metadata')
@@ -334,6 +337,107 @@ export default function BookmarkDetailModal() {
                   />
                 )}
               </div>
+
+              {fetchReport && (
+                <details className="mx-4 mt-4 rounded-md border border-white/[0.06] p-3 text-xs sm:mx-6">
+                  <summary className="cursor-pointer font-medium text-text-muted">
+                    Fetch Report ({fetchReport.duration_ms}ms, {fetchReport.fetchers.length} fetchers)
+                  </summary>
+                  <div className="mt-2 space-y-3">
+                    {/* Per-fetcher results */}
+                    <div>
+                      <h4 className="mb-1 font-medium">Fetchers</h4>
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-white/[0.06]">
+                            <th className="py-1 pr-2">Name</th>
+                            <th className="py-1 pr-2">Status</th>
+                            <th className="py-1 pr-2">Duration</th>
+                            <th className="py-1">Fields</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fetchReport.fetchers.map((f, i) => (
+                            <tr key={i} className="border-b border-white/[0.03]">
+                              <td className="py-1 pr-2">{f.name}</td>
+                              <td className="py-1 pr-2">
+                                <span className={
+                                  f.status.status === 'Success' ? 'text-green-600' :
+                                  f.status.status === 'Skip' ? 'text-yellow-600' :
+                                  'text-red-600'
+                                }>
+                                  {f.status.status}
+                                  {f.status.status === 'Error' && `: ${f.status.detail}`}
+                                </span>
+                              </td>
+                              <td className="py-1 pr-2">{f.duration_ms}ms</td>
+                              <td className="py-1">
+                                {f.fields ? Object.entries(f.fields)
+                                  .filter(([, v]) => v !== null && v !== false)
+                                  .map(([k]) => k)
+                                  .join(', ') : '\u2014'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Field decisions */}
+                    {fetchReport.field_decisions.length > 0 && (
+                      <div>
+                        <h4 className="mb-1 font-medium">Field Decisions</h4>
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="border-b border-white/[0.06]">
+                              <th className="py-1 pr-2">Field</th>
+                              <th className="py-1 pr-2">Winner</th>
+                              <th className="py-1 pr-2">Reason</th>
+                              <th className="py-1">Preview</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fetchReport.field_decisions.map((d, i) => (
+                              <tr key={i} className="border-b border-white/[0.03]">
+                                <td className="py-1 pr-2">{d.field}</td>
+                                <td className="py-1 pr-2 font-medium">{d.winner}</td>
+                                <td className="py-1 pr-2 text-text-muted">{d.reason}</td>
+                                <td className="max-w-[200px] truncate py-1" title={d.value_preview ?? undefined}>
+                                  {d.value_preview ?? '\u2014'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Headless fallback */}
+                    {fetchReport.headless_fallback && (
+                      <div>
+                        <h4 className="mb-1 font-medium">Headless Fallback</h4>
+                        <p>
+                          {fetchReport.headless_fallback.triggered ? 'Triggered' : 'Not triggered'}
+                          {' \u2014 '}{fetchReport.headless_fallback.reason}
+                          {' \u2014 Status: '}
+                          <span className={
+                            fetchReport.headless_fallback.status.status === 'Success' ? 'text-green-600' :
+                            fetchReport.headless_fallback.status.status === 'Skip' ? 'text-yellow-600' :
+                            'text-red-600'
+                          }>
+                            {fetchReport.headless_fallback.status.status}
+                          </span>
+                        </p>
+                        {fetchReport.headless_fallback.fields_overridden.length > 0 && (
+                          <p className="text-text-muted">
+                            Overrode: {fetchReport.headless_fallback.fields_overridden.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
             </div>
 
             {/* Footer actions */}

@@ -496,7 +496,7 @@ impl AppService {
     // MARK: - Metadata Operations
 
     /// Refresh metadata for a specific bookmark
-    pub fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> Result<()> {
+    pub fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> Result<Option<crate::metadata::MetadataReport>> {
         // Verify the bookmark exists
         let bookmarks = self
             .backend
@@ -511,11 +511,11 @@ impl AppService {
         }
 
         // Refresh the metadata
-        self.backend
+        let report = self.backend
             .refresh_metadata(id, opts)
             .context("Failed to refresh metadata")?;
 
-        Ok(())
+        Ok(report)
     }
 
     // MARK: - Statistics and Information
@@ -727,7 +727,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
+        fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> anyhow::Result<Option<crate::metadata::MetadataReport>, AppError> {
             unimplemented!()
         }
 

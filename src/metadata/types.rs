@@ -92,3 +92,56 @@ impl Metadata {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MetadataReport {
+    pub fetchers: Vec<FetcherReport>,
+    pub field_decisions: Vec<FieldDecision>,
+    pub headless_fallback: Option<HeadlessFallbackInfo>,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetcherReport {
+    pub name: String,
+    pub priority: u8,
+    pub status: FetcherStatus,
+    pub duration_ms: u64,
+    pub fields: Option<FetcherFields>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", content = "detail")]
+pub enum FetcherStatus {
+    Success,
+    Skip,
+    Error(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FetcherFields {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub keywords: Option<String>,
+    pub canonical_url: Option<String>,
+    pub image_url: Option<String>,
+    pub icon_url: Option<String>,
+    pub has_image_bytes: bool,
+    pub has_icon_bytes: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldDecision {
+    pub field: String,
+    pub winner: String,
+    pub reason: String,
+    pub value_preview: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeadlessFallbackInfo {
+    pub triggered: bool,
+    pub reason: String,
+    pub status: FetcherStatus,
+    pub fields_overridden: Vec<String>,
+}

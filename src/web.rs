@@ -724,10 +724,15 @@ pub struct RefreshMetadataRequest {
     pub no_headless: bool,
 }
 
+#[derive(Serialize)]
+struct RefreshMetadataResponse {
+    report: Option<crate::metadata::MetadataReport>,
+}
+
 async fn refresh_metadata(
     State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<RefreshMetadataRequest>,
-) -> Result<axum::Json<()>, AppError> {
+) -> Result<axum::Json<RefreshMetadataResponse>, AppError> {
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 
@@ -744,11 +749,11 @@ async fn refresh_metadata(
         },
     };
 
-    app_service
+    let report = app_service
         .refresh_metadata(payload.id, opts)
         .context("Failed to refresh metadata")?;
 
-    Ok(axum::Json(()))
+    Ok(axum::Json(RefreshMetadataResponse { report }))
 }
 
 /// Response for GET /api/semantic/status
@@ -1190,7 +1195,7 @@ mod tests {
                 unimplemented!()
             }
 
-            fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<(), BackendError> {
+            fn refresh_metadata(&self, _: u64, _: RefreshMetadataOpts) -> Result<Option<crate::metadata::MetadataReport>, BackendError> {
                 unimplemented!()
             }
 

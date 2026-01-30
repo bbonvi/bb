@@ -368,15 +368,67 @@ export function fetchTags(): Promise<string[]> {
   return fetchApi('/api/bookmarks/tags', { method: 'POST', body: {} })
 }
 
+// -- Metadata Report types --
+
+export interface MetadataReport {
+  fetchers: FetcherReport[]
+  field_decisions: FieldDecision[]
+  headless_fallback: HeadlessFallbackInfo | null
+  duration_ms: number
+}
+
+export interface FetcherReport {
+  name: string
+  priority: number
+  status: FetcherStatus
+  duration_ms: number
+  fields: FetcherFields | null
+}
+
+export type FetcherStatus =
+  | { status: 'Success' }
+  | { status: 'Skip' }
+  | { status: 'Error'; detail: string }
+
+export interface FetcherFields {
+  title: string | null
+  description: string | null
+  keywords: string | null
+  canonical_url: string | null
+  image_url: string | null
+  icon_url: string | null
+  has_image_bytes: boolean
+  has_icon_bytes: boolean
+}
+
+export interface FieldDecision {
+  field: string
+  winner: string
+  reason: string
+  value_preview: string | null
+}
+
+export interface HeadlessFallbackInfo {
+  triggered: boolean
+  reason: string
+  status: FetcherStatus
+  fields_overridden: string[]
+}
+
+export interface RefreshMetadataResponse {
+  report: MetadataReport | null
+}
+
 export async function refreshMetadata(
   id: number,
   opts?: { async_meta?: boolean; no_headless?: boolean },
-): Promise<void> {
-  await fetchApi<void>('/api/bookmarks/refresh_metadata', {
+): Promise<RefreshMetadataResponse> {
+  const res = await fetchApi<RefreshMetadataResponse>('/api/bookmarks/refresh_metadata', {
     method: 'POST',
     body: { id, ...opts },
   })
   clearEtagCache('bookmarks')
+  return res
 }
 
 export function fetchConfig(): Promise<Config> {

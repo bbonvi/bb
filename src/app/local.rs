@@ -3,7 +3,7 @@ use crate::{
     config::{Config, ImageConfig, RulesConfig},
     eid::Eid,
     images,
-    metadata::{fetch_meta, Metadata},
+    metadata::{fetch_meta, Metadata, MetadataReport},
     rules::{self, Rule},
     storage::{self, BackendLocal},
 };
@@ -107,7 +107,7 @@ impl AppBackend for AppLocal {
         Ok(self.rules_config.clone())
     }
 
-    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
+    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<Option<MetadataReport>, AppError> {
         let bmarks = self.bmark_mgr.search(bookmarks::SearchQuery {
             id: Some(id),
             ..Default::default()
@@ -115,7 +115,7 @@ impl AppBackend for AppLocal {
 
         let bmark = bmarks.first().ok_or(anyhow!("not found"))?;
 
-        if opts.async_meta {
+        let report = if opts.async_meta {
             self.schedule_fetch_and_update_metadata(
                 bmark,
                 FetchMetadataOpts {
@@ -124,37 +124,38 @@ impl AppBackend for AppLocal {
                     force_overwrite: true,
                 },
             );
+            None
         } else {
             // attempt to fetch and merge metadata
-            {
-                let meta = Self::fetch_metadata(
-                    &bmark.url,
-                    FetchMetadataOpts {
-                        no_https_upgrade: true,
-                        meta_opts: opts.meta_opts.clone(),
-                        ..Default::default()
-                    },
-                )?;
+            let (meta, report) = Self::fetch_metadata(
+                &bmark.url,
+                FetchMetadataOpts {
+                    no_https_upgrade: true,
+                    meta_opts: opts.meta_opts.clone(),
+                    ..Default::default()
+                },
+            )?;
 
-                let img_config = &self.config.read().unwrap().images;
-                Self::merge_metadata(
-                    bmark.clone(),
-                    meta,
-                    self.storage_mgr.clone(),
-                    self.bmark_mgr.clone(),
-                    img_config,
-                    true,
-                )?;
-            };
+            let img_config = &self.config.read().unwrap().images;
+            Self::merge_metadata(
+                bmark.clone(),
+                meta,
+                self.storage_mgr.clone(),
+                self.bmark_mgr.clone(),
+                img_config,
+                true,
+            )?;
 
             // apply rules
             let rules_guard = self.rules_config.read().unwrap();
             Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules_guard.rules())?;
+
+            Some(report)
         };
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
 
-        Ok(())
+        Ok(report)
     }
 
     fn create(
@@ -197,7 +198,7 @@ impl AppBackend for AppLocal {
             } else {
                 // attempt to fetch and merge metadata
                 let with_meta = {
-                    let meta = Self::fetch_metadata(
+                    let (meta, _report) = Self::fetch_metadata(
                         &url,
                         FetchMetadataOpts {
                             no_https_upgrade: opts.no_https_upgrade,
@@ -378,7 +379,7 @@ impl AppLocal {
         Ok(())
     }
 
-    pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> anyhow::Result<Metadata> {
+    pub fn fetch_metadata(url: &str, opts: FetchMetadataOpts) -> anyhow::Result<(Metadata, MetadataReport)> {
         let mut url_parsed = reqwest::Url::parse(url)
             .map_err(|e| anyhow!("invalid URL '{}': {}", url, e))?;
         let mut tried_https = false;
@@ -389,7 +390,7 @@ impl AppLocal {
         }
 
         let err = match fetch_meta(url_parsed.as_ref(), opts.meta_opts.clone()) {
-            Ok(m) => return Ok(m),
+            Ok(result) => return Ok(result),
             Err(err) => Err(err),
         };
 

@@ -269,7 +269,7 @@ impl MetaCommand {
         eprintln!("Fetching metadata for: {}", self.url);
         let start = std::time::Instant::now();
 
-        let meta = crate::metadata::fetch_meta(&self.url, self.options)
+        let (meta, _report) = crate::metadata::fetch_meta(&self.url, self.options)
             .map_err(|e| crate::cli::errors::CliError::metadata(e.to_string()))?;
 
         let elapsed = start.elapsed();

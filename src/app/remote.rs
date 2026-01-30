@@ -118,7 +118,7 @@ impl AppBackend for AppRemote {
         let rules: Vec<Rule> = handle_response(resp)?;
         Ok(Arc::new(RwLock::new(RulesConfig::from_rules(rules))))
     }
-    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
+    fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<Option<crate::metadata::MetadataReport>, AppError> {
         let resp = self
             .post("/api/bookmarks/refresh_metadata")
             .json(&json!({
@@ -128,7 +128,13 @@ impl AppBackend for AppRemote {
             }))
             .send()?;
 
-        Ok(handle_response(resp)?)
+        #[derive(Deserialize, Clone)]
+        struct RefreshResponse {
+            report: Option<crate::metadata::MetadataReport>,
+        }
+
+        let parsed: RefreshResponse = handle_response(resp)?;
+        Ok(parsed.report)
     }
 
     fn create(

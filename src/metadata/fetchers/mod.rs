@@ -8,8 +8,12 @@ pub mod wayback;
 
 use crate::config::ScrapeConfig;
 use crate::metadata::image_validation::validate_image;
-use crate::metadata::types::{Metadata, MetaOptions};
+use crate::metadata::types::{
+    FieldDecision, FetcherFields, FetcherReport, FetcherStatus, HeadlessFallbackInfo, Metadata,
+    MetaOptions, MetadataReport,
+};
 use std::thread;
+use std::time::Instant;
 
 /// Helper to fetch bytes from a URL via scrape::reqwest_with_retries
 pub fn fetch_bytes(url: &str, scrape_config: Option<&ScrapeConfig>) -> Option<Vec<u8>> {
@@ -82,11 +86,13 @@ impl FetcherRegistry {
 
     /// Fan out all fetchers in parallel, collect results, merge by priority.
     /// Falls back to headless if no validated image after merge.
-    pub fn fetch_metadata(&self, url: &str, opts: &MetaOptions) -> anyhow::Result<Option<Metadata>> {
+    /// Returns both the merged metadata and a diagnostic report.
+    pub fn fetch_metadata(&self, url: &str, opts: &MetaOptions) -> anyhow::Result<(Option<Metadata>, MetadataReport)> {
+        let pipeline_start = Instant::now();
         let scrape_config = opts.scrape_config.as_ref();
 
         // Fan out parallel fetchers using thread::scope (bounded by fetcher count)
-        let results: Vec<(u8, &str, Metadata)> = thread::scope(|s| {
+        let raw_results: Vec<(u8, &str, Result<Option<Metadata>, String>, u64)> = thread::scope(|s| {
             let handles: Vec<_> = self
                 .fetchers
                 .iter()
@@ -95,19 +101,22 @@ impl FetcherRegistry {
                     let sc = scrape_config;
                     s.spawn(move || {
                         let name = f.name();
-                        match f.fetch(url, sc) {
+                        let start = Instant::now();
+                        let result = f.fetch(url, sc);
+                        let dur_ms = start.elapsed().as_millis() as u64;
+                        match result {
                             Ok(Some(m)) => {
                                 let fields = describe_fields(&m);
                                 log::info!("fetcher={name} outcome=success fields=[{fields}]");
-                                Some((idx as u8, name, m))
+                                (idx as u8, name, Ok(Some(m)), dur_ms)
                             }
                             Ok(None) => {
                                 log::info!("fetcher={name} outcome=skip");
-                                None
+                                (idx as u8, name, Ok(None), dur_ms)
                             }
                             Err(e) => {
                                 log::warn!("fetcher={name} outcome=error err={e}");
-                                None
+                                (idx as u8, name, Err(e.to_string()), dur_ms)
                             }
                         }
                     })
@@ -116,16 +125,51 @@ impl FetcherRegistry {
 
             handles
                 .into_iter()
-                .filter_map(|h| h.join().ok().flatten())
+                .filter_map(|h| h.join().ok())
                 .collect()
         });
 
-        let merged = merge_results(results, scrape_config);
+        // Build fetcher reports and extract successes
+        let mut fetcher_reports = Vec::new();
+        let mut successes: Vec<(u8, &str, Metadata)> = Vec::new();
 
-        // Short-circuit only if we have ALL key fields: validated image,
-        // non-generic title, and a description. Missing or generic text
-        // fields warrant a headless fallback attempt.
-        // Skip fallback if headless already ran in parallel (always_headless).
+        for (priority, name, result, dur_ms) in &raw_results {
+            match result {
+                Ok(Some(m)) => {
+                    fetcher_reports.push(FetcherReport {
+                        name: name.to_string(),
+                        priority: *priority,
+                        status: FetcherStatus::Success,
+                        duration_ms: *dur_ms,
+                        fields: Some(metadata_to_fetcher_fields(m)),
+                    });
+                    successes.push((*priority, *name, m.clone()));
+                }
+                Ok(None) => {
+                    fetcher_reports.push(FetcherReport {
+                        name: name.to_string(),
+                        priority: *priority,
+                        status: FetcherStatus::Skip,
+                        duration_ms: *dur_ms,
+                        fields: None,
+                    });
+                }
+                Err(e) => {
+                    fetcher_reports.push(FetcherReport {
+                        name: name.to_string(),
+                        priority: *priority,
+                        status: FetcherStatus::Error(e.clone()),
+                        duration_ms: *dur_ms,
+                        fields: None,
+                    });
+                }
+            }
+        }
+
+        let mut field_decisions = Vec::new();
+        let merged = merge_results(successes, scrape_config, &mut field_decisions);
+
+        // Headless fallback
         let already_ran_headless = opts.scrape_config.as_ref()
             .map(|c| c.always_headless)
             .unwrap_or(false);
@@ -134,18 +178,91 @@ impl FetcherRegistry {
                 || merged.description.is_none()
                 || is_generic_title(merged.title.as_deref()));
 
+        let mut headless_fallback = None;
+
         if needs_headless && !opts.no_headless {
+            let reason = if !merged.has_valid_image() {
+                "no validated image"
+            } else if merged.description.is_none() {
+                "no description"
+            } else {
+                "generic title"
+            }.to_string();
+
             let headless_fetcher = plain::HeadlessFetcher::new(opts.clone());
-            if let Ok(Some(m)) = headless_fetcher.fetch_with_headless(url, scrape_config) {
-                return Ok(Some(merge_two(merged, m, scrape_config)));
+            let headless_start = Instant::now();
+            match headless_fetcher.fetch_with_headless(url, scrape_config) {
+                Ok(Some(m)) => {
+                    let mut overridden = Vec::new();
+                    let final_merged = merge_two(merged, m, scrape_config, &mut field_decisions, &mut overridden);
+                    headless_fallback = Some(HeadlessFallbackInfo {
+                        triggered: true,
+                        reason,
+                        status: FetcherStatus::Success,
+                        fields_overridden: overridden,
+                    });
+                    fetcher_reports.push(FetcherReport {
+                        name: "Headless".to_string(),
+                        priority: 255,
+                        status: FetcherStatus::Success,
+                        duration_ms: headless_start.elapsed().as_millis() as u64,
+                        fields: None,
+                    });
+                    let report = MetadataReport {
+                        fetchers: fetcher_reports,
+                        field_decisions,
+                        headless_fallback,
+                        duration_ms: pipeline_start.elapsed().as_millis() as u64,
+                    };
+                    return Ok((Some(final_merged), report));
+                }
+                Ok(None) => {
+                    headless_fallback = Some(HeadlessFallbackInfo {
+                        triggered: true,
+                        reason,
+                        status: FetcherStatus::Skip,
+                        fields_overridden: vec![],
+                    });
+                    fetcher_reports.push(FetcherReport {
+                        name: "Headless".to_string(),
+                        priority: 255,
+                        status: FetcherStatus::Skip,
+                        duration_ms: headless_start.elapsed().as_millis() as u64,
+                        fields: None,
+                    });
+                }
+                Err(e) => {
+                    headless_fallback = Some(HeadlessFallbackInfo {
+                        triggered: true,
+                        reason,
+                        status: FetcherStatus::Error(e.to_string()),
+                        fields_overridden: vec![],
+                    });
+                    fetcher_reports.push(FetcherReport {
+                        name: "Headless".to_string(),
+                        priority: 255,
+                        status: FetcherStatus::Error(e.to_string()),
+                        duration_ms: headless_start.elapsed().as_millis() as u64,
+                        fields: None,
+                    });
+                }
             }
         }
 
-        if merged.has_any_data() {
-            Ok(Some(merged))
+        let result = if merged.has_any_data() {
+            Some(merged)
         } else {
-            Ok(None)
-        }
+            None
+        };
+
+        let report = MetadataReport {
+            fetchers: fetcher_reports,
+            field_decisions,
+            headless_fallback,
+            duration_ms: pipeline_start.elapsed().as_millis() as u64,
+        };
+
+        Ok((result, report))
     }
 }
 
@@ -153,7 +270,7 @@ impl FetcherRegistry {
 /// For each field, take the first non-None value from the sorted results.
 /// Validate images during merge and set image_valid flag.
 /// Tracks which fetcher provided each field in `sources`.
-fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&ScrapeConfig>) -> Metadata {
+fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&ScrapeConfig>, decisions: &mut Vec<FieldDecision>) -> Metadata {
     results.sort_by_key(|(priority, _, _)| *priority);
 
     let mut merged = Metadata::default();
@@ -164,29 +281,69 @@ fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&
             let current_generic = is_generic_title(merged.title.as_deref());
             // Accept if: no title yet, OR current is generic and incoming is real
             if merged.title.is_none() || (current_generic && !incoming_generic) {
+                let reason = if merged.title.is_none() {
+                    "first available".to_string()
+                } else {
+                    "replaced generic title".to_string()
+                };
                 merged.title.clone_from(&m.title);
                 merged.sources.insert("title".into(), name.to_string());
+                decisions.push(FieldDecision {
+                    field: "title".into(),
+                    winner: name.to_string(),
+                    reason,
+                    value_preview: m.title.as_ref().map(|v| v.chars().take(120).collect()),
+                });
             }
         }
         if m.description.is_some() {
             let current_empty = is_empty_description(merged.description.as_deref());
             let incoming_empty = is_empty_description(m.description.as_deref());
             if merged.description.is_none() || (current_empty && !incoming_empty) {
+                let reason = if merged.description.is_none() {
+                    "first available".to_string()
+                } else {
+                    "replaced empty description".to_string()
+                };
                 merged.description.clone_from(&m.description);
                 merged.sources.insert("description".into(), name.to_string());
+                decisions.push(FieldDecision {
+                    field: "description".into(),
+                    winner: name.to_string(),
+                    reason,
+                    value_preview: m.description.as_ref().map(|v| v.chars().take(120).collect()),
+                });
             }
         }
         if merged.keywords.is_none() && m.keywords.is_some() {
             merged.keywords.clone_from(&m.keywords);
             merged.sources.insert("keywords".into(), name.to_string());
+            decisions.push(FieldDecision {
+                field: "keywords".into(),
+                winner: name.to_string(),
+                reason: "first available".into(),
+                value_preview: m.keywords.as_ref().map(|v| v.chars().take(120).collect()),
+            });
         }
         if merged.canonical_url.is_none() && m.canonical_url.is_some() {
             merged.canonical_url.clone_from(&m.canonical_url);
             merged.sources.insert("canonical_url".into(), name.to_string());
+            decisions.push(FieldDecision {
+                field: "canonical_url".into(),
+                winner: name.to_string(),
+                reason: "first available".into(),
+                value_preview: m.canonical_url.clone(),
+            });
         }
         if merged.icon_url.is_none() && m.icon_url.is_some() {
             merged.icon_url.clone_from(&m.icon_url);
             merged.sources.insert("icon".into(), name.to_string());
+            decisions.push(FieldDecision {
+                field: "icon".into(),
+                winner: name.to_string(),
+                reason: "first available".into(),
+                value_preview: m.icon_url.clone(),
+            });
         }
         if merged.icon.is_none() {
             merged.icon.clone_from(&m.icon);
@@ -204,6 +361,12 @@ fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&
                     merged.image_valid = true;
                     merged.image_source = Some(name.to_string());
                     merged.sources.insert("image".into(), name.to_string());
+                    decisions.push(FieldDecision {
+                        field: "image".into(),
+                        winner: name.to_string(),
+                        reason: "first available".into(),
+                        value_preview: m.image_url.clone(),
+                    });
                 } else {
                     log::debug!("Image from fetcher={name} failed validation, trying next source");
                 }
@@ -227,6 +390,12 @@ fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&
                             if m.image_url.as_deref() == Some(img_url.as_str()) {
                                 merged.image_source = Some(name.to_string());
                                 merged.sources.insert("image".into(), name.to_string());
+                                decisions.push(FieldDecision {
+                                    field: "image".into(),
+                                    winner: name.to_string(),
+                                    reason: "first available".into(),
+                                    value_preview: Some(img_url.clone()),
+                                });
                                 break;
                             }
                         }
@@ -242,7 +411,7 @@ fn merge_results(mut results: Vec<(u8, &str, Metadata)>, scrape_config: Option<&
 /// Merge overlay (from headless fallback) into base.
 /// Fills missing fields. Additionally **overrides** generic/missing title and
 /// missing description — headless often produces better text for JS-rendered pages.
-fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&ScrapeConfig>) -> Metadata {
+fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&ScrapeConfig>, decisions: &mut Vec<FieldDecision>, overridden: &mut Vec<String>) -> Metadata {
     let source = "Headless";
 
     // Title: override if base is missing or generic, and overlay has something better
@@ -250,24 +419,57 @@ fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&Scrap
         && !is_generic_title(overlay.title.as_deref())
         && (base.title.is_none() || is_generic_title(base.title.as_deref()))
     {
-        base.title = overlay.title;
+        let reason = if base.title.is_none() {
+            "first available".to_string()
+        } else {
+            "replaced generic title".to_string()
+        };
+        base.title = overlay.title.clone();
         base.sources.insert("title".into(), source.into());
+        overridden.push("title".into());
+        decisions.push(FieldDecision {
+            field: "title".into(),
+            winner: source.into(),
+            reason,
+            value_preview: overlay.title.as_ref().map(|v| v.chars().take(120).collect()),
+        });
     }
     // Description: override if base is missing and overlay has one
     if base.description.is_none() && overlay.description.is_some() {
-        base.description = overlay.description;
+        base.description = overlay.description.clone();
         base.sources.insert("description".into(), source.into());
+        overridden.push("description".into());
+        decisions.push(FieldDecision {
+            field: "description".into(),
+            winner: source.into(),
+            reason: "first available".into(),
+            value_preview: overlay.description.as_ref().map(|v| v.chars().take(120).collect()),
+        });
     }
     if base.keywords.is_none() {
         base.keywords = overlay.keywords;
     }
     if base.canonical_url.is_none() && overlay.canonical_url.is_some() {
-        base.canonical_url = overlay.canonical_url;
+        base.canonical_url = overlay.canonical_url.clone();
         base.sources.insert("canonical_url".into(), source.into());
+        overridden.push("canonical_url".into());
+        decisions.push(FieldDecision {
+            field: "canonical_url".into(),
+            winner: source.into(),
+            reason: "first available".into(),
+            value_preview: overlay.canonical_url,
+        });
     }
     if base.icon_url.is_none() && overlay.icon_url.is_some() {
-        base.icon_url = overlay.icon_url;
+        base.icon_url = overlay.icon_url.clone();
         base.sources.insert("icon".into(), source.into());
+        overridden.push("icon".into());
+        decisions.push(FieldDecision {
+            field: "icon".into(),
+            winner: source.into(),
+            reason: "first available".into(),
+            value_preview: overlay.icon_url,
+        });
     }
     if base.icon.is_none() {
         base.icon = overlay.icon;
@@ -285,6 +487,13 @@ fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&Scrap
                 base.image_valid = true;
                 base.image_source = Some(source.into());
                 base.sources.insert("image".into(), source.into());
+                overridden.push("image".into());
+                decisions.push(FieldDecision {
+                    field: "image".into(),
+                    winner: source.into(),
+                    reason: "first available".into(),
+                    value_preview: None,
+                });
             }
         } else if base.image_url.is_none() {
             base.image_url = overlay.image_url;
@@ -299,6 +508,13 @@ fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&Scrap
                         base.image_valid = true;
                         base.image_source = Some(source.into());
                         base.sources.insert("image".into(), source.into());
+                        overridden.push("image".into());
+                        decisions.push(FieldDecision {
+                            field: "image".into(),
+                            winner: source.into(),
+                            reason: "first available".into(),
+                            value_preview: Some(img_url.clone()),
+                        });
                     }
                 }
             }
@@ -306,6 +522,19 @@ fn merge_two(mut base: Metadata, overlay: Metadata, scrape_config: Option<&Scrap
     }
 
     base
+}
+
+fn metadata_to_fetcher_fields(m: &Metadata) -> FetcherFields {
+    FetcherFields {
+        title: m.title.clone(),
+        description: m.description.clone(),
+        keywords: m.keywords.clone(),
+        canonical_url: m.canonical_url.clone(),
+        image_url: m.image_url.clone(),
+        icon_url: m.icon_url.clone(),
+        has_image_bytes: m.image.is_some(),
+        has_icon_bytes: m.icon.is_some(),
+    }
 }
 
 /// Describe which fields are present in metadata (for logging)
@@ -415,7 +644,7 @@ mod tests {
             (1, "Plain", meta_with_title("Reddit - Dive into anything")),
             (5, "Microlink", meta_with_title("Actual Post Title")),
         ];
-        let merged = merge_results(results, None);
+        let merged = merge_results(results, None, &mut vec![]);
         assert_eq!(merged.title.as_deref(), Some("Actual Post Title"));
     }
 
@@ -452,7 +681,7 @@ mod tests {
                 ..Default::default()
             }),
         ];
-        let merged = merge_results(results, None);
+        let merged = merge_results(results, None, &mut vec![]);
         assert_eq!(
             merged.description.as_deref(),
             Some("A much longer and more useful description of the page")
@@ -465,7 +694,7 @@ mod tests {
             (1, "Plain", meta_with_title("Good Specific Title")),
             (5, "DDG", meta_with_title("Different Title")),
         ];
-        let merged = merge_results(results, None);
+        let merged = merge_results(results, None, &mut vec![]);
         assert_eq!(merged.title.as_deref(), Some("Good Specific Title"));
     }
 }

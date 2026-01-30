@@ -331,7 +331,13 @@ impl Task {
                     opts.meta_opts.scrape_config = Some(scrape_cfg);
 
                     let force_overwrite = opts.force_overwrite;
-                    let meta = AppLocal::fetch_metadata(&bmark.url, opts)?;
+                    let (meta, report) = AppLocal::fetch_metadata(&bmark.url, opts)?;
+                    log::info!(
+                        "metadata report for bookmark {bmark_id}: {} fetchers, {} field decisions, {}ms",
+                        report.fetchers.len(),
+                        report.field_decisions.len(),
+                        report.duration_ms
+                    );
 
                     let img_config = &config.read().unwrap().images;
                     let bmark = AppLocal::merge_metadata(
