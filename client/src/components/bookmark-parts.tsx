@@ -351,6 +351,7 @@ function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
   const openDetailInEditMode = useStore((s) => s.openDetailInEditMode)
   const setBookmarks = useStore((s) => s.setBookmarks)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
+  const fetching = useStore((s) => s.bookmarks.find((b) => b.id === bookmarkId)?.fetching)
 
   const handleEdit = useCallback(
     (e: React.MouseEvent) => {
@@ -372,8 +373,9 @@ function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
       <button
         tabIndex={-1}
         onClick={handleEdit}
-        className="rounded bg-bg/80 p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-        title="Edit"
+        disabled={!!fetching}
+        className="rounded bg-bg/80 p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:hover:bg-bg/80"
+        title={fetching ? 'Cannot edit while fetching' : 'Edit'}
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>

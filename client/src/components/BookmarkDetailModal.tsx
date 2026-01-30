@@ -11,7 +11,7 @@ import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { updateBookmark, deleteBookmark, refreshMetadata, normalizeTags, toBase64, fileUrl } from '@/lib/api'
 import type { Bookmark } from '@/lib/api'
-import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone } from './bookmark-parts'
+import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone, FetchingIndicator } from './bookmark-parts'
 import { TagAutocompleteInput } from '@/components/TagAutocompleteInput'
 import {
   ChevronLeft,
@@ -20,7 +20,6 @@ import {
   RefreshCw,
   X,
   Check,
-  Clock,
   ExternalLink,
 } from 'lucide-react'
 
@@ -32,6 +31,7 @@ export default function BookmarkDetailModal() {
   const markDirty = useStore((s) => s.markDirty)
   const clearDirty = useStore((s) => s.clearDirty)
   const setBookmarks = useStore((s) => s.setBookmarks)
+  const triggerRefetch = useStore((s) => s.triggerRefetch)
   const allTags = useStore((s) => s.tags)
   const hiddenTags = useHiddenTags()
   const visibleTags = useMemo(() => {
@@ -45,7 +45,6 @@ export default function BookmarkDetailModal() {
   const [editForm, setEditForm] = useState({ title: '', description: '', url: '', tags: '' })
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [refreshSuccess, setRefreshSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Pending image files (uploaded on save, not immediately)
   const [pendingCover, setPendingCover] = useState<File | null>(null)
@@ -110,6 +109,14 @@ export default function BookmarkDetailModal() {
     },
     [currentIndex, displayBookmarks, setDetailModalId],
   )
+
+  // Exit edit mode when bookmark starts fetching
+  useEffect(() => {
+    if (bookmark?.fetching && editing) {
+      setEditing(false)
+      setError(null)
+    }
+  }, [bookmark?.fetching, editing])
 
   // Reset state when modal opens/closes or bookmark changes
   useEffect(() => {
@@ -193,18 +200,16 @@ export default function BookmarkDetailModal() {
   const handleRefreshMetadata = useCallback(async () => {
     if (!bookmark) return
     setRefreshing(true)
-    setRefreshSuccess(false)
     setError(null)
     try {
       await refreshMetadata(bookmark.id, { async_meta: true })
-      setRefreshSuccess(true)
-      setTimeout(() => setRefreshSuccess(false), 1500)
+      triggerRefetch()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to refresh metadata')
     } finally {
       setRefreshing(false)
     }
-  }, [bookmark])
+  }, [bookmark, triggerRefetch])
 
   // Keyboard: arrows for nav, Ctrl+Enter to save, Escape to discard edit first
   useEffect(() => {
@@ -295,7 +300,14 @@ export default function BookmarkDetailModal() {
                   )}
                 </div>
               ) : (
-                <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
+                <div className="relative">
+                  <Thumbnail bookmark={bookmark} className="h-48 w-full sm:h-64" />
+                  {bookmark.fetching && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-surface">
+                      <FetchingIndicator />
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Content */}
@@ -346,21 +358,18 @@ export default function BookmarkDetailModal() {
                     <button
                       tabIndex={-1}
                       onClick={handleRefreshMetadata}
-                      disabled={refreshing}
-                      className={`rounded p-1.5 transition-colors hover:bg-surface-hover disabled:opacity-50 ${refreshSuccess ? 'text-hi' : 'text-text-muted hover:text-text'}`}
+                      disabled={refreshing || bookmark.fetching}
+                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:hover:bg-transparent"
                       title="Refresh metadata"
                     >
-                      {refreshSuccess ? (
-                        <Clock className="h-4 w-4" />
-                      ) : (
-                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                      )}
+                      <RefreshCw className={`h-4 w-4 ${refreshing || bookmark.fetching ? 'animate-spin' : ''}`} />
                     </button>
                     <button
                       tabIndex={-1}
                       onClick={startEdit}
-                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-                      title="Edit"
+                      disabled={bookmark.fetching}
+                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:hover:bg-transparent"
+                      title={bookmark.fetching ? 'Cannot edit while fetching' : 'Edit'}
                     >
                       <Pencil className="h-4 w-4" />
                     </button>

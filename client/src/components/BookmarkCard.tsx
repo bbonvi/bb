@@ -25,7 +25,7 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
       <div className="relative">
         <Thumbnail bookmark={bookmark} className="h-36 w-full rounded-t-lg" />
         {bookmark.fetching && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-t-lg bg-black/50">
+          <div className="absolute inset-0 flex items-center justify-center rounded-t-lg bg-surface">
             <FetchingIndicator />
           </div>
         )}
