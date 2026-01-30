@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useLayoutEffect, useMemo, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 /**
@@ -6,6 +7,7 @@ import { X } from 'lucide-react'
  * Chips render inside the input. Space/Enter/Tab commit tags.
  * Backspace with empty input does staged-delete of last tag.
  * Autocomplete dropdown with first item pre-selected.
+ * Dropdown rendered via portal so it escapes overflow-hidden and modals.
  */
 export function TagTokenInput({
   tags,
@@ -20,11 +22,17 @@ export function TagTokenInput({
   placeholder?: string
   className?: string
 }) {
+  'use no memo' // Opt out of React Compiler — DOM measurements require refs in effects
   const [input, setInput] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [highlightIdx, setHighlightIdx] = useState(0)
   const [stagedDelete, setStagedDelete] = useState(false)
-  const [dropUp, setDropUp] = useState(false)
+  const [dropdownPos, setDropdownPos] = useState<{
+    top: number
+    left: number
+    width: number
+    dropUp: boolean
+  } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -40,25 +48,62 @@ export function TagTokenInput({
 
   const visible = showSuggestions && suggestions.length > 0
 
-  // Recompute drop direction
-  const recomputeDropDirection = useCallback(() => {
-    if (!containerRef.current) return
+  // Measure container rect and position the portal dropdown
+  const updateDropdownPos = useCallback(() => {
+    if (!containerRef.current) {
+      setDropdownPos(null)
+      return
+    }
     const rect = containerRef.current.getBoundingClientRect()
     const vh = window.visualViewport?.height ?? window.innerHeight
-    setDropUp(vh - rect.bottom < 160)
+    const spaceBelow = vh - rect.bottom
+    const dropUp = spaceBelow < 160 && rect.top > spaceBelow
+    setDropdownPos({
+      top: dropUp ? rect.top : rect.bottom + 2,
+      left: rect.left,
+      width: rect.width,
+      dropUp,
+    })
   }, [])
 
-  useEffect(() => {
-    if (!visible) return
-    recomputeDropDirection()
-    const vv = window.visualViewport
-    window.addEventListener('resize', recomputeDropDirection)
-    vv?.addEventListener('resize', recomputeDropDirection)
-    return () => {
-      window.removeEventListener('resize', recomputeDropDirection)
-      vv?.removeEventListener('resize', recomputeDropDirection)
+  // Reposition on visibility, input change, scroll, resize, and mobile keyboard
+  useLayoutEffect(() => {
+    if (!visible) {
+      setDropdownPos(null) // eslint-disable-line react-hooks/set-state-in-effect
+      return
     }
-  }, [visible, recomputeDropDirection])
+    updateDropdownPos() // eslint-disable-line react-hooks/set-state-in-effect
+
+    const vv = window.visualViewport
+    const scrollParents: EventTarget[] = []
+
+    // Walk up to find scrollable ancestors
+    let el: HTMLElement | null = containerRef.current
+    while (el) {
+      if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) {
+        scrollParents.push(el)
+      }
+      el = el.parentElement
+    }
+
+    window.addEventListener('scroll', updateDropdownPos, true)
+    window.addEventListener('resize', updateDropdownPos)
+    vv?.addEventListener('resize', updateDropdownPos)
+    vv?.addEventListener('scroll', updateDropdownPos)
+    for (const sp of scrollParents) {
+      sp.addEventListener('scroll', updateDropdownPos)
+    }
+
+    return () => {
+      window.removeEventListener('scroll', updateDropdownPos, true)
+      window.removeEventListener('resize', updateDropdownPos)
+      vv?.removeEventListener('resize', updateDropdownPos)
+      vv?.removeEventListener('scroll', updateDropdownPos)
+      for (const sp of scrollParents) {
+        sp.removeEventListener('scroll', updateDropdownPos)
+      }
+    }
+  }, [visible, updateDropdownPos, input])
 
   const addTag = useCallback(
     (tag: string) => {
@@ -150,8 +195,46 @@ export function TagTokenInput({
     [commitTag],
   )
 
+  const dropdown =
+    visible && dropdownPos
+      ? createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              top: dropdownPos.dropUp ? undefined : dropdownPos.top,
+              bottom: dropdownPos.dropUp
+                ? (window.visualViewport?.height ?? window.innerHeight) - dropdownPos.top + 2
+                : undefined,
+              left: dropdownPos.left,
+              width: dropdownPos.width,
+              minWidth: 160,
+              zIndex: 99999,
+            }}
+            className="max-h-32 overflow-y-auto rounded-md border border-white/[0.08] bg-surface shadow-lg"
+          >
+            {suggestions.map((s, i) => (
+              <button
+                key={s}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  commitTag(s)
+                }}
+                className={`block w-full px-2 py-1 text-left font-mono text-xs transition-colors ${
+                  i === highlightIdx
+                    ? 'bg-surface-hover text-text'
+                    : 'text-text-muted hover:bg-surface-hover hover:text-text'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )
+      : null
+
   return (
-    <div ref={containerRef} className={`relative ${className ?? ''}`}>
+    <div ref={containerRef} className={className ?? ''}>
       <div
         className="flex min-h-[28px] cursor-text flex-wrap items-center gap-1 rounded-md border border-white/[0.06] bg-surface px-1.5 py-1 transition-colors focus-within:border-hi-dim"
         onClick={() => inputRef.current?.focus()}
@@ -198,31 +281,7 @@ export function TagTokenInput({
           placeholder={tags.length === 0 ? placeholder : ''}
         />
       </div>
-
-      {visible && (
-        <div
-          className={`absolute left-0 z-50 max-h-32 w-full overflow-y-auto rounded-md border border-white/[0.08] bg-surface shadow-lg ${
-            dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
-          }`}
-        >
-          {suggestions.map((s, i) => (
-            <button
-              key={s}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                commitTag(s)
-              }}
-              className={`block w-full px-2 py-1 text-left font-mono text-xs transition-colors ${
-                i === highlightIdx
-                  ? 'bg-surface-hover text-text'
-                  : 'text-text-muted hover:bg-surface-hover hover:text-text'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+      {dropdown}
     </div>
   )
 }

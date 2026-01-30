@@ -5,7 +5,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useSettings } from '@/hooks/useSettings'
-import { TagAutocompleteInput } from '@/components/TagAutocompleteInput'
+import { TagTokenInput } from '@/components/TagTokenInput'
 import type { SearchQuery } from '@/lib/api'
 
 // ─── Icons (inline SVG) ────────────────────────────────────────────
@@ -396,7 +396,16 @@ export function Toolbar() {
             {semanticEnabled && (
               <FilterField label="query" value={localQueryAlt} onChange={setLocalQueryAlt} />
             )}
-            <TagFilterField label="tags" value={localTags} onChange={setLocalTags} availableTags={autocompleteTags} />
+            <div className="flex items-center gap-1.5 min-w-0 w-[calc(50%-0.75rem)] sm:w-auto">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim select-none shrink-0">tags</span>
+              <TagTokenInput
+                tags={localTags ? localTags.split(/[\s,]+/).filter(Boolean) : []}
+                onChange={(tags) => setLocalTags(tags.join(','))}
+                availableTags={autocompleteTags}
+                placeholder="Add tag"
+                className="w-full sm:w-40"
+              />
+            </div>
             <FilterField label="title" value={localTitle} onChange={setLocalTitle} />
             <FilterField label="url" value={localUrl} onChange={setLocalUrl} />
             <FilterField label="description" value={localDescription} onChange={setLocalDescription} />
@@ -416,38 +425,6 @@ export function Toolbar() {
     </header>
   )
 }
-
-// ─── Tag filter field (with autocomplete) ─────────────────────────
-const TagFilterField = memo(function TagFilterField({
-  label,
-  value,
-  onChange,
-  availableTags,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  availableTags: string[]
-}) {
-  return (
-    <label className="flex items-center gap-1.5 min-w-0 w-[calc(50%-0.75rem)] sm:w-auto">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-text-dim select-none shrink-0">
-        {label}
-      </span>
-      <TagAutocompleteInput
-        value={value}
-        onChange={onChange}
-        availableTags={availableTags}
-        className="w-full sm:w-28"
-        inputClassName={`h-7 w-full rounded-md border bg-transparent px-2 text-sm outline-none transition-colors ${
-          value
-            ? 'border-hi/20 text-text'
-            : 'border-white/[0.06] text-text placeholder:text-text-dim'
-        } focus:border-hi-dim focus:bg-surface`}
-      />
-    </label>
-  )
-})
 
 // ─── Filter field ──────────────────────────────────────────────────
 const FilterField = memo(function FilterField({
