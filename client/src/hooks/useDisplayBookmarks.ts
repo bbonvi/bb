@@ -28,7 +28,6 @@ export function useDisplayBookmarks() {
     totalCount,
     bookmarksFresh,
     initialLoadComplete,
-    activeWorkspaceId,
   } = useStore(
     useShallow((s) => ({
       bookmarks: s.bookmarks,
@@ -39,7 +38,6 @@ export function useDisplayBookmarks() {
       totalCount: s.totalCount,
       bookmarksFresh: s.bookmarksFresh,
       initialLoadComplete: s.initialLoadComplete,
-      activeWorkspaceId: s.activeWorkspaceId,
     })),
   )
 
@@ -54,15 +52,13 @@ export function useDisplayBookmarks() {
     searchQuery.description
   )
 
-  const hasWorkspace = activeWorkspaceId !== null
-
   const emptyReason: EmptyReason = useMemo(() => {
     if (!initialLoadComplete) return 'loading'
     if (totalCount === 0 && bookmarksFresh) return 'no-bookmarks'
-    if (!showAll && !hasQuery && !hasWorkspace) return 'no-query'
-    if (bookmarks.length === 0 && (hasQuery || hasWorkspace) && bookmarksFresh) return 'no-matches'
+    if (!showAll && !hasQuery) return 'no-query'
+    if (bookmarks.length === 0 && (hasQuery || showAll) && bookmarksFresh) return 'no-matches'
     return null
-  }, [initialLoadComplete, totalCount, showAll, hasQuery, hasWorkspace, bookmarks.length, bookmarksFresh])
+  }, [initialLoadComplete, totalCount, showAll, hasQuery, bookmarks.length, bookmarksFresh])
 
   // Filter out bookmarks with globally ignored tags (before workspace filter)
   const globalFiltered = useMemo(() => {

@@ -79,8 +79,7 @@ export function usePolling() {
       && workspaces.length === 0
     if (awaitingWorkspaces) return
 
-    const hasWorkspace = activeWorkspaceId !== null
-    const shouldFetchBookmarks = showAll || !isQueryEmpty(searchQuery) || hasWorkspace
+    const shouldFetchBookmarks = showAll || !isQueryEmpty(searchQuery)
 
     store.setIsLoading(true)
     try {
