@@ -19,7 +19,7 @@ export interface SearchQuery {
   title?: string
   description?: string
   tags?: string       // comma-separated for search endpoint
-  keyword?: string
+  query?: string
   semantic?: string
   threshold?: number
   exact?: boolean
@@ -56,7 +56,7 @@ export interface BulkSearchQuery {
   title?: string
   description?: string
   tags?: string[]     // JSON array
-  keyword?: string
+  query?: string
   semantic?: string
   threshold?: number
   exact?: boolean
@@ -394,7 +394,7 @@ export function fetchSemanticStatus(): Promise<SemanticStatus> {
 export interface WorkspaceFilters {
   tag_whitelist: string[]
   tag_blacklist: string[]
-  keyword: string | null
+  query: string | null
 }
 
 export interface ViewPrefs {

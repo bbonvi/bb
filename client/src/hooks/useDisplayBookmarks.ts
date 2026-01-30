@@ -47,7 +47,7 @@ export function useDisplayBookmarks() {
 
   const hasQuery = !!(
     searchQuery.semantic ||
-    searchQuery.keyword ||
+    searchQuery.query ||
     searchQuery.tags ||
     searchQuery.title ||
     searchQuery.url ||

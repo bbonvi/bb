@@ -25,7 +25,7 @@ function toBulkQuery(q: SearchQuery): BulkSearchQuery {
   if (q.title) bulk.title = q.title
   if (q.description) bulk.description = q.description
   if (q.tags) bulk.tags = q.tags.split(',').map((t) => t.trim()).filter(Boolean)
-  if (q.keyword) bulk.keyword = q.keyword
+  if (q.query) bulk.query = q.query
   if (q.semantic) bulk.semantic = q.semantic
   if (q.threshold != null) bulk.threshold = q.threshold
   if (q.exact) bulk.exact = q.exact

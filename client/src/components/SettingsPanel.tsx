@@ -14,7 +14,7 @@ import {
 } from '@/lib/api'
 import type { Workspace } from '@/lib/api'
 import { DeleteButton } from './bookmark-parts'
-import { buildWorkspaceKeyword } from '@/lib/workspaceFilters'
+import { buildWorkspaceQuery } from '@/lib/workspaceFilters'
 import {
   DndContext,
   closestCenter,
@@ -399,7 +399,7 @@ function WorkspaceEditor({
   const [name, setName] = useState(workspace.name)
   const [whitelistInput, setWhitelistInput] = useState('')
   const [blacklistInput, setBlacklistInput] = useState('')
-  const [keyword, setKeyword] = useState(workspace.filters.keyword ?? '')
+  const [query, setQuery] = useState(workspace.filters.query ?? '')
 
   // Related tags (separate per list)
   const [whitelistRelated, setWhitelistRelated] = useState<string[]>([])
@@ -410,7 +410,7 @@ function WorkspaceEditor({
   // Reset form when workspace changes
   useEffect(() => {
     setName(workspace.name)
-    setKeyword(workspace.filters.keyword ?? '')
+    setQuery(workspace.filters.query ?? '')
     setWhitelistInput('')
     setBlacklistInput('')
     setWhitelistRelated([])
@@ -421,12 +421,12 @@ function WorkspaceEditor({
   const [bookmarkCount, setBookmarkCount] = useState<number | null>(null)
   useEffect(() => {
     let cancelled = false
-    const wsKeyword = buildWorkspaceKeyword(workspace)
+    const wsKeyword = buildWorkspaceQuery(workspace)
     if (!wsKeyword) {
       setBookmarkCount(null)
       return
     }
-    searchBookmarksUncached({ keyword: wsKeyword }).then((results) => {
+    searchBookmarksUncached({ query: wsKeyword }).then((results) => {
       if (!cancelled) setBookmarkCount(results.length)
     }).catch(() => {
       if (!cancelled) setBookmarkCount(null)
@@ -464,7 +464,7 @@ function WorkspaceEditor({
     const filters = {
       tag_whitelist: whitelist,
       tag_blacklist: blacklist,
-      keyword: keyword || null,
+      query: query || null,
       ...overrides,
     }
     onSave({ ...workspace, name, filters })
@@ -544,9 +544,9 @@ function WorkspaceEditor({
     }
   }, [name, workspace.name]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleKeywordBlur = useCallback(() => {
+  const handleQueryBlur = useCallback(() => {
     saveWorkspace()
-  }, [keyword]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col gap-4">
@@ -636,11 +636,11 @@ function WorkspaceEditor({
         </label>
         <input
           type="text"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          onBlur={handleKeywordBlur}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onBlur={handleQueryBlur}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleKeywordBlur()
+            if (e.key === 'Enter') handleQueryBlur()
           }}
           className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs font-mono text-text outline-none transition-colors focus:border-hi-dim"
           placeholder="e.g. .tutorial :github.com"

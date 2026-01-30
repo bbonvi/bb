@@ -85,8 +85,8 @@ export function Toolbar() {
 
   const SEARCH_DEBOUNCE_MS = 500
 
-  // Primary search — semantic if enabled, keyword otherwise
-  const primaryField = semanticEnabled ? 'semantic' : 'keyword'
+  // Primary search — semantic if enabled, query otherwise
+  const primaryField = semanticEnabled ? 'semantic' : 'query'
   const primaryExternal = searchQuery[primaryField] ?? ''
   const [debouncedPrimary, setLocalPrimary, localPrimary, flushPrimary] =
     useDebouncedValue(primaryExternal, SEARCH_DEBOUNCE_MS)
@@ -100,15 +100,15 @@ export function Toolbar() {
     useDebouncedValue(searchQuery.url ?? '', SEARCH_DEBOUNCE_MS)
   const [debouncedDescription, setLocalDescription, localDescription, flushDescription] =
     useDebouncedValue(searchQuery.description ?? '', SEARCH_DEBOUNCE_MS)
-  // keyword field shown in filters when semantic is the primary
-  const [debouncedKeywordAlt, setLocalKeywordAlt, localKeywordAlt, flushKeywordAlt] =
-    useDebouncedValue(searchQuery.keyword ?? '', SEARCH_DEBOUNCE_MS)
+  // query field shown in filters when semantic is the primary
+  const [debouncedQueryAlt, setLocalQueryAlt, localQueryAlt, flushQueryAlt] =
+    useDebouncedValue(searchQuery.query ?? '', SEARCH_DEBOUNCE_MS)
 
   // Apply debounced values to store
   useEffect(() => {
     const query: SearchQuery = {}
     if (debouncedPrimary) query[primaryField] = debouncedPrimary
-    if (semanticEnabled && debouncedKeywordAlt) query.keyword = debouncedKeywordAlt
+    if (semanticEnabled && debouncedQueryAlt) query.query = debouncedQueryAlt
     if (debouncedTags) query.tags = debouncedTags
     if (debouncedTitle) query.title = debouncedTitle
     if (debouncedUrl) query.url = debouncedUrl
@@ -127,7 +127,7 @@ export function Toolbar() {
     if (changed) setSearchQuery(query)
   }, [
     debouncedPrimary,
-    debouncedKeywordAlt,
+    debouncedQueryAlt,
     debouncedTags,
     debouncedTitle,
     debouncedUrl,
@@ -137,7 +137,7 @@ export function Toolbar() {
     setSearchQuery,
   ])
 
-  const hasAdvancedFilters = !!debouncedTags || !!debouncedTitle || !!debouncedUrl || !!debouncedDescription || (semanticEnabled && !!debouncedKeywordAlt)
+  const hasAdvancedFilters = !!debouncedTags || !!debouncedTitle || !!debouncedUrl || !!debouncedDescription || (semanticEnabled && !!debouncedQueryAlt)
   const hasAnySearch = !!debouncedPrimary || hasAdvancedFilters
 
   const clearAll = useCallback(() => {
@@ -146,10 +146,10 @@ export function Toolbar() {
     flushTitle('')
     flushUrl('')
     flushDescription('')
-    if (semanticEnabled) flushKeywordAlt('')
+    if (semanticEnabled) flushQueryAlt('')
     setSearchQuery({})
     searchInputRef.current?.focus()
-  }, [flushPrimary, flushTags, flushTitle, flushUrl, flushDescription, flushKeywordAlt, semanticEnabled, setSearchQuery])
+  }, [flushPrimary, flushTags, flushTitle, flushUrl, flushDescription, flushQueryAlt, semanticEnabled, setSearchQuery])
 
   const { displayBookmarks } = useDisplayBookmarks()
   const matchedCount = displayBookmarks.length
@@ -222,7 +222,7 @@ export function Toolbar() {
             <FilterIcon className="shrink-0" />
             {hasAdvancedFilters && (
               <span className="font-mono text-[10px]">
-                {[debouncedTags, debouncedTitle, debouncedUrl, debouncedDescription, semanticEnabled ? debouncedKeywordAlt : ''].filter(Boolean).length}
+                {[debouncedTags, debouncedTitle, debouncedUrl, debouncedDescription, semanticEnabled ? debouncedQueryAlt : ''].filter(Boolean).length}
               </span>
             )}
           </button>
@@ -394,7 +394,7 @@ export function Toolbar() {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/[0.04] px-3 py-2 sm:px-4 sm:py-2.5">
             {/* Advanced fields */}
             {semanticEnabled && (
-              <FilterField label="keyword" value={localKeywordAlt} onChange={setLocalKeywordAlt} />
+              <FilterField label="query" value={localQueryAlt} onChange={setLocalQueryAlt} />
             )}
             <TagFilterField label="tags" value={localTags} onChange={setLocalTags} availableTags={autocompleteTags} />
             <FilterField label="title" value={localTitle} onChange={setLocalTitle} />

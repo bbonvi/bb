@@ -1,15 +1,15 @@
-// Workspace filter → keyword query construction
+// Workspace filter → search query construction
 //
-// Translates workspace filter fields (tag whitelist, blacklist, keyword)
-// into a keyword search query string for server-side evaluation.
+// Translates workspace filter fields (tag whitelist, blacklist, query)
+// into a search query string for server-side evaluation.
 
 import type { SearchQuery, Workspace } from './api'
 
 /**
- * Build a keyword query string from workspace filter fields.
+ * Build a search query string from workspace filter fields.
  * Returns null if no filters produce any query terms.
  */
-export function buildWorkspaceKeyword(workspace: Workspace): string | null {
+export function buildWorkspaceQuery(workspace: Workspace): string | null {
   const parts: string[] = []
   const f = workspace.filters
 
@@ -28,9 +28,9 @@ export function buildWorkspaceKeyword(workspace: Workspace): string | null {
     parts.push(`not #${tag}`)
   }
 
-  // Keyword: append as-is
-  if (f.keyword) {
-    parts.push(f.keyword)
+  // Query: append as-is
+  if (f.query) {
+    parts.push(f.query)
   }
 
   if (parts.length === 0) return null
@@ -38,21 +38,21 @@ export function buildWorkspaceKeyword(workspace: Workspace): string | null {
 }
 
 /**
- * Merge workspace keyword query with user's search query.
- * The workspace keyword is AND-combined with the user's existing keyword.
+ * Merge workspace query with user's search query.
+ * The workspace query is AND-combined with the user's existing query.
  */
 export function mergeWorkspaceQuery(
   userQuery: SearchQuery,
   workspace: Workspace,
 ): SearchQuery {
-  const wsKeyword = buildWorkspaceKeyword(workspace)
+  const wsKeyword = buildWorkspaceQuery(workspace)
   if (!wsKeyword) return userQuery
 
   const merged = { ...userQuery }
-  if (merged.keyword && merged.keyword.trim()) {
-    merged.keyword = `(${wsKeyword}) (${merged.keyword})`
+  if (merged.query && merged.query.trim()) {
+    merged.query = `(${wsKeyword}) (${merged.query})`
   } else {
-    merged.keyword = wsKeyword
+    merged.query = wsKeyword
   }
   return merged
 }

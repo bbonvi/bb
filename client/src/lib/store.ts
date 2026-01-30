@@ -104,7 +104,7 @@ export interface AppState {
   isUserLoading: boolean
   setIsUserLoading: (loading: boolean) => void
 
-  // Search error (e.g. invalid keyword expression)
+  // Search error (e.g. invalid query expression)
   searchError: string | null
   setSearchError: (error: string | null) => void
 
@@ -125,7 +125,7 @@ function searchQueryFromUrl(): SearchQuery {
   if (p.get('title')) q.title = p.get('title')!
   if (p.get('url')) q.url = p.get('url')!
   if (p.get('description')) q.description = p.get('description')!
-  if (p.get('keyword')) q.keyword = p.get('keyword')!
+  if (p.get('query')) q.query = p.get('query')!
   if (p.get('semantic')) q.semantic = p.get('semantic')!
   return q
 }
@@ -189,7 +189,7 @@ export const useStore = create<AppState>()((set, get) => ({
       title: searchQuery.title,
       url: searchQuery.url,
       description: searchQuery.description,
-      keyword: searchQuery.keyword,
+      query: searchQuery.query,
       semantic: searchQuery.semantic,
     }
     for (const [key, val] of Object.entries(fields)) {

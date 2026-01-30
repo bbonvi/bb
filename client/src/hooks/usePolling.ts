@@ -45,7 +45,7 @@ function mergeWithDirty(
 }
 
 function isQueryEmpty(q: SearchQuery): boolean {
-  return !q.semantic && !q.keyword && !q.tags && !q.title && !q.url && !q.description
+  return !q.semantic && !q.query && !q.tags && !q.title && !q.url && !q.description
 }
 
 export function usePolling() {
@@ -105,7 +105,7 @@ export function usePolling() {
     } catch (err) {
       if (controller.signal.aborted) return
       if (err instanceof ApiError && err.status === 401) return
-      if (err instanceof ApiError && err.code === 'INVALID_KEYWORD') {
+      if (err instanceof ApiError && err.code === 'INVALID_QUERY') {
         useStore.getState().setSearchError(err.message)
         return
       }
