@@ -76,9 +76,17 @@ export function BookmarkGrid() {
     virtualizer.scrollToIndex(newRow, { align: 'start' })
   }, [columns, virtualizer])
 
-  // Invalidate cached row measurements when bookmarks change (e.g. new bookmark added)
+  // Re-measure visible rows after bookmark data changes (new bookmark, metadata fetch, etc.)
+  // measureElement must be called on actual DOM nodes — measure() alone only clears the cache
+  // without re-reading element heights, leaving rows stuck at estimateSize.
   useEffect(() => {
-    virtualizer.measure()
+    const container = parentRef.current
+    if (!container) return
+    requestAnimationFrame(() => {
+      container.querySelectorAll<HTMLElement>('[data-index]').forEach((node) => {
+        virtualizer.measureElement(node)
+      })
+    })
   }, [rows, virtualizer])
 
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
