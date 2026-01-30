@@ -267,11 +267,13 @@ export default function CreateBookmarkModal() {
               checked={form.async_meta}
               onChange={(v) => update('async_meta', v)}
               label="Async"
+              disabled={form.no_meta}
             />
             <MetaToggle
               checked={!form.no_headless}
               onChange={(v) => update('no_headless', !v)}
               label="Headless"
+              disabled={form.no_meta}
             />
           </div>
         </div>
@@ -304,16 +306,19 @@ function MetaToggle({
   checked,
   onChange,
   label,
+  disabled,
 }: {
   checked: boolean
   onChange: (v: boolean) => void
   label: string
+  disabled?: boolean
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-1.5 select-none">
+    <label className={`flex items-center gap-1.5 select-none ${disabled ? 'cursor-default opacity-40' : 'cursor-pointer'}`}>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
         className="h-3.5 w-3.5 rounded border-white/20 bg-surface-hover accent-hi"
       />
