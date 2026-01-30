@@ -390,46 +390,32 @@ export default function BookmarkDetailModal() {
                           </tr>
                         </thead>
                         <tbody>
-                          {fetchReport.fetchers.map((f, i) => (
-                            <tr key={i} className="border-b border-white/[0.03]">
-                              <td className="py-1 pr-2">{f.name}</td>
-                              <td className="py-1 pr-2">
-                                <span className={
-                                  f.status.status === 'Success' ? 'text-green-600' :
-                                  f.status.status === 'Skip' ? 'text-yellow-600' :
-                                  'text-red-600'
-                                }>
-                                  {f.status.status}
-                                  {(f.status.status === 'Error' || f.status.status === 'Skip') && f.status.detail && `: ${f.status.detail}`}
-                                </span>
-                              </td>
-                              <td className="py-1 pr-2">{f.duration_ms}ms</td>
-                              <td className="py-1">
-                                {f.fields ? (() => {
-                                  const entries = Object.entries(f.fields!)
-                                    .filter(([, v]) => v !== null && v !== false)
-                                  if (entries.length === 0) return '\u2014'
-                                  return (
-                                    <details>
-                                      <summary className="cursor-pointer">
-                                        {entries.map(([k]) => k).join(', ')}
-                                      </summary>
-                                      <dl className="mt-1 space-y-0.5 pl-2 text-text-muted">
-                                        {entries.map(([k, v]) => (
-                                          <div key={k} className="flex gap-1">
-                                            <dt className="font-medium shrink-0">{k}:</dt>
-                                            <dd className="truncate" title={String(v)}>
-                                              {typeof v === 'string' ? (v.length > 80 ? v.slice(0, 80) + '...' : v) : String(v)}
-                                            </dd>
-                                          </div>
-                                        ))}
-                                      </dl>
-                                    </details>
-                                  )
-                                })() : '\u2014'}
-                              </td>
-                            </tr>
-                          ))}
+                          {fetchReport.fetchers.map((f, i) => {
+                            const fieldEntries = f.fields
+                              ? Object.entries(f.fields).filter(([, v]) => v !== null && v !== false)
+                              : []
+                            return (
+                              <FetcherRow key={i} fieldEntries={fieldEntries}>
+                                <td className="py-1 pr-2">{f.name}</td>
+                                <td className="py-1 pr-2">
+                                  <span className={
+                                    f.status.status === 'Success' ? 'text-green-600' :
+                                    f.status.status === 'Skip' ? 'text-yellow-600' :
+                                    'text-red-600'
+                                  }>
+                                    {f.status.status}
+                                    {(f.status.status === 'Error' || f.status.status === 'Skip') && f.status.detail && `: ${f.status.detail}`}
+                                  </span>
+                                </td>
+                                <td className="py-1 pr-2">{f.duration_ms}ms</td>
+                                <td className="py-1">
+                                  {fieldEntries.length > 0
+                                    ? fieldEntries.map(([k]) => k).join(', ')
+                                    : '\u2014'}
+                                </td>
+                              </FetcherRow>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -664,6 +650,45 @@ function EditForm({
         />
       </label>
     </div>
+  )
+}
+
+// Fetcher table row with expandable field values in a full-width row below
+function FetcherRow({
+  children,
+  fieldEntries,
+}: {
+  children: React.ReactNode
+  fieldEntries: [string, unknown][]
+}) {
+  const [open, setOpen] = useState(false)
+  const expandable = fieldEntries.length > 0
+
+  return (
+    <>
+      <tr
+        className={`border-b border-white/[0.03] ${expandable ? 'cursor-pointer hover:bg-white/[0.02]' : ''}`}
+        onClick={expandable ? () => setOpen((o) => !o) : undefined}
+      >
+        {children}
+      </tr>
+      {open && (
+        <tr className="border-b border-white/[0.03]">
+          <td colSpan={4} className="py-1.5 pl-4">
+            <dl className="space-y-0.5 text-text-muted">
+              {fieldEntries.map(([k, v]) => (
+                <div key={k} className="flex gap-1.5">
+                  <dt className="shrink-0 font-medium">{k}:</dt>
+                  <dd className="truncate" title={String(v)}>
+                    {typeof v === 'string' ? (v.length > 80 ? v.slice(0, 80) + '\u2026' : v) : String(v)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
