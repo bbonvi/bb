@@ -121,6 +121,7 @@ impl AppBackend for AppLocal {
                 FetchMetadataOpts {
                     no_https_upgrade: true,
                     meta_opts: opts.meta_opts.clone(),
+                    force_overwrite: true,
                 },
             );
         } else {
@@ -131,6 +132,7 @@ impl AppBackend for AppLocal {
                     FetchMetadataOpts {
                         no_https_upgrade: true,
                         meta_opts: opts.meta_opts.clone(),
+                        ..Default::default()
                     },
                 )?;
 
@@ -141,6 +143,7 @@ impl AppBackend for AppLocal {
                     self.storage_mgr.clone(),
                     self.bmark_mgr.clone(),
                     img_config,
+                    true,
                 )?;
             };
 
@@ -188,6 +191,7 @@ impl AppBackend for AppLocal {
                     FetchMetadataOpts {
                         no_https_upgrade: opts.no_https_upgrade,
                         meta_opts: meta_opts.clone(),
+                        ..Default::default()
                     },
                 );
             } else {
@@ -198,6 +202,7 @@ impl AppBackend for AppLocal {
                         FetchMetadataOpts {
                             no_https_upgrade: opts.no_https_upgrade,
                             meta_opts,
+                            ..Default::default()
                         },
                     )?;
 
@@ -208,6 +213,7 @@ impl AppBackend for AppLocal {
                         self.storage_mgr.clone(),
                         self.bmark_mgr.clone(),
                         img_config,
+                        false,
                     )?;
 
                     Ok(bmark) as anyhow::Result<bookmarks::Bookmark>
@@ -402,16 +408,17 @@ impl AppLocal {
         storage_mgr: Arc<dyn storage::StorageManager>,
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
         img_config: &ImageConfig,
+        force: bool,
     ) -> anyhow::Result<bookmarks::Bookmark> {
         let mut bmark_update = bookmarks::BookmarkUpdate {
             ..Default::default()
         };
 
-        if bookmark.title.is_empty() {
+        if force || bookmark.title.is_empty() {
             bmark_update.title = meta.title;
         }
 
-        if bookmark.description.is_empty() {
+        if force || bookmark.description.is_empty() {
             bmark_update.description = meta.description;
         }
 

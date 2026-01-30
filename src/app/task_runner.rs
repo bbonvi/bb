@@ -330,6 +330,7 @@ impl Task {
                     let scrape_cfg = config.read().unwrap().scrape.clone();
                     opts.meta_opts.scrape_config = Some(scrape_cfg);
 
+                    let force_overwrite = opts.force_overwrite;
                     let meta = AppLocal::fetch_metadata(&bmark.url, opts)?;
 
                     let img_config = &config.read().unwrap().images;
@@ -339,6 +340,7 @@ impl Task {
                         storage_mgr.clone(),
                         bmark_mgr.clone(),
                         img_config,
+                        force_overwrite,
                     )?;
 
                     Ok(bmark) as anyhow::Result<bookmarks::Bookmark>

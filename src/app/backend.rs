@@ -58,4 +58,7 @@ pub struct RefreshMetadataOpts {
 pub struct FetchMetadataOpts {
     pub no_https_upgrade: bool,
     pub meta_opts: MetaOptions,
+    /// When true, overwrite existing title/description with freshly fetched values.
+    #[serde(default)]
+    pub force_overwrite: bool,
 }

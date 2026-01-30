@@ -200,3 +200,71 @@ pub fn test_bookmark_dedup() {
     // third attempt with same URL is still rejected
     assert!(app.create(bmark_create, opts).is_err());
 }
+
+// --- merge_metadata force overwrite ---
+
+#[test]
+fn merge_metadata_without_force_skips_existing_fields() {
+    let (app, _tmp) = create_app();
+    let bmark = app.create(
+        bookmarks::BookmarkCreate {
+            url: "https://example.com".into(),
+            title: Some("Old Title".into()),
+            description: Some("Old Desc".into()),
+            ..Default::default()
+        },
+        default_add_opts(),
+    ).unwrap();
+
+    let meta = crate::metadata::Metadata {
+        title: Some("New Title".into()),
+        description: Some("New Desc".into()),
+        ..Default::default()
+    };
+
+    let img_config = crate::config::ImageConfig::default();
+    let result = AppLocal::merge_metadata(
+        bmark.clone(),
+        meta,
+        app.storage_mgr.clone(),
+        app.bmark_mgr.clone(),
+        &img_config,
+        false,
+    ).unwrap();
+
+    assert_eq!(result.title, "Old Title");
+    assert_eq!(result.description, "Old Desc");
+}
+
+#[test]
+fn merge_metadata_with_force_overwrites_existing_fields() {
+    let (app, _tmp) = create_app();
+    let bmark = app.create(
+        bookmarks::BookmarkCreate {
+            url: "https://example.com".into(),
+            title: Some("Old Title".into()),
+            description: Some("Old Desc".into()),
+            ..Default::default()
+        },
+        default_add_opts(),
+    ).unwrap();
+
+    let meta = crate::metadata::Metadata {
+        title: Some("New Title".into()),
+        description: Some("New Desc".into()),
+        ..Default::default()
+    };
+
+    let img_config = crate::config::ImageConfig::default();
+    let result = AppLocal::merge_metadata(
+        bmark.clone(),
+        meta,
+        app.storage_mgr.clone(),
+        app.bmark_mgr.clone(),
+        &img_config,
+        true,
+    ).unwrap();
+
+    assert_eq!(result.title, "New Title");
+    assert_eq!(result.description, "New Desc");
+}
