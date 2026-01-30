@@ -63,7 +63,14 @@ fn acquire_cli_lock(base_path: &std::path::Path) -> anyhow::Result<LockGuard> {
     })
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("error: {:#}", e);
+        std::process::exit(1);
+    }
+}
+
+fn run() -> anyhow::Result<()> {
     if std::env::var("RUST_LOG").is_err() {
         unsafe { std::env::set_var("RUST_LOG", "error") }
     }

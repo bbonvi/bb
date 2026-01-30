@@ -189,13 +189,13 @@ pub fn start_daemon(app: crate::app::local::AppLocal, base_path: &str) {
 
 #[derive(thiserror::Error, Debug)]
 pub enum AppError {
-    #[error("reqwest error: {0:?}")]
+    #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
 
-    #[error("io error: {0:?}")]
+    #[error("io error: {0}")]
     IO(#[from] std::io::Error),
 
-    #[error("Base64: {0:?}")]
+    #[error("{0}")]
     Base64(#[from] base64::DecodeError),
 
     #[error("{message}")]
@@ -213,18 +213,22 @@ pub enum AppError {
     #[error("{0}")]
     Workspace(#[from] WorkspaceError),
 
-    #[error("unexpected error: {0:?}")]
+    #[error("{0:#}")]
     Other(#[from] anyhow::Error),
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let (status, code, message) = match &self {
-            AppError::Reqwest(_) => (StatusCode::BAD_GATEWAY, "GATEWAY_ERROR", self.to_string()),
-            AppError::IO(_) => (
+            AppError::Reqwest(ref e) => (
+                StatusCode::BAD_GATEWAY,
+                "GATEWAY_ERROR",
+                format!("External request failed: {}", e),
+            ),
+            AppError::IO(ref e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "IO_ERROR",
-                self.to_string(),
+                format!("IO error: {}", e),
             ),
             AppError::Base64(_) => (StatusCode::BAD_REQUEST, "BASE64_ERROR", self.to_string()),
             AppError::SemanticDisabled { message } => (
@@ -256,11 +260,28 @@ impl IntoResponse for AppError {
                 };
                 (status, "WORKSPACE_ERROR", self.to_string())
             }
-            AppError::Other(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "INTERNAL_ERROR",
-                self.to_string(),
-            ),
+            AppError::Other(ref e) => {
+                let msg = format!("{:#}", e);
+
+                if msg.contains("already exists") || msg.contains("already used by another") {
+                    (StatusCode::CONFLICT, "DUPLICATE", msg)
+                } else if msg.contains("not found") || msg.contains("Not found") {
+                    (StatusCode::NOT_FOUND, "NOT_FOUND", msg)
+                } else if msg.contains("cannot be empty")
+                    || msg.contains("cannot exceed")
+                    || msg.contains("cannot contain")
+                    || msg.contains("validation failed")
+                {
+                    (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", msg)
+                } else {
+                    log::error!("Internal error: {:?}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "INTERNAL_ERROR",
+                        "Internal server error".to_string(),
+                    )
+                }
+            }
         };
 
         let body = Json(serde_json::json!({
@@ -1044,6 +1065,41 @@ mod tests {
         assert!(!response.enabled);
         assert_eq!(response.indexed_count, 0);
         assert!(response.total_bookmarks > 0);
+    }
+
+    #[test]
+    fn test_other_error_duplicate_returns_409() {
+        let err = AppError::Other(anyhow::anyhow!("URL already exists in bookmarks"));
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn test_other_error_not_found_returns_404() {
+        let err = AppError::Other(anyhow::anyhow!("Bookmark not found"));
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_other_error_validation_returns_400() {
+        let err = AppError::Other(anyhow::anyhow!("Title cannot be empty"));
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_other_error_unknown_returns_500_generic() {
+        let err = AppError::Other(anyhow::anyhow!("something unexpected broke"));
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        use http_body_util::BodyExt;
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["message"], "Internal server error");
+        // Must not contain backtrace or original error
+        assert!(!json["message"].as_str().unwrap().contains("unexpected broke"));
     }
 
     // =========================================================================
