@@ -139,7 +139,7 @@ export default function SettingsPanel() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4" onClick={() => setOpen(false)}>
       <div
-        className="flex h-full w-full flex-col bg-bg sm:h-auto sm:max-h-[85vh] sm:max-w-5xl sm:rounded-xl sm:border sm:border-white/[0.08] sm:shadow-2xl"
+        className="flex h-full w-full flex-col bg-bg sm:h-[85vh] sm:max-h-[760px] sm:max-w-5xl sm:rounded-xl sm:border sm:border-white/[0.08] sm:shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -318,7 +318,7 @@ function WorkspaceManager({
       </div>
 
       {/* Workspace editor */}
-      <div className="min-w-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {selectedWorkspace ? (
           <WorkspaceEditor
             workspace={selectedWorkspace}
@@ -561,10 +561,13 @@ function WorkspaceEditor({
     saveWorkspace()
   }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const inputClass = 'h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim'
+  const labelClass = 'shrink-0 w-24 text-[11px] text-text-dim pt-1.5'
+
   return (
-    <div className="flex flex-col gap-4">
-      {/* Name + activate + delete */}
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-0 pb-4">
+      {/* Name + activate + delete — top bar */}
+      <div className="flex items-center gap-2 pb-3">
         <input
           type="text"
           value={name}
@@ -573,96 +576,96 @@ function WorkspaceEditor({
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleNameBlur()
           }}
-          className="h-8 flex-1 rounded-md border border-white/[0.06] bg-surface px-2.5 text-sm text-text outline-none transition-colors focus:border-hi-dim"
+          className="h-7 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm text-text outline-none transition-colors hover:border-white/[0.06] focus:border-hi-dim focus:bg-surface"
           placeholder="Workspace name"
         />
         {isActive ? (
-          <span className="flex h-8 items-center px-2 text-xs text-text-dim">Active</span>
+          <span className="flex h-7 items-center px-2 text-[11px] text-text-dim">Active</span>
         ) : (
           <button
             onClick={() => setActiveWorkspaceId(workspace.id)}
-            className="h-8 rounded-md border border-hi/30 px-2.5 text-xs font-medium text-hi hover:bg-hi/10"
+            className="h-7 shrink-0 rounded-md border border-hi/30 px-2.5 text-[11px] font-medium text-hi hover:bg-hi/10"
           >
             Activate
           </button>
         )}
-        <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-8 w-8" />
-      </div>
-      {bookmarkCount !== null && (
-        <p className="text-xs text-text-dim">
-          {bookmarkCount} {bookmarkCount === 1 ? 'bookmark' : 'bookmarks'} matching filters
-        </p>
-      )}
-
-      {/* Tag whitelist */}
-      <div>
-        <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-dim">
-          Tag whitelist
-        </label>
-        <TagListEditor
-          tags={workspace.filters.tag_whitelist}
-          input={whitelistInput}
-          setInput={setWhitelistInput}
-          suggestions={whitelistSuggestions}
-          onAdd={addWhitelistTag}
-          onRemove={removeWhitelistTag}
-          placeholder="Add tag pattern (supports glob: dev/*)"
-        />
-        <RelatedTags
-          tags={whitelistRelated}
-          fetching={fetchingWhitelistRelated}
-          disabled={whitelist.length === 0}
-          onFetch={() => fetchRelated(whitelist, setWhitelistRelated, setFetchingWhitelistRelated)}
-          onAdd={addWhitelistTag}
-          setTags={setWhitelistRelated}
-        />
+        <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-7 w-7 shrink-0" />
       </div>
 
-      {/* Tag blacklist */}
-      <div>
-        <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-dim">
-          Tag blacklist
-        </label>
-        <TagListEditor
-          tags={workspace.filters.tag_blacklist}
-          input={blacklistInput}
-          setInput={setBlacklistInput}
-          suggestions={blacklistSuggestions}
-          onAdd={addBlacklistTag}
-          onRemove={removeBlacklistTag}
-          placeholder="Add tag to exclude"
-        />
-        <RelatedTags
-          tags={blacklistRelated}
-          fetching={fetchingBlacklistRelated}
-          disabled={blacklist.length === 0}
-          onFetch={() => fetchRelated(blacklist, setBlacklistRelated, setFetchingBlacklistRelated)}
-          onAdd={addBlacklistTag}
-          setTags={setBlacklistRelated}
-        />
-      </div>
+      {/* Show bookmarks that... */}
+      <div className="rounded-lg border border-white/[0.06] bg-hi-subtle px-4 py-3">
+        <div className="mb-2.5 flex items-center gap-2">
+          <span className="rounded bg-hi-dim px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-hi">show</span>
+          <span className="text-[11px] text-text-dim">
+            bookmarks matching{bookmarkCount !== null && <> &middot; {bookmarkCount} found</>}
+          </span>
+        </div>
+        <div className="flex flex-col gap-2">
+          {/* Search query */}
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Query</span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onBlur={handleQueryBlur}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleQueryBlur()
+              }}
+              className={`${inputClass} font-mono`}
+              placeholder="#tag .title >desc :url and or not"
+            />
+          </div>
 
-      {/* Query filter */}
-      <div>
-        <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-text-dim">
-          Search query
-        </label>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onBlur={handleQueryBlur}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleQueryBlur()
-          }}
-          className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs font-mono text-text outline-none transition-colors focus:border-hi-dim"
-          placeholder="e.g. .tutorial :github.com"
-        />
-        <p className="mt-1 text-[11px] text-text-dim">
-          Search query — combined with tag filters above
-        </p>
-      </div>
+          {/* Must have these tags */}
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Has tags</span>
+            <div className="min-w-0 flex-1">
+              <TagListEditor
+                tags={workspace.filters.tag_whitelist}
+                input={whitelistInput}
+                setInput={setWhitelistInput}
+                suggestions={whitelistSuggestions}
+                onAdd={addWhitelistTag}
+                onRemove={removeWhitelistTag}
+                placeholder="Add tag"
+              />
+              <RelatedTags
+                tags={whitelistRelated}
+                fetching={fetchingWhitelistRelated}
+                disabled={whitelist.length === 0}
+                onFetch={() => fetchRelated(whitelist, setWhitelistRelated, setFetchingWhitelistRelated)}
+                onAdd={addWhitelistTag}
+                setTags={setWhitelistRelated}
+              />
+            </div>
+          </div>
 
+          {/* Must not have these tags */}
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Without tags</span>
+            <div className="min-w-0 flex-1">
+              <TagListEditor
+                tags={workspace.filters.tag_blacklist}
+                input={blacklistInput}
+                setInput={setBlacklistInput}
+                suggestions={blacklistSuggestions}
+                onAdd={addBlacklistTag}
+                onRemove={removeBlacklistTag}
+                placeholder="Add tag"
+              />
+              <RelatedTags
+                tags={blacklistRelated}
+                fetching={fetchingBlacklistRelated}
+                disabled={blacklist.length === 0}
+                onFetch={() => fetchRelated(blacklist, setBlacklistRelated, setFetchingBlacklistRelated)}
+                onAdd={addBlacklistTag}
+                setTags={setBlacklistRelated}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
