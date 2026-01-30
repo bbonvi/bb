@@ -139,6 +139,7 @@ export function TagChip({ tag }: { tag: string }) {
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      e.preventDefault()
       const searchQuery = useStore.getState().searchQuery
       const current = searchQuery.tags ?? ''
       const tagList = current ? current.split(',').map((t) => t.trim()) : []
@@ -198,6 +199,7 @@ export function Description({
           tabIndex={-1}
           onClick={(e) => {
             e.stopPropagation()
+            e.preventDefault()
             setExpanded(!expanded)
           }}
           className="mt-0.5 text-[11px] text-hi-muted hover:text-hi"
@@ -246,7 +248,10 @@ export function ConfirmButton({
 
   const handleClick = useCallback(
     async (e: React.MouseEvent) => {
-      if (stopPropagation) e.stopPropagation()
+      if (stopPropagation) {
+        e.stopPropagation()
+        e.preventDefault()
+      }
       if (!armed) {
         setArmed(true)
         return
@@ -356,6 +361,7 @@ function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
   const handleEdit = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      e.preventDefault()
       openDetailInEditMode(bookmarkId)
     },
     [bookmarkId, openDetailInEditMode],
