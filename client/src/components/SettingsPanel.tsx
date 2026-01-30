@@ -921,7 +921,7 @@ function RuleEditor({
               onChange={(e) => setQuery(e.target.value)}
               onBlur={() => saveField({ query: query || undefined })}
               className={`${inputClass} font-mono`}
-              placeholder="Supports: #tag, t:title, d:desc, u:url, AND, OR, NOT, quotes, parens"
+              placeholder="Supports: #tag, .title, >desc, :url, and, or, not, quotes, parens"
             />
           </div>
           <div>
