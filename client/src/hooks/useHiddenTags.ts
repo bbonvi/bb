@@ -3,6 +3,8 @@ import { useStore } from '@/lib/store'
 import { useShallow } from 'zustand/react/shallow'
 import { useSettings } from '@/hooks/useSettings'
 
+const EMPTY_TAGS: string[] = []
+
 /**
  * Returns the merged set of hidden tags:
  * - global `hidden_by_default` from server config
@@ -12,7 +14,7 @@ import { useSettings } from '@/hooks/useSettings'
 export function useHiddenTags(): string[] {
   const { globalHidden, activeWorkspaceId, workspaces } = useStore(
     useShallow((s) => ({
-      globalHidden: s.config?.hidden_by_default ?? [],
+      globalHidden: s.config?.hidden_by_default ?? EMPTY_TAGS,
       activeWorkspaceId: s.activeWorkspaceId,
       workspaces: s.workspaces,
     })),
