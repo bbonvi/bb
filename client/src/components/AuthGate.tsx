@@ -125,7 +125,7 @@ function LoginForm({
     <div className="flex h-screen items-center justify-center bg-bg">
       <form
         onSubmit={handleSubmit}
-        className="flex w-80 flex-col gap-4 rounded-lg border border-border bg-surface p-6"
+        className="flex w-80 flex-col gap-4 rounded-lg border border-white/[0.06] bg-surface p-6"
       >
         <h1 className="text-center text-xl font-semibold text-text">bb</h1>
         <input
@@ -135,15 +135,15 @@ function LoginForm({
           placeholder="Enter token"
           autoFocus
           disabled={submitting}
-          className="rounded border border-border bg-bg px-3 py-2 text-text placeholder:text-text-muted focus:border-primary focus:outline-none"
+          className="rounded-md border border-white/[0.06] bg-surface px-3 py-2 text-xs text-text placeholder:text-text-dim outline-none transition-colors focus:border-hi-dim"
         />
         {displayError && (
-          <p className="text-sm text-danger">{displayError}</p>
+          <p className="text-xs text-danger">{displayError}</p>
         )}
         <button
           type="submit"
           disabled={submitting || !value.trim()}
-          className="rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="rounded-md bg-hi px-4 py-2 text-xs font-medium text-bg hover:bg-hi/90 disabled:opacity-50 transition-colors"
         >
           {submitting ? 'Checking…' : 'Login'}
         </button>

@@ -55,24 +55,25 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* Shadcn tokens → mapped to app palette */
+  --background: oklch(0.071 0.005 286);      /* bg */
+  --foreground: #e8e8ed;                      /* text */
+  --card: #141417;                            /* surface */
+  --card-foreground: #e8e8ed;                 /* text */
+  --popover: #141417;                         /* surface */
+  --popover-foreground: #e8e8ed;              /* text */
+  --primary: #6b8afd;                         /* hi */
+  --primary-foreground: oklch(0.071 0.005 286); /* bg */
+  --secondary: #1c1c21;                       /* surface-hover */
+  --secondary-foreground: #e8e8ed;            /* text */
+  --muted: #1c1c21;                           /* surface-hover */
+  --muted-foreground: #7c7c8a;               /* text-muted */
+  --accent: #1c1c21;                          /* surface-hover */
+  --accent-foreground: #e8e8ed;               /* text */
+  --destructive: #ef4444;                     /* danger */
+  --border: oklch(1 0 0 / 6%);               /* matches white/[0.06] */
+  --input: oklch(1 0 0 / 6%);                /* same as border */
+  --ring: #283d6e;                            /* hi-dim */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
