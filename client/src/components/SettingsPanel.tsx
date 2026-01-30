@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { TagTokenInput } from '@/components/TagTokenInput'
-import { X, Plus, RefreshCw, LogOut, GripVertical, Save } from 'lucide-react'
+import { X, Plus, RefreshCw, LogOut, GripVertical, Save, RotateCcw } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useSettings } from '@/hooks/useSettings'
@@ -53,12 +53,6 @@ export default function SettingsPanel() {
   const [selectedView, setSelectedView] = useState<SettingsView>('preferences')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [dirty, setDirty] = useState(false)
-  const saveHandlerRef = useRef<(() => Promise<void>) | null>(null)
-
-  const registerSaveHandler = useCallback((handler: (() => Promise<void>) | null) => {
-    saveHandlerRef.current = handler
-  }, [])
   const prevWorkspacesRef = useRef<Workspace[]>([])
 
   // Drag-and-drop sensors
@@ -95,30 +89,8 @@ export default function SettingsPanel() {
     if (!open) {
       setSelectedView('preferences')
       setError(null)
-      setDirty(false)
-      saveHandlerRef.current = null
     }
   }, [open])
-
-  // Reset dirty on view change
-  useEffect(() => {
-    setDirty(false)
-    saveHandlerRef.current = null
-  }, [selectedView])
-
-  async function handleSave() {
-    if (!saveHandlerRef.current) return
-    setSaving(true)
-    setError(null)
-    try {
-      await saveHandlerRef.current()
-      setDirty(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   if (!open) return null
 
@@ -237,15 +209,10 @@ export default function SettingsPanel() {
                 onDragEnd={handleDragEnd}
                 onCreate={handleCreate}
                 onDelete={handleDelete}
-                onDirtyChange={setDirty}
-                onRegisterSave={registerSaveHandler}
                 refreshWorkspaces={refreshWorkspaces}
               />
             ) : selectedView === 'rules' ? (
-              <RulesManager
-                onDirtyChange={setDirty}
-                onRegisterSave={registerSaveHandler}
-              />
+              <RulesManager />
             ) : null}
           </div>
         </div>
@@ -262,16 +229,6 @@ export default function SettingsPanel() {
             </button>
           )}
           <div className="flex-1" />
-          {dirty && (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-1.5 rounded-md bg-hi px-3.5 py-1.5 text-xs font-semibold text-bg transition-all hover:bg-hi/85 disabled:opacity-50"
-            >
-              <Save className="h-3 w-3" />
-              {saving ? 'Saving…' : 'Save changes'}
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -288,8 +245,6 @@ function WorkspaceManager({
   onDragEnd,
   onCreate,
   onDelete,
-  onDirtyChange,
-  onRegisterSave,
   refreshWorkspaces,
 }: {
   workspaces: Workspace[]
@@ -299,8 +254,6 @@ function WorkspaceManager({
   onDragEnd: (event: DragEndEvent) => void
   onCreate: () => void
   onDelete: (id: string) => void
-  onDirtyChange: (dirty: boolean) => void
-  onRegisterSave: (handler: (() => Promise<void>) | null) => void
   refreshWorkspaces: () => Promise<void>
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -356,8 +309,6 @@ function WorkspaceManager({
           <WorkspaceEditor
             workspace={selectedWorkspace}
             visibleTags={visibleTags}
-            onDirtyChange={onDirtyChange}
-            onRegisterSave={onRegisterSave}
             refreshWorkspaces={refreshWorkspaces}
             onDelete={() => onDelete(selectedWorkspace.id)}
           />
@@ -432,15 +383,11 @@ function SortableWorkspaceItem({
 function WorkspaceEditor({
   workspace,
   visibleTags,
-  onDirtyChange,
-  onRegisterSave,
   refreshWorkspaces,
   onDelete,
 }: {
   workspace: Workspace
   visibleTags: string[]
-  onDirtyChange: (dirty: boolean) => void
-  onRegisterSave: (handler: (() => Promise<void>) | null) => void
   refreshWorkspaces: () => Promise<void>
   onDelete: () => void
 }) {
@@ -469,6 +416,9 @@ function WorkspaceEditor({
     setBlacklistRelated([])
   }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   // Dirty detection
   const isDirty = useMemo(() => {
     const origWhitelist = workspace.filters.tag_whitelist ?? []
@@ -481,13 +431,10 @@ function WorkspaceEditor({
     )
   }, [name, query, whitelist, blacklist, workspace])
 
-  useEffect(() => {
-    onDirtyChange(isDirty)
-  }, [isDirty, onDirtyChange])
-
-  // Register save handler
-  useEffect(() => {
-    onRegisterSave(async () => {
+  async function handleSave() {
+    setSaving(true)
+    setSaveError(null)
+    try {
       await apiUpdateWorkspace(workspace.id, {
         name,
         filters: {
@@ -498,8 +445,20 @@ function WorkspaceEditor({
         view_prefs: workspace.view_prefs,
       })
       await refreshWorkspaces()
-    })
-  }, [name, query, whitelist, blacklist, workspace.id, workspace.view_prefs, onRegisterSave, refreshWorkspaces])
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save workspace')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleReset() {
+    setName(workspace.name)
+    setQuery(workspace.filters.query ?? '')
+    setWhitelist(workspace.filters.tag_whitelist ?? [])
+    setBlacklist(workspace.filters.tag_blacklist ?? [])
+    setSaveError(null)
+  }
 
   // Bookmark count — use draft filters for live preview
   const draftFilters = useMemo(() => ({
@@ -573,8 +532,15 @@ function WorkspaceEditor({
   const inputClass = 'h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim'
   const labelClass = 'shrink-0 w-24 text-[11px] text-text-dim pt-1.5'
 
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && isDirty && !saving) {
+      e.preventDefault()
+      handleSave()
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-0 pb-4">
+    <div className="flex flex-col gap-0 pb-4" onKeyDown={handleKeyDown}>
       {/* Name + activate + delete — top bar */}
       <div className="flex items-center gap-2 pb-3">
         <input
@@ -596,6 +562,9 @@ function WorkspaceEditor({
         )}
         <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-7 w-7 shrink-0" />
       </div>
+      {saveError && (
+        <div className="mb-2 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">{saveError}</div>
+      )}
 
       {/* Show bookmarks that... */}
       <div className="rounded-lg border border-white/[0.06] bg-hi-subtle px-4 py-3">
@@ -661,24 +630,43 @@ function WorkspaceEditor({
           </div>
         </div>
       </div>
+      {isDirty && (
+        <div className="sticky bottom-0 z-10 mt-3 flex items-center justify-between rounded-md border border-hi/20 bg-hi/[0.06] px-3 py-2 backdrop-blur-sm">
+          <span className="text-xs text-text-muted">Unsaved changes</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReset}
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reset
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-md bg-hi px-3 py-1 text-xs font-semibold text-bg transition-all hover:bg-hi/85 disabled:opacity-50"
+            >
+              <Save className="h-3 w-3" />
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── Rules Manager ────────────────────────────────────────────────
 
-function RulesManager({
-  onDirtyChange,
-  onRegisterSave,
-}: {
-  onDirtyChange: (dirty: boolean) => void
-  onRegisterSave: (handler: (() => Promise<void>) | null) => void
-}) {
+function RulesManager() {
   const [savedRules, setSavedRules] = useState<Rule[]>([])
   const [draftRules, setDraftRules] = useState<Rule[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resetKey, setResetKey] = useState(0)
 
   useEffect(() => {
     fetchRules()
@@ -697,18 +685,25 @@ function RulesManager({
     [draftRules, savedRules],
   )
 
-  useEffect(() => {
-    onDirtyChange(isDirty)
-  }, [isDirty, onDirtyChange])
-
-  // Register save handler
-  useEffect(() => {
-    onRegisterSave(async () => {
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
       const result = await updateRules(draftRules)
       setSavedRules(result)
       setDraftRules(result)
-    })
-  }, [draftRules, onRegisterSave])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save rules')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleReset() {
+    setDraftRules(savedRules)
+    setError(null)
+    setResetKey((k) => k + 1)
+  }
 
   function handleAdd() {
     const newRule: Rule = { action: { UpdateBookmark: {} } }
@@ -742,8 +737,15 @@ function RulesManager({
 
   const selectedRule = selectedIndex !== null ? draftRules[selectedIndex] : null
 
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && isDirty && !saving) {
+      e.preventDefault()
+      handleSave()
+    }
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4" onKeyDown={handleKeyDown}>
       {/* Rule list */}
       <div className="flex max-h-40 shrink-0 flex-col rounded-lg border border-white/[0.06] bg-surface/30 sm:max-h-none sm:w-44">
         <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
@@ -783,7 +785,7 @@ function RulesManager({
         )}
         {selectedRule && selectedIndex !== null ? (
           <RuleEditor
-            key={selectedIndex}
+            key={`${selectedIndex}-${resetKey}`}
             rule={selectedRule}
             onUpdate={(patch) => handleUpdateRule(selectedIndex, patch)}
             onDelete={() => handleDelete(selectedIndex)}
@@ -791,6 +793,29 @@ function RulesManager({
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-text-dim">
             {draftRules.length === 0 ? 'Add a rule to get started' : 'Select a rule'}
+          </div>
+        )}
+        {isDirty && (
+          <div className="sticky bottom-0 z-10 mt-3 flex items-center justify-between rounded-md border border-hi/20 bg-hi/[0.06] px-3 py-2 backdrop-blur-sm">
+            <span className="text-xs text-text-muted">Unsaved changes</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleReset}
+                disabled={saving}
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-50"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-1.5 rounded-md bg-hi px-3 py-1 text-xs font-semibold text-bg transition-all hover:bg-hi/85 disabled:opacity-50"
+              >
+                <Save className="h-3 w-3" />
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -853,8 +878,7 @@ function RuleEditor({
         <input
           type="text"
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          onBlur={() => saveField({ comment: comment || undefined })}
+          onChange={(e) => { setComment(e.target.value); saveField({ comment: e.target.value || undefined }) }}
           className="h-7 flex-1 rounded-md border border-transparent bg-transparent px-2 text-xs text-text-muted outline-none transition-colors hover:border-white/[0.06] focus:border-hi-dim focus:bg-surface"
           placeholder="Add a note..."
         />
@@ -873,8 +897,7 @@ function RuleEditor({
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onBlur={() => saveField({ query: query || undefined })}
+              onChange={(e) => { setQuery(e.target.value); saveField({ query: e.target.value || undefined }) }}
               className={`${inputClass} font-mono`}
               placeholder="#tag .title >desc :url and or not"
             />
@@ -884,8 +907,7 @@ function RuleEditor({
             <input
               type="text"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onBlur={() => saveField({ url: url || undefined })}
+              onChange={(e) => { setUrl(e.target.value); saveField({ url: e.target.value || undefined }) }}
               className={inputClass}
               placeholder="substring or r/regex/"
             />
@@ -895,8 +917,7 @@ function RuleEditor({
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => saveField({ title: title || undefined })}
+              onChange={(e) => { setTitle(e.target.value); saveField({ title: e.target.value || undefined }) }}
               className={inputClass}
               placeholder="substring or r/regex/"
             />
@@ -906,8 +927,7 @@ function RuleEditor({
             <input
               type="text"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={() => saveField({ description: description || undefined })}
+              onChange={(e) => { setDescription(e.target.value); saveField({ description: e.target.value || undefined }) }}
               className={inputClass}
               placeholder="substring or r/regex/"
             />
@@ -937,8 +957,7 @@ function RuleEditor({
             <input
               type="text"
               value={actionTitle}
-              onChange={(e) => setActionTitle(e.target.value)}
-              onBlur={() => saveActionField('title', actionTitle)}
+              onChange={(e) => { setActionTitle(e.target.value); saveActionField('title', e.target.value) }}
               className={inputClass}
               placeholder="Override title"
             />
@@ -948,8 +967,7 @@ function RuleEditor({
             <input
               type="text"
               value={actionDesc}
-              onChange={(e) => setActionDesc(e.target.value)}
-              onBlur={() => saveActionField('description', actionDesc)}
+              onChange={(e) => { setActionDesc(e.target.value); saveActionField('description', e.target.value) }}
               className={inputClass}
               placeholder="Override description"
             />
