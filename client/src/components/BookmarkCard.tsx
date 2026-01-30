@@ -15,7 +15,11 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
   return (
     <article
       onClick={() => setDetailModalId(bookmark.id)}
-      className="group relative flex flex-col overflow-hidden rounded-lg border border-white/[0.06] bg-surface transition-[border-color] duration-150 hover:border-white/[0.15] cursor-default"
+      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface transition-[border-color] duration-150 cursor-default ${
+        bookmark.fetching
+          ? 'fetching-glow'
+          : 'border-white/[0.06] hover:border-white/[0.15]'
+      }`}
     >
       <CardActions bookmarkId={bookmark.id} />
       <Thumbnail bookmark={bookmark} className="h-36 w-full rounded-t-lg" />

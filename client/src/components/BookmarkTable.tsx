@@ -67,7 +67,9 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
   return (
     <div
       onClick={() => setDetailModalId(bookmark.id)}
-      className="group relative flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover"
+      className={`group relative flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover ${
+        bookmark.fetching ? 'border-l-2 border-l-hi-dim' : ''
+      }`}
     >
       <CardActions bookmarkId={bookmark.id} variant="row" />
       {/* Title */}

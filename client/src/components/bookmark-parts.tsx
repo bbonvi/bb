@@ -87,9 +87,9 @@ export function Favicon({
 // ─── Fetching indicator ─────────────────────────────────────────────
 export function FetchingIndicator() {
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-text-dim">
-      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-text-dim" />
-      Fetching metadata&hellip;
+    <span className="inline-flex w-fit items-center gap-1.5 rounded-md bg-hi-dim/40 px-2 py-0.5 font-mono text-xs text-hi">
+      <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-hi" />
+      Fetching&hellip;
     </span>
   )
 }

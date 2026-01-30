@@ -80,6 +80,15 @@
   --chart-5: oklch(0.645 0.246 16.439);
 }
 
+@keyframes fetching-border {
+  0%, 100% { border-color: var(--color-hi-dim); }
+  50%      { border-color: var(--color-hi-muted); }
+}
+
+.fetching-glow {
+  animation: fetching-border 2s ease-in-out infinite;
+}
+
 @keyframes search-flash {
   0%   { border-color: var(--color-hi); }
   30%  { border-color: var(--color-hi); }
