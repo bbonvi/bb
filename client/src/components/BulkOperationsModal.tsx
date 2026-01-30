@@ -15,6 +15,7 @@ import {
 } from '@/lib/api'
 import { X, Pencil, Trash2, AlertTriangle, CircleHelp } from 'lucide-react'
 import { ConfirmButton } from '@/components/bookmark-parts'
+import { TagTokenInput } from '@/components/TagTokenInput'
 
 // Convert store SearchQuery (comma-separated tags) to BulkSearchQuery (JSON array tags)
 function toBulkQuery(q: SearchQuery): BulkSearchQuery {
@@ -63,14 +64,8 @@ function BookmarkPreview({ count }: { count: number }) {
   )
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────
-function parseTags(raw: string): string[] {
-  return raw.split(/[\s,]+/).map((t) => t.trim()).filter(Boolean)
-}
-
 // ─── Remove tag match preview ─────────────────────────────────────
-function RemoveTagPreview({ input, bookmarks }: { input: string; bookmarks: Bookmark[] }) {
-  const tags = parseTags(input)
+function RemoveTagPreview({ tags, bookmarks }: { tags: string[]; bookmarks: Bookmark[] }) {
   if (tags.length === 0) return null
 
   const counts = tags.map((tag) => {
@@ -100,11 +95,12 @@ export function BulkEditModal({
 }) {
   const bookmarks = useStore((s) => s.bookmarks)
   const searchQuery = useStore((s) => s.searchQuery)
+  const allTags = useStore((s) => s.tags)
 
-  const [addTags, setAddTags] = useState('')
-  const [removeTags, setRemoveTags] = useState('')
+  const [addTags, setAddTags] = useState<string[]>([])
+  const [removeTags, setRemoveTags] = useState<string[]>([])
   const [replaceMode, setReplaceMode] = useState(false)
-  const [replaceTags, setReplaceTags] = useState('')
+  const [replaceTags, setReplaceTags] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<number | null>(null)
@@ -112,14 +108,14 @@ export function BulkEditModal({
   const count = bookmarks.length
 
   const hasChanges = replaceMode
-    ? replaceTags.trim().length > 0
-    : addTags.trim().length > 0 || removeTags.trim().length > 0
+    ? replaceTags.length > 0
+    : addTags.length > 0 || removeTags.length > 0
 
   const reset = useCallback(() => {
-    setAddTags('')
-    setRemoveTags('')
+    setAddTags([])
+    setRemoveTags([])
     setReplaceMode(false)
-    setReplaceTags('')
+    setReplaceTags([])
     setError(null)
     setResult(null)
   }, [])
@@ -133,10 +129,10 @@ export function BulkEditModal({
     try {
       const query = toBulkQuery(searchQuery)
       const update = replaceMode
-        ? { tags: parseTags(replaceTags) }
+        ? { tags: replaceTags }
         : {
-            ...(addTags.trim() ? { append_tags: parseTags(addTags) } : {}),
-            ...(removeTags.trim() ? { remove_tags: parseTags(removeTags) } : {}),
+            ...(addTags.length > 0 ? { append_tags: addTags } : {}),
+            ...(removeTags.length > 0 ? { remove_tags: removeTags } : {}),
           }
 
       const affected = await searchUpdateBookmarks(query, update)
@@ -159,14 +155,11 @@ export function BulkEditModal({
   // Summary lines
   const summaryLines = (() => {
     if (replaceMode) {
-      const tags = parseTags(replaceTags)
-      return tags.length > 0 ? [{ label: 'Replace all with', tags, color: 'text-text-muted' }] : []
+      return replaceTags.length > 0 ? [{ label: 'Replace all with', tags: replaceTags, color: 'text-text-muted' }] : []
     }
     const lines: { label: string; tags: string[]; color: string }[] = []
-    const remove = parseTags(removeTags)
-    const add = parseTags(addTags)
-    if (remove.length > 0) lines.push({ label: '- Remove', tags: remove, color: 'text-danger/70' })
-    if (add.length > 0) lines.push({ label: '+ Add', tags: add, color: 'text-green-400/70' })
+    if (removeTags.length > 0) lines.push({ label: '- Remove', tags: removeTags, color: 'text-danger/70' })
+    if (addTags.length > 0) lines.push({ label: '+ Add', tags: addTags, color: 'text-green-400/70' })
     return lines
   })()
 
@@ -194,13 +187,13 @@ export function BulkEditModal({
         {/* Body */}
         <div className="flex flex-col gap-4 p-4 sm:p-6">
           {result !== null ? (
-            <div className="rounded-md bg-green-500/10 px-3 py-2 text-sm text-green-400">
+            <div className="rounded-md bg-green-500/10 px-3 py-2 text-xs text-green-400">
               Updated <strong className="font-mono">{result}</strong> bookmark{result !== 1 ? 's' : ''}.
             </div>
           ) : (
             <>
               {error && (
-                <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+                <div className="rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
                   {error}
                 </div>
               )}
@@ -222,47 +215,40 @@ export function BulkEditModal({
 
               {replaceMode ? (
                 /* Replace mode: single input */
-                <label className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-text-muted">New tags</span>
-                  <input
-                    type="text"
-                    value={replaceTags}
-                    onChange={(e) => setReplaceTags(e.target.value)}
-                    placeholder="rust, webdev"
-                    autoFocus
-                    className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
+                  <TagTokenInput
+                    tags={replaceTags}
+                    onChange={setReplaceTags}
+                    availableTags={allTags}
+                    placeholder="Add tag"
                   />
                   <span className="text-[11px] text-text-dim">
                     All existing tags will be replaced with these.
                   </span>
-                </label>
+                </div>
               ) : (
                 /* Default mode: add + remove side by side */
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="flex flex-col gap-1">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-danger/80">- Remove tags</span>
-                      <input
-                        type="text"
-                        value={removeTags}
-                        onChange={(e) => setRemoveTags(e.target.value)}
-                        placeholder="old-tag, deprecated"
-                        autoFocus
-                        className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
-                      />
-                    </label>
-                    <RemoveTagPreview input={removeTags} bookmarks={bookmarks} />
-                  </div>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-green-400/80">+ Add tags</span>
-                    <input
-                      type="text"
-                      value={addTags}
-                      onChange={(e) => setAddTags(e.target.value)}
-                      placeholder="rust, webdev"
-                      className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
+                    <span className="text-xs font-medium text-danger/80">- Remove tags</span>
+                    <TagTokenInput
+                      tags={removeTags}
+                      onChange={setRemoveTags}
+                      availableTags={allTags}
+                      placeholder="Remove tag"
                     />
-                  </label>
+                    <RemoveTagPreview tags={removeTags} bookmarks={bookmarks} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-green-400/80">+ Add tags</span>
+                    <TagTokenInput
+                      tags={addTags}
+                      onChange={setAddTags}
+                      availableTags={allTags}
+                      placeholder="Add tag"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -375,20 +361,20 @@ export function BulkDeleteModal({
         {/* Body */}
         <div className="flex flex-col gap-4 p-4 sm:p-6">
           {result !== null ? (
-            <div className="rounded-md bg-green-500/10 px-3 py-2 text-sm text-green-400">
+            <div className="rounded-md bg-green-500/10 px-3 py-2 text-xs text-green-400">
               Deleted <strong className="font-mono">{result}</strong> bookmark{result !== 1 ? 's' : ''}.
             </div>
           ) : (
             <>
               {error && (
-                <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+                <div className="rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
                   {error}
                 </div>
               )}
 
               <BookmarkPreview count={count} />
 
-              <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+              <div className="rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
                 This action cannot be undone. All matched bookmarks will be permanently deleted.
               </div>
             </>
