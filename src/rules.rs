@@ -11,6 +11,8 @@ pub struct Rule {
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
@@ -84,6 +86,23 @@ impl Rule {
                         return false;
                     }
                 }
+            }
+        }
+
+        if let Some(query_str) = &self.query {
+            has_any_condition = true;
+            let temp_bookmark = crate::bookmarks::Bookmark {
+                id: 0,
+                url: record.url.clone(),
+                title: record.title.clone().unwrap_or_default(),
+                description: record.description.clone().unwrap_or_default(),
+                tags: record.tags.clone().unwrap_or_default(),
+                image_id: None,
+                icon_id: None,
+            };
+            match crate::search_query::matches(query_str, &temp_bookmark) {
+                Ok(true) => {}
+                _ => return false,
             }
         }
 

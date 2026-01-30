@@ -374,6 +374,7 @@ impl RuleCommand {
                     description: description.map(|d| d.to_lowercase()),
                     title: title.map(|d| d.to_lowercase()),
                     tags: tags.clone().map(parse_tags),
+                    query: None,
                     action: crate::rules::Action::UpdateBookmark {
                         title: update_action.title.map(|u| u.to_lowercase()),
                         description: update_action.description.map(|d| d.to_lowercase()),

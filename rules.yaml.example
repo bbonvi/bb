@@ -16,6 +16,14 @@ rules:
     tags:
     - ai
 
+# Search query example (supports #tag, .title, >desc, :url, and, or, not, quotes, parens):
+# - query: "#programming and .tutorial"
+#   comment: Programming tutorials
+#   action: !UpdateBookmark
+#     tags:
+#     - tutorial
+#     - programming
+
 # Regex example:
 # - url: r/github\.com\/.*\/pull\//
 #   comment: GitHub pull requests

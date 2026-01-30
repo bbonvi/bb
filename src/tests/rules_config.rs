@@ -72,6 +72,7 @@ fn test_rules_crud() {
         title: None,
         description: None,
         tags: None,
+        query: None,
         comment: Some("dev rule".to_string()),
         action: Action::UpdateBookmark {
             title: None,

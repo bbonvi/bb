@@ -441,9 +441,17 @@ impl RulesConfig {
                 && rule.title.is_none()
                 && rule.description.is_none()
                 && rule.tags.is_none()
+                && rule.query.is_none()
             {
                 let idx = idx + 1;
                 errors.push(format!("rule #{idx} is empty"));
+            }
+
+            if let Some(q) = &rule.query {
+                if let Err(err) = crate::search_query::parse(q) {
+                    let idx = idx + 1;
+                    errors.push(format!("rule #{idx} has invalid query: {err}"));
+                }
             }
 
             Rule::is_string_matches(&rule.url.clone().unwrap_or_default(), "");

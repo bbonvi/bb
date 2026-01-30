@@ -39,6 +39,7 @@ pub fn test_record_match() {
         description: None,
         title: None,
         tags: None,
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: Some(vec!["favorite".to_string()]),
@@ -69,6 +70,7 @@ pub fn test_rule_matches_by_title() {
         title: Some("important".to_string()),
         description: None,
         tags: None,
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -99,6 +101,7 @@ pub fn test_rule_matches_by_description() {
         title: None,
         description: Some("tutorial".to_string()),
         tags: None,
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -129,6 +132,7 @@ pub fn test_rule_matches_by_tags_with_url() {
         title: None,
         description: None,
         tags: Some(vec!["programming".to_string(), "rust".to_string()]),
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -174,6 +178,7 @@ pub fn test_rule_empty_tags_matches_untagged() {
         title: None,
         description: None,
         tags: Some(vec![]),
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -212,6 +217,7 @@ pub fn test_rule_multiple_fields_all_must_match() {
         title: Some("repo".to_string()),
         description: None,
         tags: None,
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -252,6 +258,7 @@ pub fn test_rule_tag_matching_is_case_insensitive() {
         title: None,
         description: None,
         tags: Some(vec!["Rust".to_string()]),
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -275,6 +282,7 @@ pub fn test_rule_tags_only_matches() {
         title: None,
         description: None,
         tags: Some(vec!["rust".to_string()]),
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -305,6 +313,7 @@ pub fn test_rule_tag_order_independent() {
         title: None,
         description: None,
         tags: Some(vec!["b".to_string(), "a".to_string()]),
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -346,6 +355,7 @@ pub fn test_title_rule_vs_none_title_record() {
         title: Some("x".to_string()),
         description: None,
         tags: None,
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -371,6 +381,7 @@ pub fn test_description_rule_vs_none_description_record() {
         title: None,
         description: Some("tutorial".to_string()),
         tags: None,
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -395,6 +406,7 @@ pub fn test_no_condition_rule_returns_false() {
         title: None,
         description: None,
         tags: None,
+        query: None,
         comment: None,
         action: rules::Action::UpdateBookmark {
             tags: None,
@@ -431,4 +443,250 @@ pub fn test_action_fields_exist() {
             assert_eq!(tags.unwrap().len(), 2);
         }
     }
+}
+
+#[test]
+pub fn test_query_simple_term() {
+    let rule = rules::Rule {
+        url: None,
+        title: None,
+        description: None,
+        tags: None,
+        query: Some("rust".to_string()),
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    assert!(rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("Learning Rust".into()),
+        description: None,
+        tags: None,
+    }));
+
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("Learning Python".into()),
+        description: None,
+        tags: None,
+    }));
+}
+
+#[test]
+pub fn test_query_boolean_ops() {
+    let rule = rules::Rule {
+        url: None,
+        title: None,
+        description: None,
+        tags: None,
+        query: Some("rust and tutorial".to_string()),
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    assert!(rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("Rust Tutorial".into()),
+        description: None,
+        tags: None,
+    }));
+
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("Rust Reference".into()),
+        description: None,
+        tags: None,
+    }));
+}
+
+#[test]
+pub fn test_query_not_operator() {
+    let rule = rules::Rule {
+        url: None,
+        title: None,
+        description: None,
+        tags: None,
+        query: Some("rust not beginner".to_string()),
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    assert!(rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("Advanced Rust".into()),
+        description: None,
+        tags: None,
+    }));
+
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("Rust beginner guide".into()),
+        description: None,
+        tags: None,
+    }));
+}
+
+#[test]
+pub fn test_query_field_prefix_tag() {
+    let rule = rules::Rule {
+        url: None,
+        title: None,
+        description: None,
+        tags: None,
+        query: Some("#programming".to_string()),
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    assert!(rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("Any".into()),
+        description: None,
+        tags: Some(vec!["programming".to_string()]),
+    }));
+
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("Any".into()),
+        description: None,
+        tags: Some(vec!["cooking".to_string()]),
+    }));
+}
+
+#[test]
+pub fn test_query_field_prefix_url() {
+    let rule = rules::Rule {
+        url: None,
+        title: None,
+        description: None,
+        tags: None,
+        query: Some(":github.com".to_string()),
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    assert!(rule.is_match(&rules::Record {
+        url: "https://github.com/user/repo".into(),
+        title: None,
+        description: None,
+        tags: None,
+    }));
+
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://gitlab.com/user/repo".into(),
+        title: None,
+        description: None,
+        tags: None,
+    }));
+}
+
+#[test]
+pub fn test_query_combined_with_url_condition() {
+    let rule = rules::Rule {
+        url: Some("example.com".to_string()),
+        title: None,
+        description: None,
+        tags: None,
+        query: Some("#rust".to_string()),
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    // Both conditions match
+    assert!(rule.is_match(&rules::Record {
+        url: "https://example.com/page".into(),
+        title: None,
+        description: None,
+        tags: Some(vec!["rust".to_string()]),
+    }));
+
+    // URL matches but query doesn't
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://example.com/page".into(),
+        title: None,
+        description: None,
+        tags: Some(vec!["python".to_string()]),
+    }));
+
+    // Query matches but URL doesn't
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://other.com/page".into(),
+        title: None,
+        description: None,
+        tags: Some(vec!["rust".to_string()]),
+    }));
+}
+
+#[test]
+pub fn test_query_invalid_returns_false() {
+    let rule = rules::Rule {
+        url: None,
+        title: None,
+        description: None,
+        tags: None,
+        query: Some("(unclosed".to_string()),
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    // Invalid query -> no match
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("anything".into()),
+        description: None,
+        tags: None,
+    }));
+}
+
+#[test]
+pub fn test_query_empty_string_returns_false() {
+    let rule = rules::Rule {
+        url: None,
+        title: None,
+        description: None,
+        tags: None,
+        query: Some("".to_string()),
+        comment: None,
+        action: rules::Action::UpdateBookmark {
+            tags: None,
+            title: None,
+            description: None,
+        },
+    };
+
+    // Empty query string -> parse error -> no match
+    assert!(!rule.is_match(&rules::Record {
+        url: "https://example.com".into(),
+        title: Some("anything".into()),
+        description: None,
+        tags: None,
+    }));
 }
