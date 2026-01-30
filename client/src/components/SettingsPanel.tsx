@@ -765,7 +765,7 @@ function RulesManager() {
       </div>
 
       {/* Rule editor */}
-      <div className="min-w-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {error && (
           <div className="mb-3 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">{error}</div>
         )}
@@ -889,7 +889,7 @@ function RuleEditor({
   const labelClass = 'shrink-0 w-24 text-[11px] text-text-dim pt-1.5'
 
   return (
-    <div className="flex flex-col gap-0 overflow-y-auto pb-4">
+    <div className="flex flex-col gap-0 pb-4">
       {/* Comment — subtle top bar */}
       <div className="flex items-center gap-2 pb-3">
         <input
