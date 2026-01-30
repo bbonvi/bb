@@ -1,0 +1,25 @@
+# Automated rules applied to bookmarks on creation and metadata refresh.
+# Rules are evaluated in order; all matching rules are applied.
+#
+# Each rule has match conditions (url, title, description, tags)
+# and an action to perform when matched.
+# Match strings are case-insensitive substrings, or regex with r/pattern/ syntax.
+
+rules:
+- url: mail.proton.me
+  action: !UpdateBookmark
+    tags:
+    - mail
+
+- url: huggingface.co
+  action: !UpdateBookmark
+    tags:
+    - ai
+
+# Regex example:
+# - url: r/github\.com\/.*\/pull\//
+#   comment: GitHub pull requests
+#   action: !UpdateBookmark
+#     tags:
+#     - github
+#     - pr
