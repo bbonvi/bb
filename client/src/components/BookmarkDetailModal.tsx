@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -53,7 +53,19 @@ export default function BookmarkDetailModal() {
   // Local preview URLs for display
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [iconPreview, setIconPreview] = useState<string | null>(null)
+  // Per-bookmark report cache — survives navigation within the modal session
+  const reportCache = useRef<Map<number, MetadataReport>>(new Map())
   const [fetchReport, setFetchReport] = useState<MetadataReport | null>(null)
+
+  const setReportForBookmark = useCallback((id: number, report: MetadataReport | null) => {
+    if (report) {
+      reportCache.current.set(id, report)
+    }
+    // Only update visible state if we're still viewing that bookmark
+    if (useStore.getState().detailModalId === id) {
+      setFetchReport(report)
+    }
+  }, [])
 
   // Find the bookmark by ID from the full bookmarks array (not display — may be reversed/shuffled)
   const bookmark = useMemo(
@@ -139,12 +151,19 @@ export default function BookmarkDetailModal() {
     setPendingIcon(null)
     setCoverPreview(null)
     setIconPreview(null)
-    // Consume pending report from create path, or clear
-    if (pendingFetchReport) {
+    // Consume pending report from create path, restore from cache, or clear
+    if (pendingFetchReport && detailModalId !== null) {
+      reportCache.current.set(detailModalId, pendingFetchReport)
       setFetchReport(pendingFetchReport)
       setPendingFetchReport(null)
+    } else if (detailModalId !== null && reportCache.current.has(detailModalId)) {
+      setFetchReport(reportCache.current.get(detailModalId)!)
     } else {
       setFetchReport(null)
+    }
+    // Clear cache when modal closes
+    if (detailModalId === null) {
+      reportCache.current.clear()
     }
   }, [detailModalId])
 
@@ -209,18 +228,23 @@ export default function BookmarkDetailModal() {
 
   const handleRefreshMetadata = useCallback(async () => {
     if (!bookmark) return
+    const targetId = bookmark.id
     setRefreshing(true)
     setError(null)
     try {
-      const { report } = await refreshMetadata(bookmark.id, { async_meta: false })
-      setFetchReport(report)
+      const { report } = await refreshMetadata(targetId, { async_meta: false })
+      setReportForBookmark(targetId, report)
       triggerRefetch()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to refresh metadata')
+      if (useStore.getState().detailModalId === targetId) {
+        setError(e instanceof Error ? e.message : 'Failed to refresh metadata')
+      }
     } finally {
-      setRefreshing(false)
+      if (useStore.getState().detailModalId === targetId) {
+        setRefreshing(false)
+      }
     }
-  }, [bookmark, triggerRefetch])
+  }, [bookmark, triggerRefetch, setReportForBookmark])
 
   // Keyboard: arrows for nav, Ctrl+Enter to save, Escape to discard edit first
   useEffect(() => {
