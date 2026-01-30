@@ -629,10 +629,10 @@ function WorkspaceEditor({
         />
       </div>
 
-      {/* Keyword filter */}
+      {/* Query filter */}
       <div>
         <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-text-dim">
-          Keyword filter
+          Search query
         </label>
         <input
           type="text"
@@ -646,7 +646,7 @@ function WorkspaceEditor({
           placeholder="e.g. .tutorial :github.com"
         />
         <p className="mt-1 text-[11px] text-text-dim">
-          Keyword search query — combined with tag filters above
+          Search query — combined with tag filters above
         </p>
       </div>
 
