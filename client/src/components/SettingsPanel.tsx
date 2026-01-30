@@ -310,6 +310,7 @@ function WorkspaceManager({
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {selectedWorkspace ? (
           <WorkspaceEditor
+            key={selectedWorkspace.id}
             workspace={selectedWorkspace}
             visibleTags={visibleTags}
             refreshWorkspaces={refreshWorkspaces}
@@ -408,16 +409,6 @@ function WorkspaceEditor({
   const [blacklistRelated, setBlacklistRelated] = useState<string[]>([])
   const [fetchingWhitelistRelated, setFetchingWhitelistRelated] = useState(false)
   const [fetchingBlacklistRelated, setFetchingBlacklistRelated] = useState(false)
-
-  // Reset form when workspace changes
-  useEffect(() => {
-    setName(workspace.name)
-    setQuery(workspace.filters.query ?? '')
-    setWhitelist(workspace.filters.tag_whitelist ?? [])
-    setBlacklist(workspace.filters.tag_blacklist ?? [])
-    setWhitelistRelated([])
-    setBlacklistRelated([])
-  }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
