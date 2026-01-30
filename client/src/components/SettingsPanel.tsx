@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { TagTokenInput } from '@/components/TagTokenInput'
 import { X, Plus, RefreshCw, LogOut, GripVertical } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
@@ -410,8 +411,6 @@ function WorkspaceEditor({
   const isActive = workspace.id === activeWorkspaceId
 
   const [name, setName] = useState(workspace.name)
-  const [whitelistInput, setWhitelistInput] = useState('')
-  const [blacklistInput, setBlacklistInput] = useState('')
   const [query, setQuery] = useState(workspace.filters.query ?? '')
 
   // Related tags (separate per list)
@@ -424,8 +423,6 @@ function WorkspaceEditor({
   useEffect(() => {
     setName(workspace.name)
     setQuery(workspace.filters.query ?? '')
-    setWhitelistInput('')
-    setBlacklistInput('')
     setWhitelistRelated([])
     setBlacklistRelated([])
   }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -461,18 +458,6 @@ function WorkspaceEditor({
     [visibleTags, existingTags],
   )
 
-  const whitelistSuggestions = useMemo(() => {
-    if (!whitelistInput) return []
-    const lower = whitelistInput.toLowerCase()
-    return autocompleteTags.filter((t) => t.toLowerCase().includes(lower)).slice(0, 8)
-  }, [whitelistInput, autocompleteTags])
-
-  const blacklistSuggestions = useMemo(() => {
-    if (!blacklistInput) return []
-    const lower = blacklistInput.toLowerCase()
-    return autocompleteTags.filter((t) => t.toLowerCase().includes(lower)).slice(0, 8)
-  }, [blacklistInput, autocompleteTags])
-
   function saveWorkspace(overrides: Partial<Workspace['filters']> = {}) {
     const filters = {
       tag_whitelist: whitelist,
@@ -481,36 +466,6 @@ function WorkspaceEditor({
       ...overrides,
     }
     onSave({ ...workspace, name, filters })
-  }
-
-  function addWhitelistTag(tag: string) {
-    const trimmed = tag.trim()
-    if (!trimmed || whitelist.includes(trimmed)) return
-    saveWorkspace({
-      tag_whitelist: [...whitelist, trimmed],
-    })
-    setWhitelistInput('')
-  }
-
-  function removeWhitelistTag(tag: string) {
-    saveWorkspace({
-      tag_whitelist: whitelist.filter((t) => t !== tag),
-    })
-  }
-
-  function addBlacklistTag(tag: string) {
-    const trimmed = tag.trim()
-    if (!trimmed || blacklist.includes(trimmed)) return
-    saveWorkspace({
-      tag_blacklist: [...blacklist, trimmed],
-    })
-    setBlacklistInput('')
-  }
-
-  function removeBlacklistTag(tag: string) {
-    saveWorkspace({
-      tag_blacklist: workspace.filters.tag_blacklist.filter((t) => t !== tag),
-    })
   }
 
   async function fetchRelated(
@@ -621,13 +576,10 @@ function WorkspaceEditor({
           <div className="flex items-start gap-2">
             <span className={labelClass}>Has tags</span>
             <div className="min-w-0 flex-1">
-              <TagListEditor
+              <TagTokenInput
                 tags={workspace.filters.tag_whitelist}
-                input={whitelistInput}
-                setInput={setWhitelistInput}
-                suggestions={whitelistSuggestions}
-                onAdd={addWhitelistTag}
-                onRemove={removeWhitelistTag}
+                onChange={(tags) => saveWorkspace({ tag_whitelist: tags })}
+                availableTags={autocompleteTags}
                 placeholder="Add tag"
               />
               <RelatedTags
@@ -635,7 +587,7 @@ function WorkspaceEditor({
                 fetching={fetchingWhitelistRelated}
                 disabled={whitelist.length === 0}
                 onFetch={() => fetchRelated(whitelist, setWhitelistRelated, setFetchingWhitelistRelated)}
-                onAdd={addWhitelistTag}
+                onAdd={(tag) => { if (tag.trim() && !whitelist.includes(tag.trim())) saveWorkspace({ tag_whitelist: [...whitelist, tag.trim()] }) }}
                 setTags={setWhitelistRelated}
               />
             </div>
@@ -645,13 +597,10 @@ function WorkspaceEditor({
           <div className="flex items-start gap-2">
             <span className={labelClass}>Without tags</span>
             <div className="min-w-0 flex-1">
-              <TagListEditor
+              <TagTokenInput
                 tags={workspace.filters.tag_blacklist}
-                input={blacklistInput}
-                setInput={setBlacklistInput}
-                suggestions={blacklistSuggestions}
-                onAdd={addBlacklistTag}
-                onRemove={removeBlacklistTag}
+                onChange={(tags) => saveWorkspace({ tag_blacklist: tags })}
+                availableTags={autocompleteTags}
                 placeholder="Add tag"
               />
               <RelatedTags
@@ -659,7 +608,7 @@ function WorkspaceEditor({
                 fetching={fetchingBlacklistRelated}
                 disabled={blacklist.length === 0}
                 onFetch={() => fetchRelated(blacklist, setBlacklistRelated, setFetchingBlacklistRelated)}
-                onAdd={addBlacklistTag}
+                onAdd={(tag) => { if (tag.trim() && !blacklist.includes(tag.trim())) saveWorkspace({ tag_blacklist: [...blacklist, tag.trim()] }) }}
                 setTags={setBlacklistRelated}
               />
             </div>
@@ -810,9 +759,6 @@ function RuleEditor({
   const [actionTitle, setActionTitle] = useState(rule.action.UpdateBookmark.title ?? '')
   const [actionDesc, setActionDesc] = useState(rule.action.UpdateBookmark.description ?? '')
 
-  // Tag input state for TagListEditor
-  const [condTagInput, setCondTagInput] = useState('')
-  const [actionTagInput, setActionTagInput] = useState('')
 
   function saveField(patch: Partial<Rule>) {
     onUpdate(patch)
@@ -835,57 +781,6 @@ function RuleEditor({
   // Visible tags for autocomplete (exclude hidden + already-used)
   const hiddenSet = useMemo(() => new Set(hiddenTags), [hiddenTags])
   const visibleTags = useMemo(() => tags.filter((t) => !hiddenSet.has(t)), [tags, hiddenSet])
-
-  const condExisting = useMemo(() => new Set([...conditionTags, ...actionTags]), [conditionTags, actionTags])
-  const condSuggestions = useMemo(() => {
-    if (!condTagInput) return []
-    const lower = condTagInput.toLowerCase()
-    return visibleTags.filter((t) => !condExisting.has(t) && t.toLowerCase().includes(lower)).slice(0, 8)
-  }, [condTagInput, visibleTags, condExisting])
-
-  const actionSuggestions = useMemo(() => {
-    if (!actionTagInput) return []
-    const lower = actionTagInput.toLowerCase()
-    return visibleTags.filter((t) => !condExisting.has(t) && t.toLowerCase().includes(lower)).slice(0, 8)
-  }, [actionTagInput, visibleTags, condExisting])
-
-  function addConditionTag(tag: string) {
-    const trimmed = tag.trim()
-    if (!trimmed || conditionTags.includes(trimmed)) return
-    onUpdate({ tags: [...conditionTags, trimmed] })
-    setCondTagInput('')
-  }
-
-  function removeConditionTag(tag: string) {
-    const updated = conditionTags.filter((t) => t !== tag)
-    onUpdate({ tags: updated.length > 0 ? updated : undefined })
-  }
-
-  function addActionTag(tag: string) {
-    const trimmed = tag.trim()
-    if (!trimmed || actionTags.includes(trimmed)) return
-    onUpdate({
-      action: {
-        UpdateBookmark: {
-          ...rule.action.UpdateBookmark,
-          tags: [...actionTags, trimmed],
-        },
-      },
-    })
-    setActionTagInput('')
-  }
-
-  function removeActionTag(tag: string) {
-    const updated = actionTags.filter((t) => t !== tag)
-    onUpdate({
-      action: {
-        UpdateBookmark: {
-          ...rule.action.UpdateBookmark,
-          tags: updated.length > 0 ? updated : undefined,
-        },
-      },
-    })
-  }
 
   const inputClass = 'h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim'
   const labelClass = 'shrink-0 w-24 text-[11px] text-text-dim pt-1.5'
@@ -959,13 +854,10 @@ function RuleEditor({
           <div className="flex items-start gap-2">
             <span className={labelClass}>Has tags</span>
             <div className="min-w-0 flex-1">
-              <TagListEditor
+              <TagTokenInput
                 tags={conditionTags}
-                input={condTagInput}
-                setInput={setCondTagInput}
-                suggestions={condSuggestions}
-                onAdd={addConditionTag}
-                onRemove={removeConditionTag}
+                onChange={(tags) => onUpdate({ tags: tags.length > 0 ? tags : undefined })}
+                availableTags={visibleTags}
                 placeholder="Add tag"
               />
             </div>
@@ -1004,212 +896,23 @@ function RuleEditor({
           <div className="flex items-start gap-2">
             <span className={labelClass}>Add tags</span>
             <div className="min-w-0 flex-1">
-              <TagListEditor
+              <TagTokenInput
                 tags={actionTags}
-                input={actionTagInput}
-                setInput={setActionTagInput}
-                suggestions={actionSuggestions}
-                onAdd={addActionTag}
-                onRemove={removeActionTag}
+                onChange={(tags) => onUpdate({
+                  action: {
+                    UpdateBookmark: {
+                      ...rule.action.UpdateBookmark,
+                      tags: tags.length > 0 ? tags : undefined,
+                    },
+                  },
+                })}
+                availableTags={visibleTags}
                 placeholder="Add tag"
               />
             </div>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-// ─── Tag List Editor ─────────────────────────────────────────────
-
-function TagListEditor({
-  tags,
-  input,
-  setInput,
-  suggestions,
-  onAdd,
-  onRemove,
-  placeholder,
-}: {
-  tags: string[]
-  input: string
-  setInput: (v: string) => void
-  suggestions: string[]
-  onAdd: (tag: string) => void
-  onRemove: (tag: string) => void
-  placeholder: string
-}) {
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const [highlightIdx, setHighlightIdx] = useState(-1)
-  const [stagedDelete, setStagedDelete] = useState(false)
-  const [dropUp, setDropUp] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  const visible = showSuggestions && suggestions.length > 0
-
-  // Recompute drop direction
-  const recomputeDropDirection = useCallback(() => {
-    if (!containerRef.current) return
-    const rect = containerRef.current.getBoundingClientRect()
-    const vh = window.visualViewport?.height ?? window.innerHeight
-    setDropUp(vh - rect.bottom < 160)
-  }, [])
-
-  useEffect(() => {
-    if (!visible) return
-    recomputeDropDirection()
-    const vv = window.visualViewport
-    window.addEventListener('resize', recomputeDropDirection)
-    vv?.addEventListener('resize', recomputeDropDirection)
-    return () => {
-      window.removeEventListener('resize', recomputeDropDirection)
-      vv?.removeEventListener('resize', recomputeDropDirection)
-    }
-  }, [visible, recomputeDropDirection])
-
-  const commitTag = useCallback((tag: string) => {
-    const cleaned = tag.replace(/,/g, ' ').trim()
-    if (!cleaned) return
-    // Split on spaces to handle pasted multi-tag strings
-    for (const t of cleaned.split(/\s+/)) {
-      if (t) onAdd(t)
-    }
-    setInput('')
-    setShowSuggestions(false)
-    setHighlightIdx(0)
-  }, [onAdd, setInput])
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Autocomplete navigation
-    if (visible) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setHighlightIdx(i => (i + 1) % suggestions.length)
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setHighlightIdx(i => (i <= 0 ? suggestions.length - 1 : i - 1))
-        return
-      }
-      if (e.key === 'Tab' || e.key === 'Enter') {
-        e.preventDefault()
-        commitTag(suggestions[highlightIdx] ?? suggestions[0])
-        return
-      }
-      if (e.key === 'Escape') {
-        setShowSuggestions(false)
-        setHighlightIdx(0)
-        return
-      }
-    }
-
-    // No suggestions visible — Enter commits raw text, Tab passes through
-    if (e.key === 'Enter' && input.trim()) {
-      e.preventDefault()
-      commitTag(input)
-      return
-    }
-
-    // Backspace-to-delete: staged delete pattern
-    if (e.key === 'Backspace' && input === '' && tags.length > 0) {
-      e.preventDefault()
-      if (stagedDelete) {
-        onRemove(tags[tags.length - 1])
-        setStagedDelete(false)
-      } else {
-        setStagedDelete(true)
-      }
-    }
-  }, [visible, suggestions, highlightIdx, input, tags, stagedDelete, commitTag, onRemove])
-
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value
-    // Auto-replace commas with spaces; if space typed, commit the preceding token
-    const cleaned = raw.replace(/,/g, ' ')
-    if (cleaned.endsWith(' ') && cleaned.trim()) {
-      commitTag(cleaned)
-    } else {
-      setInput(cleaned)
-      setShowSuggestions(true)
-      setHighlightIdx(0)
-      setStagedDelete(false)
-    }
-  }, [commitTag, setInput])
-
-  return (
-    <div ref={containerRef} className="relative">
-      {/* Inline token field */}
-      <div
-        className="flex min-h-[28px] cursor-text flex-wrap items-center gap-1 rounded-md border border-white/[0.06] bg-surface px-1.5 py-1 transition-colors focus-within:border-hi-dim"
-        onClick={() => inputRef.current?.focus()}
-      >
-        {tags.map((tag, i) => (
-          <span
-            key={tag}
-            className={`flex items-center gap-0.5 rounded px-1.5 py-px font-mono text-[11px] transition-colors ${
-              stagedDelete && i === tags.length - 1
-                ? 'bg-danger/20 text-danger'
-                : 'bg-surface-active text-text-muted'
-            }`}
-          >
-            {tag}
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onRemove(tag)
-              }}
-              className="ml-0.5 text-text-dim transition-colors hover:text-danger"
-              tabIndex={-1}
-            >
-              <X className="h-2.5 w-2.5" />
-            </button>
-          </span>
-        ))}
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={handleChange}
-          onFocus={() => { setShowSuggestions(true); setHighlightIdx(0) }}
-          onBlur={() => {
-            setTimeout(() => setShowSuggestions(false), 150)
-            setStagedDelete(false)
-            // Commit any remaining text on blur
-            if (input.trim()) commitTag(input)
-          }}
-          onKeyDown={handleKeyDown}
-          className="min-w-[60px] flex-1 bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim"
-          placeholder={tags.length === 0 ? placeholder : ''}
-        />
-      </div>
-
-      {/* Autocomplete dropdown */}
-      {visible && (
-        <div className={`absolute left-0 z-50 max-h-32 w-full overflow-y-auto rounded-md border border-white/[0.08] bg-surface shadow-lg ${
-          dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
-        }`}>
-          {suggestions.map((s, i) => (
-            <button
-              key={s}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                commitTag(s)
-              }}
-              className={`block w-full px-2 py-1 text-left text-xs transition-colors ${
-                i === highlightIdx
-                  ? 'bg-surface-hover text-text'
-                  : 'text-text-muted hover:bg-surface-hover hover:text-text'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -1267,35 +970,6 @@ function RelatedTags({
 
 function GeneralSettings({ visibleTags }: { visibleTags: string[] }) {
   const [settings, updateSettings] = useSettings()
-  const [ignoredInput, setIgnoredInput] = useState('')
-
-  const existingIgnored = useMemo(
-    () => new Set(settings.globalIgnoredTags),
-    [settings.globalIgnoredTags],
-  )
-
-  const suggestions = useMemo(() => {
-    if (!ignoredInput) return []
-    const lower = ignoredInput.toLowerCase()
-    return visibleTags
-      .filter((t) => !existingIgnored.has(t) && t.toLowerCase().includes(lower))
-      .slice(0, 8)
-  }, [ignoredInput, visibleTags, existingIgnored])
-
-  function addIgnoredTag(tag: string) {
-    const trimmed = tag.trim()
-    if (!trimmed || existingIgnored.has(trimmed)) return
-    updateSettings({
-      globalIgnoredTags: [...settings.globalIgnoredTags, trimmed],
-    })
-    setIgnoredInput('')
-  }
-
-  function removeIgnoredTag(tag: string) {
-    updateSettings({
-      globalIgnoredTags: settings.globalIgnoredTags.filter((t) => t !== tag),
-    })
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -1362,13 +1036,10 @@ function GeneralSettings({ visibleTags }: { visibleTags: string[] }) {
         <p className="mb-2 text-xs text-text-muted">
           Bookmarks with these tags are completely hidden everywhere
         </p>
-        <TagListEditor
+        <TagTokenInput
           tags={settings.globalIgnoredTags}
-          input={ignoredInput}
-          setInput={setIgnoredInput}
-          suggestions={suggestions}
-          onAdd={addIgnoredTag}
-          onRemove={removeIgnoredTag}
+          onChange={(tags) => updateSettings({ globalIgnoredTags: tags })}
+          availableTags={visibleTags}
           placeholder="Add tag to ignore globally"
         />
       </div>

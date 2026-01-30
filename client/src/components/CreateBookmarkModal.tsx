@@ -7,14 +7,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
-import { createBookmark, normalizeTags } from '@/lib/api'
+import { createBookmark } from '@/lib/api'
+import { TagTokenInput } from '@/components/TagTokenInput'
 import { Check, X } from 'lucide-react'
 
 interface CreateForm {
   url: string
   title: string
   description: string
-  tags: string
+  tags: string[]
   no_meta: boolean
   async_meta: boolean
   no_headless: boolean
@@ -24,7 +25,7 @@ const emptyForm: CreateForm = {
   url: '',
   title: '',
   description: '',
-  tags: '',
+  tags: [],
   no_meta: false,
   async_meta: true,
   no_headless: false,
@@ -48,6 +49,7 @@ export default function CreateBookmarkModal() {
   const initialTags = useStore((s) => s.createModalInitialTags)
   const openCreateModal = useStore((s) => s.openCreateModal)
   const triggerRefetch = useStore((s) => s.triggerRefetch)
+  const allTags = useStore((s) => s.tags)
 
   const [form, setForm] = useState<CreateForm>(emptyForm)
   const [submitting, setSubmitting] = useState(false)
@@ -61,7 +63,7 @@ export default function CreateBookmarkModal() {
         url: initialUrl || '',
         title: initialTitle || '',
         description: initialDescription || '',
-        tags: initialTags || '',
+        tags: initialTags ? initialTags.split(/[\s,]+/).filter(Boolean) : [],
       })
       setError(null)
     }
@@ -122,7 +124,7 @@ export default function CreateBookmarkModal() {
         url,
         title: form.title.trim() || undefined,
         description: form.description.trim() || undefined,
-        tags: normalizeTags(form.tags) || undefined,
+        tags: form.tags.length > 0 ? form.tags.join(',') : undefined,
         no_meta: form.no_meta || undefined,
         async_meta: form.async_meta || undefined,
         no_headless: form.no_headless || undefined,
@@ -199,16 +201,15 @@ export default function CreateBookmarkModal() {
             />
           </label>
 
-          <label className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-text-muted">Tags</span>
-            <Input
-              value={form.tags}
-              onChange={(e) => update('tags', e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="comma-separated"
-              className="bg-surface-hover"
+            <TagTokenInput
+              tags={form.tags}
+              onChange={(tags) => setForm((f) => ({ ...f, tags }))}
+              availableTags={allTags}
+              placeholder="Add tag"
             />
-          </label>
+          </div>
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-text-muted">

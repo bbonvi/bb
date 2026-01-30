@@ -9,10 +9,10 @@ import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
-import { updateBookmark, deleteBookmark, refreshMetadata, normalizeTags, toBase64, fileUrl } from '@/lib/api'
+import { updateBookmark, deleteBookmark, refreshMetadata, toBase64, fileUrl } from '@/lib/api'
 import type { Bookmark } from '@/lib/api'
 import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone, FetchingIndicator } from './bookmark-parts'
-import { TagAutocompleteInput } from '@/components/TagAutocompleteInput'
+import { TagTokenInput } from '@/components/TagTokenInput'
 import {
   ChevronLeft,
   ChevronRight,
@@ -42,7 +42,7 @@ export default function BookmarkDetailModal() {
   const { displayBookmarks } = useDisplayBookmarks()
 
   const [editing, setEditing] = useState(false)
-  const [editForm, setEditForm] = useState({ title: '', description: '', url: '', tags: '' })
+  const [editForm, setEditForm] = useState<EditFormState>({ title: '', description: '', url: '', tags: [] })
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -125,7 +125,7 @@ export default function BookmarkDetailModal() {
         title: bookmark.title,
         description: bookmark.description,
         url: bookmark.url,
-        tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)).join(', '),
+        tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)),
       })
       setEditing(true)
     } else {
@@ -144,7 +144,7 @@ export default function BookmarkDetailModal() {
       title: bookmark.title,
       description: bookmark.description,
       url: bookmark.url,
-      tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)).join(', '),
+      tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)),
     })
     setEditing(true)
     setError(null)
@@ -167,7 +167,7 @@ export default function BookmarkDetailModal() {
         title: editForm.title,
         description: editForm.description,
         url: editForm.url,
-        tags: normalizeTags(editForm.tags),
+        tags: editForm.tags.join(','),
       }
       // Convert pending images to base64 if present
       if (pendingCover) payload.image_b64 = await toBase64(pendingCover)
@@ -438,7 +438,7 @@ interface EditFormState {
   title: string
   description: string
   url: string
-  tags: string
+  tags: string[]
 }
 
 function EditForm({
@@ -491,12 +491,11 @@ function EditForm({
       </label>
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-text-muted">Tags</span>
-        <TagAutocompleteInput
-          value={form.tags}
-          onChange={(v) => update('tags', v)}
+        <TagTokenInput
+          tags={form.tags}
+          onChange={(tags) => onChange({ ...form, tags })}
           availableTags={availableTags}
-          placeholder="comma or space separated"
-          inputClassName="flex h-9 w-full min-w-0 rounded-md border border-border bg-surface-hover px-3 py-1 text-sm text-text outline-none transition-colors focus:ring-1 focus:ring-ring"
+          placeholder="Add tag"
         />
       </div>
       <label className="flex flex-col gap-1">
