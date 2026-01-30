@@ -84,7 +84,7 @@ pub struct SearchQuery {
     pub url: Option<String>,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
-    pub keyword: Option<String>,
+    pub query: Option<String>,
 
     /// Semantic search query text (not lowercased—preserves embedding intent)
     #[serde(default)]
@@ -123,7 +123,7 @@ impl SearchQuery {
             .tags
             .as_ref()
             .map(|tags| tags.iter().map(|t| t.to_lowercase()).collect::<Vec<_>>());
-        self.keyword = self.keyword.as_ref().map(|keyword| keyword.to_lowercase());
+        self.query = self.query.as_ref().map(|q| q.to_lowercase());
     }
 }
 
@@ -471,7 +471,7 @@ impl BookmarkManager for BackendCsv {
             && query.title.is_none()
             && (query.tags.is_none() || query.tags.clone().unwrap_or_default().is_empty())
             && query.id.is_none()
-            && query.keyword.is_none()
+            && query.query.is_none()
         {
             return Ok(bmarks.clone());
         }
@@ -567,12 +567,12 @@ impl BookmarkManager for BackendCsv {
                 }
             };
 
-            // Keyword search — structured query language with field prefixes,
+            // Query search — structured query language with field prefixes,
             // boolean operators, quoted phrases, and parenthesized grouping.
-            if let Some(keyword) = &query.keyword {
-                let keyword = keyword.trim();
-                if !keyword.is_empty() {
-                    let filter = crate::search_query::parse(keyword)
+            if let Some(query_str) = &query.query {
+                let query_str = query_str.trim();
+                if !query_str.is_empty() {
+                    let filter = crate::search_query::parse(query_str)
                         .map_err(|e| anyhow::anyhow!("invalid search query: {}", e))?;
                     if !crate::search_query::eval(&filter, bookmark) {
                         continue;

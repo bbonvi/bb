@@ -315,8 +315,8 @@ impl AppBackend for AppLocal {
             if query.url.clone().unwrap_or_default() == "" {
                 query.url = None;
             };
-            if query.keyword.clone().unwrap_or_default() == "" {
-                query.keyword = None;
+            if query.query.clone().unwrap_or_default() == "" {
+                query.query = None;
             }
         }
 

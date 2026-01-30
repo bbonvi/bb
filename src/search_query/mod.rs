@@ -61,7 +61,7 @@ pub fn parse(input: &str) -> anyhow::Result<SearchFilter> {
 
 /// Tolerant parse: normalizes away all malformed constructs.
 /// Returns `Ok(None)` for empty/whitespace-only/operator-only input (match all).
-/// Used by workspace keyword validation/merge where tolerance is required.
+/// Used by workspace query validation/merge where tolerance is required.
 pub fn parse_tolerant(input: &str) -> anyhow::Result<Option<SearchFilter>> {
     let tokens = lexer::tokenize(input);
     let tokens = normalize::normalize(tokens);

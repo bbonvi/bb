@@ -681,13 +681,13 @@ fn search_delete_entire_collection() {
 }
 
 #[test]
-fn keyword_with_tag_prefix_search() {
+fn query_with_tag_prefix_search() {
     let (mgr, _tmp) = fresh_mgr();
     seed(&mgr, 3); // tags: ["all","tag0"], ["all","tag1"], ["all","tag2"]
 
     let results = mgr
         .search(SearchQuery {
-            keyword: Some("#tag0".into()),
+            query: Some("#tag0".into()),
             ..Default::default()
         })
         .unwrap();
@@ -696,16 +696,16 @@ fn keyword_with_tag_prefix_search() {
 }
 
 #[test]
-fn empty_and_whitespace_keyword_returns_all() {
+fn empty_and_whitespace_query_returns_all() {
     let (mgr, _tmp) = fresh_mgr();
     seed(&mgr, 4);
 
     // Known behavior: Some("") is not None, so the early "return all" path is
-    // skipped, yet the empty keyword sets no has_match flag → returns nothing.
+    // skipped, yet the empty query sets no has_match flag → returns nothing.
     // This documents the current (arguably buggy) behavior.
     let results_empty = mgr
         .search(SearchQuery {
-            keyword: Some("".into()),
+            query: Some("".into()),
             ..Default::default()
         })
         .unwrap();
@@ -713,7 +713,7 @@ fn empty_and_whitespace_keyword_returns_all() {
 
     let results_whitespace = mgr
         .search(SearchQuery {
-            keyword: Some("   ".into()),
+            query: Some("   ".into()),
             ..Default::default()
         })
         .unwrap();

@@ -49,7 +49,7 @@ impl AppService {
     /// Search bookmarks with optional count-only mode
     ///
     /// When `query.semantic` is provided and semantic search is enabled:
-    /// 1. First applies all filters (id, title, url, tags, keyword, etc.)
+    /// 1. First applies all filters (id, title, url, tags, query, etc.)
     /// 2. Then ranks filtered results by semantic similarity
     /// 3. Returns results ordered by relevance (highest similarity first)
     pub fn search_bookmarks(&self, query: SearchQuery, count_only: bool) -> Result<Vec<Bookmark>> {

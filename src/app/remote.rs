@@ -231,7 +231,7 @@ impl AppBackend for AppRemote {
                 "url": query.url,
                 "description": query.description,
                 "tags": query.tags.map(|tags| tags.join(",")),
-                "keyword": query.keyword,
+                "query": query.query,
                 "semantic": query.semantic,
                 "threshold": query.threshold,
                 "exact": query.exact,

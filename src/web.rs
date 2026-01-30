@@ -185,7 +185,7 @@ pub enum AppError {
     ModelUnavailable { message: String },
 
     #[error("{message}")]
-    InvalidKeyword { message: String },
+    InvalidQuery { message: String },
 
     #[error("{0}")]
     Workspace(#[from] WorkspaceError),
@@ -209,15 +209,15 @@ impl IntoResponse for AppError {
             AppError::ModelUnavailable { message } => {
                 (StatusCode::SERVICE_UNAVAILABLE, "MODEL_UNAVAILABLE", message.clone())
             }
-            AppError::InvalidKeyword { message } => {
-                (StatusCode::BAD_REQUEST, "INVALID_KEYWORD", message.clone())
+            AppError::InvalidQuery { message } => {
+                (StatusCode::BAD_REQUEST, "INVALID_QUERY", message.clone())
             }
             AppError::Workspace(ref e) => {
                 let status = match e {
                     WorkspaceError::NotFound(_) => StatusCode::NOT_FOUND,
                     WorkspaceError::InvalidName
                     | WorkspaceError::DuplicateName(_)
-                    | WorkspaceError::InvalidKeyword(_)
+                    | WorkspaceError::InvalidQuery(_)
                     | WorkspaceError::InvalidReorder(_) => StatusCode::BAD_REQUEST,
                     WorkspaceError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 };
@@ -244,7 +244,7 @@ pub struct ListBookmarksRequest {
     pub url: Option<String>,
     pub description: Option<String>,
     pub tags: Option<String>,
-    pub keyword: Option<String>,
+        pub query: Option<String>,
 
     /// Semantic search query text
     #[serde(default)]
@@ -301,7 +301,7 @@ async fn search(
         url: payload.url,
         description: payload.description,
         tags: payload.tags.map(crate::parse_tags),
-        keyword: payload.keyword,
+        query: payload.query,
         semantic: payload.semantic,
         threshold: payload.threshold,
         exact: payload.exact,
@@ -324,7 +324,7 @@ async fn search(
                     .unwrap_or_else(|| full.clone());
                 // Capitalize first letter for consistency
                 let message = format!("I{}", &message[1..]);
-                AppError::InvalidKeyword { message }
+                AppError::InvalidQuery { message }
             } else if full.contains("Semantic search is disabled") {
                 AppError::SemanticDisabled {
                     message: "Semantic search is disabled in configuration".to_string(),
@@ -904,8 +904,8 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_keyword_error_returns_400() {
-        let err = AppError::InvalidKeyword {
+    fn test_invalid_query_error_returns_400() {
+        let err = AppError::InvalidQuery {
             message: "invalid search query: unexpected token".to_string(),
         };
         let response = err.into_response();
@@ -1465,8 +1465,8 @@ mod tests {
         }
 
         // Note: WorkspaceFilters has no regex/url_pattern field.
-        // The keyword validator uses a normalizing parser that accepts all input,
-        // so invalid-keyword rejection is not testable here. Name validation
+        // The query validator uses a normalizing parser that accepts all input,
+        // so invalid-query rejection is not testable here. Name validation
         // (empty, too long) and duplicate-name rejection are covered by other tests.
 
         #[tokio::test]

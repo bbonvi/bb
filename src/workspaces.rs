@@ -18,7 +18,7 @@ pub struct WorkspaceFilters {
     #[serde(default)]
     pub tag_blacklist: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub keyword: Option<String>,
+    pub query: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -37,8 +37,8 @@ pub enum WorkspaceError {
     InvalidName,
     #[error("duplicate workspace name: {0}")]
     DuplicateName(String),
-    #[error("invalid keyword query: {0}")]
-    InvalidKeyword(String),
+    #[error("invalid query: {0}")]
+    InvalidQuery(String),
     #[error("workspace not found: {0}")]
     NotFound(String),
     #[error("invalid reorder: {0}")]
@@ -100,7 +100,7 @@ impl WorkspaceStore {
     ) -> Result<Workspace, WorkspaceError> {
         let name = validate_name(&name)?;
         let filters = filters.unwrap_or_default();
-        validate_keyword(&filters)?;
+        validate_query(&filters)?;
         self.check_duplicate_name(&name, None)?;
 
         let workspace = Workspace {
@@ -135,7 +135,7 @@ impl WorkspaceStore {
         }
 
         if let Some(filters) = filters {
-            validate_keyword(&filters)?;
+            validate_query(&filters)?;
             self.workspaces[idx].filters = filters;
         }
 
@@ -208,11 +208,11 @@ fn validate_name(name: &str) -> Result<String, WorkspaceError> {
     Ok(trimmed.to_string())
 }
 
-fn validate_keyword(filters: &WorkspaceFilters) -> Result<(), WorkspaceError> {
-    if let Some(ref kw) = filters.keyword {
+fn validate_query(filters: &WorkspaceFilters) -> Result<(), WorkspaceError> {
+    if let Some(ref kw) = filters.query {
         if !kw.trim().is_empty() {
             search_query::parse_tolerant(kw)
-                .map_err(|e| WorkspaceError::InvalidKeyword(e.to_string()))?;
+                .map_err(|e| WorkspaceError::InvalidQuery(e.to_string()))?;
         }
     }
     Ok(())
@@ -361,12 +361,12 @@ mod tests {
     }
 
     #[test]
-    fn malformed_keyword_accepted_tolerantly() {
+    fn malformed_query_accepted_tolerantly() {
         let dir = tmp_dir();
         let mut store = WorkspaceStore::load(&dir).unwrap();
         // Unmatched parens, trailing operators, etc. are now normalized away
         let filters = WorkspaceFilters {
-            keyword: Some("(unclosed".into()),
+            query: Some("(unclosed".into()),
             ..Default::default()
         };
         store.create("Valid".into(), Some(filters), None).unwrap();
@@ -387,7 +387,7 @@ mod tests {
         let mut store = WorkspaceStore::load(&dir).unwrap();
         let filters = WorkspaceFilters {
             tag_whitelist: vec!["rust".into()],
-            keyword: Some(":github.com".into()),
+            query: Some(":github.com".into()),
             ..Default::default()
         };
         let view_prefs = ViewPrefs {
@@ -503,11 +503,11 @@ mod tests {
     }
 
     #[test]
-    fn test_create_with_empty_keyword() {
+    fn test_create_with_empty_query() {
         let dir = tmp_dir();
         let mut store = WorkspaceStore::load(&dir).unwrap();
         let filters = WorkspaceFilters {
-            keyword: Some("".into()),
+            query: Some("".into()),
             ..Default::default()
         };
         let ws = store.create("EmptyKw".into(), Some(filters), None).unwrap();
@@ -528,11 +528,11 @@ mod tests {
     }
 
     #[test]
-    fn test_create_with_whitespace_keyword() {
+    fn test_create_with_whitespace_query() {
         let dir = tmp_dir();
         let mut store = WorkspaceStore::load(&dir).unwrap();
         let filters = WorkspaceFilters {
-            keyword: Some("   ".into()),
+            query: Some("   ".into()),
             ..Default::default()
         };
         let ws = store

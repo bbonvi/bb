@@ -2,7 +2,7 @@ use crate::bookmarks;
 use crate::bookmarks::BookmarkManager;
 
 #[test]
-pub fn test_keyword_search() {
+pub fn test_query_search() {
     let tmp = tempfile::tempdir().expect("failed to create temp dir");
     let csv_path = tmp.path().join("bookmarks.csv");
     let mgr = bookmarks::BackendCsv::load(csv_path.to_str().unwrap()).unwrap();
@@ -35,20 +35,20 @@ pub fn test_keyword_search() {
     })
     .unwrap();
 
-    // Test keyword search by title
+    // Test query search by title
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("rust".to_string()),
+            query: Some("rust".to_string()),
             ..Default::default()
         })
         .unwrap();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].title, "Rust Programming Guide");
 
-    // Test keyword search by description
+    // Test query search by description
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("tutorial".to_string()),
+            query: Some("tutorial".to_string()),
             ..Default::default()
         })
         .unwrap();
@@ -56,59 +56,59 @@ pub fn test_keyword_search() {
     assert!(results.iter().any(|b| b.title == "Python Tutorial"));
     assert!(results.iter().any(|b| b.title == "Web Development"));
 
-    // Test multi-keyword search
+    // Test multi-term query search
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("python programming".to_string()),
+            query: Some("python programming".to_string()),
             ..Default::default()
         })
         .unwrap();
     assert_eq!(results.len(), 1); // Only Python has both "python" and "programming"
     assert_eq!(results[0].title, "Python Tutorial");
 
-    // Test multi-keyword with mixed field matches
+    // Test multi-term query with mixed field matches
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("rust guide".to_string()),
+            query: Some("rust guide".to_string()),
             ..Default::default()
         })
         .unwrap();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].title, "Rust Programming Guide");
 
-    // Test multi-keyword with tag and text
+    // Test multi-term query with tag and text
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("python programming".to_string()),
+            query: Some("python programming".to_string()),
             ..Default::default()
         })
         .unwrap();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].title, "Python Tutorial");
 
-    // Test multi-keyword where not all keywords match
+    // Test multi-term query where not all keywords match
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("python javascript".to_string()),
+            query: Some("python javascript".to_string()),
             ..Default::default()
         })
         .unwrap();
     assert_eq!(results.len(), 0);
 
-    // Test keyword search by URL
+    // Test query search by URL
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("python.org".to_string()),
+            query: Some("python.org".to_string()),
             ..Default::default()
         })
         .unwrap();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].title, "Python Tutorial");
 
-    // Test keyword search by tag
+    // Test query search by tag
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("programming".to_string()),
+            query: Some("programming".to_string()),
             ..Default::default()
         })
         .unwrap();
@@ -116,10 +116,10 @@ pub fn test_keyword_search() {
     assert!(results.iter().any(|b| b.title == "Rust Programming Guide"));
     assert!(results.iter().any(|b| b.title == "Python Tutorial"));
 
-    // Test exact keyword search
+    // Test exact query search
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("Rust Programming Guide".to_string()),
+            query: Some("Rust Programming Guide".to_string()),
             exact: true,
             ..Default::default()
         })
@@ -127,10 +127,10 @@ pub fn test_keyword_search() {
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].title, "Rust Programming Guide");
 
-    // Test keyword search with no matches
+    // Test query search with no matches
     let results = mgr
         .search(bookmarks::SearchQuery {
-            keyword: Some("nonexistent".to_string()),
+            query: Some("nonexistent".to_string()),
             ..Default::default()
         })
         .unwrap();
