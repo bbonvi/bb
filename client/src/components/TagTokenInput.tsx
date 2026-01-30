@@ -283,7 +283,7 @@ export function TagTokenInput({
         if (input.trim()) commitTag(input)
       }}
       onKeyDown={handleKeyDown}
-      style={atEnd ? undefined : { width: input ? `${input.length + 1}ch` : '1px', margin: input ? undefined : '0 -3.5px' }}
+      style={atEnd ? undefined : { width: input ? `${input.length + 1}ch` : '1px', margin: input ? undefined : '0 -4.5px' }}
       className={`bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim ${
         atEnd ? 'min-w-[60px] flex-1' : 'flex-none'
       }`}
@@ -370,7 +370,7 @@ export function TagTokenInput({
     <div ref={containerRef} className={className ?? ''}>
       <div
         data-tag-field
-        className="flex min-h-[28px] cursor-text flex-wrap items-center gap-1.5 rounded-md border border-white/[0.06] bg-surface px-1.5 py-1 transition-colors focus-within:border-hi-dim"
+        className="flex min-h-[28px] cursor-text flex-wrap items-center gap-2 rounded-md border border-white/[0.06] bg-surface px-1.5 py-1 transition-colors focus-within:border-hi-dim"
         onClick={handleContainerClick}
       >
         {elements}
