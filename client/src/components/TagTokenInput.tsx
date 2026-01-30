@@ -236,16 +236,36 @@ export function TagTokenInput({
 
   const handleContainerClick = useCallback(
     (e: React.MouseEvent) => {
-      // Only handle clicks on the container itself (not chips or input)
-      if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-tag-field]')) {
-        setCursorIdx(tags.length)
-        inputRef.current?.focus()
+      const container = containerRef.current?.querySelector('[data-tag-field]') ?? containerRef.current
+      if (!container) return
+      const clickX = e.clientX
+      // Find the nearest gap between chips by checking each child's midpoint
+      const children = Array.from(container.children) as HTMLElement[]
+      let bestIdx = tags.length
+      let bestDist = Infinity
+      for (let i = 0; i < children.length; i++) {
+        const rect = children[i].getBoundingClientRect()
+        const leftDist = Math.abs(clickX - rect.left)
+        const rightDist = Math.abs(clickX - rect.right)
+        if (leftDist < bestDist) {
+          bestDist = leftDist
+          // Map child index back to tag index (input element is in the list)
+          bestIdx = i <= clampedCursorIdx ? i : i - 1
+        }
+        if (rightDist < bestDist) {
+          bestDist = rightDist
+          bestIdx = i < clampedCursorIdx ? i + 1 : i
+        }
       }
+      setCursorIdx(Math.max(0, Math.min(tags.length, bestIdx)))
+      setStagedDelete(false)
+      inputRef.current?.focus()
     },
-    [tags.length],
+    [tags.length, clampedCursorIdx],
   )
 
   // ── Build interleaved chips + input ──────────────────────────────
+  const atEnd = clampedCursorIdx >= tags.length
   const inputElement = (
     <input
       key="__input__"
@@ -263,7 +283,10 @@ export function TagTokenInput({
         if (input.trim()) commitTag(input)
       }}
       onKeyDown={handleKeyDown}
-      className="min-w-[60px] flex-1 bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim"
+      style={atEnd ? undefined : { width: input ? `${Math.max(2, input.length + 1)}ch` : '2px' }}
+      className={`bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim ${
+        atEnd ? 'min-w-[60px] flex-1' : 'flex-none'
+      }`}
       placeholder={tags.length === 0 ? placeholder : ''}
     />
   )
