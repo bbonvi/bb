@@ -13,9 +13,17 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
   const hiddenTags = useHiddenTags()
 
   return (
-    <article
-      onClick={() => setDetailModalId(bookmark.id)}
-      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface transition-[border-color] duration-150 cursor-default ${
+    <a
+      href={bookmark.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => {
+        if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+          e.preventDefault()
+          setDetailModalId(bookmark.id)
+        }
+      }}
+      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface transition-[border-color] duration-150 cursor-default no-underline ${
         bookmark.fetching
           ? 'fetching-glow'
           : 'border-white/[0.06] hover:border-white/[0.15]'
@@ -46,6 +54,6 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
         <Tags tags={bookmark.tags} hiddenTags={hiddenTags} />
         <Description text={bookmark.description} />
       </div>
-    </article>
+    </a>
   )
 })

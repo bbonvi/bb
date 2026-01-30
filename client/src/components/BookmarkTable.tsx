@@ -65,9 +65,17 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
   )
 
   return (
-    <div
-      onClick={() => setDetailModalId(bookmark.id)}
-      className={`group relative flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover ${
+    <a
+      href={bookmark.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => {
+        if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+          e.preventDefault()
+          setDetailModalId(bookmark.id)
+        }
+      }}
+      className={`group relative flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 transition-colors hover:bg-surface-hover no-underline ${
         bookmark.fetching ? 'border-l-2 border-l-hi-dim' : ''
       }`}
     >
@@ -118,6 +126,6 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
           {bookmark.description}
         </span>
       </div>
-    </div>
+    </a>
   )
 })
