@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { TagTokenInput } from '@/components/TagTokenInput'
-import { X, Plus, RefreshCw, LogOut, GripVertical } from 'lucide-react'
+import { X, Plus, RefreshCw, LogOut, GripVertical, Save } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useSettings } from '@/hooks/useSettings'
@@ -53,6 +53,12 @@ export default function SettingsPanel() {
   const [selectedView, setSelectedView] = useState<SettingsView>('preferences')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const saveHandlerRef = useRef<(() => Promise<void>) | null>(null)
+
+  const registerSaveHandler = useCallback((handler: (() => Promise<void>) | null) => {
+    saveHandlerRef.current = handler
+  }, [])
   const prevWorkspacesRef = useRef<Workspace[]>([])
 
   // Drag-and-drop sensors
@@ -89,8 +95,30 @@ export default function SettingsPanel() {
     if (!open) {
       setSelectedView('preferences')
       setError(null)
+      setDirty(false)
+      saveHandlerRef.current = null
     }
   }, [open])
+
+  // Reset dirty on view change
+  useEffect(() => {
+    setDirty(false)
+    saveHandlerRef.current = null
+  }, [selectedView])
+
+  async function handleSave() {
+    if (!saveHandlerRef.current) return
+    setSaving(true)
+    setError(null)
+    try {
+      await saveHandlerRef.current()
+      setDirty(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (!open) return null
 
@@ -209,25 +237,15 @@ export default function SettingsPanel() {
                 onDragEnd={handleDragEnd}
                 onCreate={handleCreate}
                 onDelete={handleDelete}
-                onSave={async (updated) => {
-                  setSaving(true)
-                  setError(null)
-                  try {
-                    await apiUpdateWorkspace(updated.id, {
-                      name: updated.name,
-                      filters: updated.filters,
-                      view_prefs: updated.view_prefs,
-                    })
-                    await refreshWorkspaces()
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : 'Failed to save workspace')
-                  } finally {
-                    setSaving(false)
-                  }
-                }}
+                onDirtyChange={setDirty}
+                onRegisterSave={registerSaveHandler}
+                refreshWorkspaces={refreshWorkspaces}
               />
             ) : selectedView === 'rules' ? (
-              <RulesManager />
+              <RulesManager
+                onDirtyChange={setDirty}
+                onRegisterSave={registerSaveHandler}
+              />
             ) : null}
           </div>
         </div>
@@ -244,6 +262,16 @@ export default function SettingsPanel() {
             </button>
           )}
           <div className="flex-1" />
+          {dirty && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-md bg-hi px-3.5 py-1.5 text-xs font-semibold text-bg transition-all hover:bg-hi/85 disabled:opacity-50"
+            >
+              <Save className="h-3 w-3" />
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -260,7 +288,9 @@ function WorkspaceManager({
   onDragEnd,
   onCreate,
   onDelete,
-  onSave,
+  onDirtyChange,
+  onRegisterSave,
+  refreshWorkspaces,
 }: {
   workspaces: Workspace[]
   visibleTags: string[]
@@ -269,7 +299,9 @@ function WorkspaceManager({
   onDragEnd: (event: DragEndEvent) => void
   onCreate: () => void
   onDelete: (id: string) => void
-  onSave: (ws: Workspace) => Promise<void>
+  onDirtyChange: (dirty: boolean) => void
+  onRegisterSave: (handler: (() => Promise<void>) | null) => void
+  refreshWorkspaces: () => Promise<void>
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -324,7 +356,9 @@ function WorkspaceManager({
           <WorkspaceEditor
             workspace={selectedWorkspace}
             visibleTags={visibleTags}
-            onSave={onSave}
+            onDirtyChange={onDirtyChange}
+            onRegisterSave={onRegisterSave}
+            refreshWorkspaces={refreshWorkspaces}
             onDelete={() => onDelete(selectedWorkspace.id)}
           />
         ) : (
@@ -398,12 +432,16 @@ function SortableWorkspaceItem({
 function WorkspaceEditor({
   workspace,
   visibleTags,
-  onSave,
+  onDirtyChange,
+  onRegisterSave,
+  refreshWorkspaces,
   onDelete,
 }: {
   workspace: Workspace
   visibleTags: string[]
-  onSave: (ws: Workspace) => Promise<void>
+  onDirtyChange: (dirty: boolean) => void
+  onRegisterSave: (handler: (() => Promise<void>) | null) => void
+  refreshWorkspaces: () => Promise<void>
   onDelete: () => void
 }) {
   const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
@@ -412,6 +450,8 @@ function WorkspaceEditor({
 
   const [name, setName] = useState(workspace.name)
   const [query, setQuery] = useState(workspace.filters.query ?? '')
+  const [whitelist, setWhitelist] = useState<string[]>(workspace.filters.tag_whitelist ?? [])
+  const [blacklist, setBlacklist] = useState<string[]>(workspace.filters.tag_blacklist ?? [])
 
   // Related tags (separate per list)
   const [whitelistRelated, setWhitelistRelated] = useState<string[]>([])
@@ -423,15 +463,55 @@ function WorkspaceEditor({
   useEffect(() => {
     setName(workspace.name)
     setQuery(workspace.filters.query ?? '')
+    setWhitelist(workspace.filters.tag_whitelist ?? [])
+    setBlacklist(workspace.filters.tag_blacklist ?? [])
     setWhitelistRelated([])
     setBlacklistRelated([])
   }, [workspace.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Bookmark count for this workspace
+  // Dirty detection
+  const isDirty = useMemo(() => {
+    const origWhitelist = workspace.filters.tag_whitelist ?? []
+    const origBlacklist = workspace.filters.tag_blacklist ?? []
+    return (
+      name !== workspace.name ||
+      query !== (workspace.filters.query ?? '') ||
+      JSON.stringify(whitelist) !== JSON.stringify(origWhitelist) ||
+      JSON.stringify(blacklist) !== JSON.stringify(origBlacklist)
+    )
+  }, [name, query, whitelist, blacklist, workspace])
+
+  useEffect(() => {
+    onDirtyChange(isDirty)
+  }, [isDirty, onDirtyChange])
+
+  // Register save handler
+  useEffect(() => {
+    onRegisterSave(async () => {
+      await apiUpdateWorkspace(workspace.id, {
+        name,
+        filters: {
+          tag_whitelist: whitelist,
+          tag_blacklist: blacklist,
+          query: query || null,
+        },
+        view_prefs: workspace.view_prefs,
+      })
+      await refreshWorkspaces()
+    })
+  }, [name, query, whitelist, blacklist, workspace.id, workspace.view_prefs, onRegisterSave, refreshWorkspaces])
+
+  // Bookmark count — use draft filters for live preview
+  const draftFilters = useMemo(() => ({
+    tag_whitelist: whitelist,
+    tag_blacklist: blacklist,
+    query: query || null,
+  }), [whitelist, blacklist, query])
+
   const [bookmarkCount, setBookmarkCount] = useState<number | null>(null)
   useEffect(() => {
     let cancelled = false
-    const wsKeyword = buildWorkspaceQuery(workspace)
+    const wsKeyword = buildWorkspaceQuery({ ...workspace, filters: draftFilters })
     if (!wsKeyword) {
       setBookmarkCount(null)
       return
@@ -442,12 +522,9 @@ function WorkspaceEditor({
       if (!cancelled) setBookmarkCount(null)
     })
     return () => { cancelled = true }
-  }, [workspace.id, workspace.filters])
+  }, [workspace.id, draftFilters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered autocomplete suggestions (exclude already-added tags)
-  const whitelist = useMemo(() => workspace.filters.tag_whitelist ?? [], [workspace.filters.tag_whitelist])
-  const blacklist = useMemo(() => workspace.filters.tag_blacklist ?? [], [workspace.filters.tag_blacklist])
-
   const existingTags = useMemo(
     () => new Set([...whitelist, ...blacklist]),
     [whitelist, blacklist],
@@ -458,16 +535,6 @@ function WorkspaceEditor({
     [visibleTags, existingTags],
   )
 
-  function saveWorkspace(overrides: Partial<Workspace['filters']> = {}) {
-    const filters = {
-      tag_whitelist: whitelist,
-      tag_blacklist: blacklist,
-      query: query || null,
-      ...overrides,
-    }
-    onSave({ ...workspace, name, filters })
-  }
-
   async function fetchRelated(
     sourceTags: string[],
     setResult: (tags: string[]) => void,
@@ -477,11 +544,9 @@ function WorkspaceEditor({
     if (concrete.length === 0) { setResult([]); return }
     setLoading(true)
     try {
-      // Fetch per-tag to avoid overly restrictive AND queries
       const results = await Promise.all(
         concrete.map((tag) => searchBookmarks({ tags: tag })),
       )
-      // Count co-occurrence: tags appearing with more source tags rank higher
       const freq = new Map<string, number>()
       for (const bookmarks of results) {
         const seen = new Set<string>()
@@ -494,7 +559,6 @@ function WorkspaceEditor({
           }
         }
       }
-      // Sort by frequency desc, then alphabetically
       const sorted = Array.from(freq.entries())
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .map(([tag]) => tag)
@@ -505,16 +569,6 @@ function WorkspaceEditor({
       setLoading(false)
     }
   }
-
-  const handleNameBlur = useCallback(() => {
-    if (name !== workspace.name && name.trim()) {
-      saveWorkspace()
-    }
-  }, [name, workspace.name]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleQueryBlur = useCallback(() => {
-    saveWorkspace()
-  }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const inputClass = 'h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim'
   const labelClass = 'shrink-0 w-24 text-[11px] text-text-dim pt-1.5'
@@ -527,10 +581,6 @@ function WorkspaceEditor({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onBlur={handleNameBlur}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleNameBlur()
-          }}
           className="h-7 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm text-text outline-none transition-colors hover:border-white/[0.06] focus:border-hi-dim focus:bg-surface"
           placeholder="Workspace name"
         />
@@ -563,10 +613,6 @@ function WorkspaceEditor({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onBlur={handleQueryBlur}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleQueryBlur()
-              }}
               className={`${inputClass} font-mono`}
               placeholder="#tag .title >desc :url and or not"
             />
@@ -577,8 +623,8 @@ function WorkspaceEditor({
             <span className={labelClass}>Has tags</span>
             <div className="min-w-0 flex-1">
               <TagTokenInput
-                tags={workspace.filters.tag_whitelist}
-                onChange={(tags) => saveWorkspace({ tag_whitelist: tags })}
+                tags={whitelist}
+                onChange={setWhitelist}
                 availableTags={autocompleteTags}
                 placeholder="Add tag"
               />
@@ -587,7 +633,7 @@ function WorkspaceEditor({
                 fetching={fetchingWhitelistRelated}
                 disabled={whitelist.length === 0}
                 onFetch={() => fetchRelated(whitelist, setWhitelistRelated, setFetchingWhitelistRelated)}
-                onAdd={(tag) => { if (tag.trim() && !whitelist.includes(tag.trim())) saveWorkspace({ tag_whitelist: [...whitelist, tag.trim()] }) }}
+                onAdd={(tag) => { if (tag.trim() && !whitelist.includes(tag.trim())) setWhitelist([...whitelist, tag.trim()]) }}
                 setTags={setWhitelistRelated}
               />
             </div>
@@ -598,8 +644,8 @@ function WorkspaceEditor({
             <span className={labelClass}>Without tags</span>
             <div className="min-w-0 flex-1">
               <TagTokenInput
-                tags={workspace.filters.tag_blacklist}
-                onChange={(tags) => saveWorkspace({ tag_blacklist: tags })}
+                tags={blacklist}
+                onChange={setBlacklist}
                 availableTags={autocompleteTags}
                 placeholder="Add tag"
               />
@@ -608,7 +654,7 @@ function WorkspaceEditor({
                 fetching={fetchingBlacklistRelated}
                 disabled={blacklist.length === 0}
                 onFetch={() => fetchRelated(blacklist, setBlacklistRelated, setFetchingBlacklistRelated)}
-                onAdd={(tag) => { if (tag.trim() && !blacklist.includes(tag.trim())) saveWorkspace({ tag_blacklist: [...blacklist, tag.trim()] }) }}
+                onAdd={(tag) => { if (tag.trim() && !blacklist.includes(tag.trim())) setBlacklist([...blacklist, tag.trim()]) }}
                 setTags={setBlacklistRelated}
               />
             </div>
@@ -621,8 +667,15 @@ function WorkspaceEditor({
 
 // ─── Rules Manager ────────────────────────────────────────────────
 
-function RulesManager() {
-  const [rules, setRules] = useState<Rule[]>([])
+function RulesManager({
+  onDirtyChange,
+  onRegisterSave,
+}: {
+  onDirtyChange: (dirty: boolean) => void
+  onRegisterSave: (handler: (() => Promise<void>) | null) => void
+}) {
+  const [savedRules, setSavedRules] = useState<Rule[]>([])
+  const [draftRules, setDraftRules] = useState<Rule[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -630,33 +683,43 @@ function RulesManager() {
   useEffect(() => {
     fetchRules()
       .then((r) => {
-        setRules(r)
+        setSavedRules(r)
+        setDraftRules(r)
         if (r.length > 0) setSelectedIndex(0)
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load rules'))
       .finally(() => setLoading(false))
   }, [])
 
-  async function saveRules(updated: Rule[]) {
-    try {
-      const result = await updateRules(updated)
-      setRules(result)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save rules')
-    }
-  }
+  // Dirty detection
+  const isDirty = useMemo(
+    () => JSON.stringify(draftRules) !== JSON.stringify(savedRules),
+    [draftRules, savedRules],
+  )
 
-  async function handleAdd() {
+  useEffect(() => {
+    onDirtyChange(isDirty)
+  }, [isDirty, onDirtyChange])
+
+  // Register save handler
+  useEffect(() => {
+    onRegisterSave(async () => {
+      const result = await updateRules(draftRules)
+      setSavedRules(result)
+      setDraftRules(result)
+    })
+  }, [draftRules, onRegisterSave])
+
+  function handleAdd() {
     const newRule: Rule = { action: { UpdateBookmark: {} } }
-    const updated = [...rules, newRule]
-    await saveRules(updated)
+    const updated = [...draftRules, newRule]
+    setDraftRules(updated)
     setSelectedIndex(updated.length - 1)
   }
 
-  async function handleDelete(index: number) {
-    const updated = rules.filter((_, i) => i !== index)
-    await saveRules(updated)
+  function handleDelete(index: number) {
+    const updated = draftRules.filter((_, i) => i !== index)
+    setDraftRules(updated)
     if (updated.length === 0) {
       setSelectedIndex(null)
     } else if (selectedIndex !== null && selectedIndex >= updated.length) {
@@ -665,9 +728,7 @@ function RulesManager() {
   }
 
   function handleUpdateRule(index: number, patch: Partial<Rule>) {
-    const updated = rules.map((r, i) => (i === index ? { ...r, ...patch } : r))
-    setRules(updated)
-    saveRules(updated)
+    setDraftRules((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)))
   }
 
   function ruleLabel(rule: Rule, index: number): string {
@@ -679,7 +740,7 @@ function RulesManager() {
     return <div className="flex h-full items-center justify-center text-sm text-text-dim">Loading rules...</div>
   }
 
-  const selectedRule = selectedIndex !== null ? rules[selectedIndex] : null
+  const selectedRule = selectedIndex !== null ? draftRules[selectedIndex] : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
@@ -696,7 +757,7 @@ function RulesManager() {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
-          {rules.map((rule, i) => (
+          {draftRules.map((rule, i) => (
             <button
               key={i}
               onClick={() => setSelectedIndex(i)}
@@ -709,7 +770,7 @@ function RulesManager() {
               {ruleLabel(rule, i)}
             </button>
           ))}
-          {rules.length === 0 && (
+          {draftRules.length === 0 && (
             <div className="px-3 py-4 text-xs text-text-dim">No rules yet</div>
           )}
         </div>
@@ -729,7 +790,7 @@ function RulesManager() {
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-text-dim">
-            {rules.length === 0 ? 'Add a rule to get started' : 'Select a rule'}
+            {draftRules.length === 0 ? 'Add a rule to get started' : 'Select a rule'}
           </div>
         )}
       </div>
