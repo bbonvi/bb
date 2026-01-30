@@ -106,7 +106,6 @@ impl MetadataFetcher for MicrolinkFetcher {
         }
 
         let mic_result = Self::microlink(url, api_key.as_deref());
-        log::info!("microlink result: {:#?}", mic_result);
 
         if let Some(m) = mic_result {
             // Accept partial results — any useful field is sufficient
