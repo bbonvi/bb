@@ -1,6 +1,6 @@
 use crate::config::ScrapeConfig;
 use crate::metadata::fetchers::{fetch_bytes, MetadataFetcher};
-use crate::metadata::types::Metadata;
+use crate::metadata::types::{FetchOutcome, Metadata};
 use serde_json::Value;
 
 pub struct IframelyFetcher;
@@ -70,12 +70,12 @@ struct IframelyResult {
 }
 
 impl MetadataFetcher for IframelyFetcher {
-    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<FetchOutcome> {
         let api_key = match std::env::var("IFRAMELY_API_KEY") {
             Ok(key) if !key.is_empty() => key,
             _ => {
                 log::debug!("IFRAMELY_API_KEY not set; skipping Iframely fetcher");
-                return Ok(None);
+                return Ok(FetchOutcome::Skip("IFRAMELY_API_KEY not set".into()));
             }
         };
 
@@ -89,12 +89,12 @@ impl MetadataFetcher for IframelyFetcher {
         if let Some(error) = resp.get("error").and_then(|v| v.as_str()) {
             let status = resp.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
             log::warn!("iframely error: status={status} error={error}");
-            return Ok(None);
+            return Ok(FetchOutcome::Skip(format!("API error: {status}: {error}")));
         }
 
         let result = match Self::extract_metadata(&resp) {
             Some(r) => r,
-            None => return Ok(None),
+            None => return Ok(FetchOutcome::Skip("response has no useful fields".into())),
         };
 
         let mut meta = Metadata {
@@ -117,7 +117,7 @@ impl MetadataFetcher for IframelyFetcher {
             }
         }
 
-        Ok(Some(meta))
+        Ok(FetchOutcome::Data(meta))
     }
 
     fn name(&self) -> &'static str {

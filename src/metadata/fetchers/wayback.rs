@@ -1,6 +1,6 @@
 use crate::config::ScrapeConfig;
 use crate::metadata::fetchers::MetadataFetcher;
-use crate::metadata::types::Metadata;
+use crate::metadata::types::FetchOutcome;
 
 pub struct WaybackFetcher;
 
@@ -15,17 +15,17 @@ impl MetadataFetcher for WaybackFetcher {
         &self,
         url: &str,
         scrape_config: Option<&ScrapeConfig>,
-    ) -> anyhow::Result<Option<Metadata>> {
+    ) -> anyhow::Result<FetchOutcome> {
         let snapshot_url = find_snapshot(url, scrape_config)?;
         let snapshot_url = match snapshot_url {
             Some(u) => u,
-            None => return Ok(None),
+            None => return Ok(FetchOutcome::Skip("no Wayback snapshot available".into())),
         };
 
         let result = crate::scrape::fetch_page_with_reqwest(&snapshot_url, scrape_config);
         let html = match result {
             Some(r) => r.html,
-            None => return Ok(None),
+            None => return Ok(FetchOutcome::Skip("snapshot fetch failed".into())),
         };
 
         // Parse with ORIGINAL url for relative URL resolution (not archive.org)
@@ -38,9 +38,9 @@ impl MetadataFetcher for WaybackFetcher {
         meta.image = None;
 
         if meta.title.is_some() || meta.description.is_some() || meta.image_url.is_some() {
-            Ok(Some(meta))
+            Ok(FetchOutcome::Data(meta))
         } else {
-            Ok(None)
+            Ok(FetchOutcome::Skip("snapshot has no useful data".into()))
         }
     }
 

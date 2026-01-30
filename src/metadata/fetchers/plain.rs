@@ -1,5 +1,5 @@
 use crate::config::ScrapeConfig;
-use crate::metadata::types::{Metadata, MetaOptions};
+use crate::metadata::types::{FetchOutcome, Metadata, MetaOptions};
 use crate::metadata::fetchers::{MetadataFetcher, fetch_bytes};
 
 pub struct PlainFetcher;
@@ -11,7 +11,7 @@ impl PlainFetcher {
 }
 
 impl MetadataFetcher for PlainFetcher {
-    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<FetchOutcome> {
         // Try basic reqwest fetch first
         if let Some(reqwest_result) = crate::scrape::fetch_page_with_reqwest(url, scrape_config) {
             log::debug!("plain request successful");
@@ -27,10 +27,10 @@ impl MetadataFetcher for PlainFetcher {
                 meta.try_fetch_icon(scrape_config);
             }
 
-            return Ok(Some(meta));
+            return Ok(FetchOutcome::Data(meta));
         }
 
-        Ok(None)
+        Ok(FetchOutcome::Skip("HTTP fetch failed".into()))
     }
     
     fn name(&self) -> &'static str {
@@ -51,9 +51,12 @@ impl HeadlessParallelFetcher {
 }
 
 impl MetadataFetcher for HeadlessParallelFetcher {
-    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<FetchOutcome> {
         let inner = HeadlessFetcher::new(self.opts.clone());
-        inner.fetch_with_headless(url, scrape_config)
+        match inner.fetch_with_headless(url, scrape_config)? {
+            Some(m) => Ok(FetchOutcome::Data(m)),
+            None => Ok(FetchOutcome::Skip("headless fetch returned no data".into())),
+        }
     }
 
     fn name(&self) -> &'static str {

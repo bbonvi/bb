@@ -1,6 +1,6 @@
 use crate::config::ScrapeConfig;
 use crate::metadata::fetchers::MetadataFetcher;
-use crate::metadata::types::Metadata;
+use crate::metadata::types::{FetchOutcome, Metadata};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
@@ -442,7 +442,7 @@ impl OembedFetcher {
 }
 
 impl MetadataFetcher for OembedFetcher {
-    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<FetchOutcome> {
         // Ensure providers are loaded
         Self::ensure_providers()?;
 
@@ -451,7 +451,7 @@ impl MetadataFetcher for OembedFetcher {
             Some(ep) => ep,
             None => {
                 log::debug!("No oEmbed provider matched URL: {}", url);
-                return Ok(None);
+                return Ok(FetchOutcome::Skip("no matching oEmbed provider".into()));
             }
         };
 
@@ -462,9 +462,9 @@ impl MetadataFetcher for OembedFetcher {
 
                 // Only return Some if we got useful data
                 if metadata.has_any_data() {
-                    Ok(Some(metadata))
+                    Ok(FetchOutcome::Data(metadata))
                 } else {
-                    Ok(None)
+                    Ok(FetchOutcome::Skip("oEmbed response empty".into()))
                 }
             }
             Err(e) => {

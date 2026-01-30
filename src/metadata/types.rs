@@ -57,6 +57,12 @@ pub struct MetaOptions {
     pub fetcher_timeout: Option<Duration>,
 }
 
+/// Outcome of a single fetcher attempt
+pub enum FetchOutcome {
+    Data(Metadata),
+    Skip(String),
+}
+
 impl Metadata {
     /// Returns true if this metadata has a validated image
     pub fn has_valid_image(&self) -> bool {
@@ -114,7 +120,7 @@ pub struct FetcherReport {
 #[serde(tag = "status", content = "detail")]
 pub enum FetcherStatus {
     Success,
-    Skip,
+    Skip(String),
     Error(String),
 }
 

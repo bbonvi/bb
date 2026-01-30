@@ -9,8 +9,8 @@ pub mod wayback;
 use crate::config::ScrapeConfig;
 use crate::metadata::image_validation::validate_image;
 use crate::metadata::types::{
-    FieldDecision, FetcherFields, FetcherReport, FetcherStatus, HeadlessFallbackInfo, Metadata,
-    MetaOptions, MetadataReport,
+    FetchOutcome, FieldDecision, FetcherFields, FetcherReport, FetcherStatus,
+    HeadlessFallbackInfo, Metadata, MetaOptions, MetadataReport,
 };
 use std::thread;
 use std::time::Instant;
@@ -29,7 +29,7 @@ pub fn fetch_bytes(url: &str, scrape_config: Option<&ScrapeConfig>) -> Option<Ve
 pub trait MetadataFetcher: Send + Sync {
     /// Attempt to fetch metadata from a URL
     /// Returns Some(metadata) if successful, None if this fetcher cannot handle the URL
-    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>>;
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<FetchOutcome>;
 
     /// Get the name of this fetcher for logging/debugging
     fn name(&self) -> &'static str;
@@ -92,7 +92,7 @@ impl FetcherRegistry {
         let scrape_config = opts.scrape_config.as_ref();
 
         // Fan out parallel fetchers using thread::scope (bounded by fetcher count)
-        let raw_results: Vec<(u8, &str, Result<Option<Metadata>, String>, u64)> = thread::scope(|s| {
+        let raw_results: Vec<(u8, &str, Result<FetchOutcome, String>, u64)> = thread::scope(|s| {
             let handles: Vec<_> = self
                 .fetchers
                 .iter()
@@ -105,14 +105,14 @@ impl FetcherRegistry {
                         let result = f.fetch(url, sc);
                         let dur_ms = start.elapsed().as_millis() as u64;
                         match result {
-                            Ok(Some(m)) => {
+                            Ok(FetchOutcome::Data(m)) => {
                                 let fields = describe_fields(&m);
                                 log::info!("fetcher={name} outcome=success fields=[{fields}]");
-                                (idx as u8, name, Ok(Some(m)), dur_ms)
+                                (idx as u8, name, Ok(FetchOutcome::Data(m)), dur_ms)
                             }
-                            Ok(None) => {
-                                log::info!("fetcher={name} outcome=skip");
-                                (idx as u8, name, Ok(None), dur_ms)
+                            Ok(FetchOutcome::Skip(reason)) => {
+                                log::info!("fetcher={name} outcome=skip reason={reason}");
+                                (idx as u8, name, Ok(FetchOutcome::Skip(reason)), dur_ms)
                             }
                             Err(e) => {
                                 log::warn!("fetcher={name} outcome=error err={e}");
@@ -135,7 +135,7 @@ impl FetcherRegistry {
 
         for (priority, name, result, dur_ms) in &raw_results {
             match result {
-                Ok(Some(m)) => {
+                Ok(FetchOutcome::Data(m)) => {
                     fetcher_reports.push(FetcherReport {
                         name: name.to_string(),
                         priority: *priority,
@@ -145,11 +145,11 @@ impl FetcherRegistry {
                     });
                     successes.push((*priority, *name, m.clone()));
                 }
-                Ok(None) => {
+                Ok(FetchOutcome::Skip(reason)) => {
                     fetcher_reports.push(FetcherReport {
                         name: name.to_string(),
                         priority: *priority,
-                        status: FetcherStatus::Skip,
+                        status: FetcherStatus::Skip(reason.clone()),
                         duration_ms: *dur_ms,
                         fields: None,
                     });
@@ -220,13 +220,13 @@ impl FetcherRegistry {
                     headless_fallback = Some(HeadlessFallbackInfo {
                         triggered: true,
                         reason,
-                        status: FetcherStatus::Skip,
+                        status: FetcherStatus::Skip("headless returned no data".into()),
                         fields_overridden: vec![],
                     });
                     fetcher_reports.push(FetcherReport {
                         name: "Headless".to_string(),
                         priority: 255,
-                        status: FetcherStatus::Skip,
+                        status: FetcherStatus::Skip("headless returned no data".into()),
                         duration_ms: headless_start.elapsed().as_millis() as u64,
                         fields: None,
                     });

@@ -1,6 +1,6 @@
 use crate::config::ScrapeConfig;
 use crate::metadata::fetchers::{fetch_bytes, MetadataFetcher};
-use crate::metadata::types::Metadata;
+use crate::metadata::types::{FetchOutcome, Metadata};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -97,7 +97,7 @@ impl MicrolinkFetcher {
 }
 
 impl MetadataFetcher for MicrolinkFetcher {
-    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<FetchOutcome> {
         let api_key = std::env::var("MICROLINK_API_KEY").ok();
         if api_key.is_none() {
             log::warn!(
@@ -105,37 +105,38 @@ impl MetadataFetcher for MicrolinkFetcher {
             );
         }
 
-        let mic_result = Self::microlink(url, api_key.as_deref());
+        match Self::microlink(url, api_key.as_deref()) {
+            Some(m) => {
+                // Accept partial results — any useful field is sufficient
+                if m.title.is_some() || m.description.is_some() || m.image_url.is_some() || m.icon_url.is_some() {
+                    let mut meta = Metadata {
+                        title: m.title,
+                        description: m.description,
+                        canonical_url: m.canonical_url,
+                        icon_url: m.icon_url.clone(),
+                        image_url: m.image_url.clone(),
+                        ..Default::default()
+                    };
 
-        if let Some(m) = mic_result {
-            // Accept partial results — any useful field is sufficient
-            if m.title.is_some() || m.description.is_some() || m.image_url.is_some() || m.icon_url.is_some() {
-                let mut meta = Metadata {
-                    title: m.title,
-                    description: m.description,
-                    canonical_url: m.canonical_url,
-                    icon_url: m.icon_url.clone(),
-                    image_url: m.image_url.clone(),
-                    ..Default::default()
-                };
-
-                // fetch image and icon
-                if let Some(img_url) = m.image_url {
-                    if let Some(bytes) = fetch_bytes(&img_url, scrape_config) {
-                        meta.image = Some(bytes);
+                    // fetch image and icon
+                    if let Some(img_url) = m.image_url {
+                        if let Some(bytes) = fetch_bytes(&img_url, scrape_config) {
+                            meta.image = Some(bytes);
+                        }
                     }
-                }
-                if let Some(icon_url) = m.icon_url {
-                    if let Some(bytes) = fetch_bytes(&icon_url, scrape_config) {
-                        meta.icon = Some(bytes);
+                    if let Some(icon_url) = m.icon_url {
+                        if let Some(bytes) = fetch_bytes(&icon_url, scrape_config) {
+                            meta.icon = Some(bytes);
+                        }
                     }
-                }
 
-                return Ok(Some(meta));
+                    Ok(FetchOutcome::Data(meta))
+                } else {
+                    Ok(FetchOutcome::Skip("response has no useful fields".into()))
+                }
             }
+            None => Ok(FetchOutcome::Skip("API request failed".into())),
         }
-
-        Ok(None)
     }
 
     fn name(&self) -> &'static str {

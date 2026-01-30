@@ -1,5 +1,5 @@
 use crate::config::ScrapeConfig;
-use crate::metadata::types::Metadata;
+use crate::metadata::types::{FetchOutcome, Metadata};
 use crate::metadata::fetchers::{MetadataFetcher, fetch_bytes};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -163,12 +163,12 @@ impl PeekalinkFetcher {
 }
 
 impl MetadataFetcher for PeekalinkFetcher {
-    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<Option<Metadata>> {
+    fn fetch(&self, url: &str, scrape_config: Option<&ScrapeConfig>) -> anyhow::Result<FetchOutcome> {
         let api_key = match std::env::var("PEEKALINK_API_KEY") {
             Ok(key) if !key.is_empty() => key,
             _ => {
                 log::warn!("PEEKALINK_API_KEY is missing");
-                return Ok(None);
+                return Ok(FetchOutcome::Skip("PEEKALINK_API_KEY not set".into()));
             }
         };
 
@@ -199,11 +199,11 @@ impl MetadataFetcher for PeekalinkFetcher {
                     }
                 }
 
-                return Ok(Some(meta));
+                return Ok(FetchOutcome::Data(meta));
             }
         }
 
-        Ok(None)
+        Ok(FetchOutcome::Skip("response has no useful fields".into()))
     }
     
     fn name(&self) -> &'static str {
