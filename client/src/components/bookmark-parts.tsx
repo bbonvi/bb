@@ -276,7 +276,7 @@ export function ConfirmButton({
       onClick={handleClick}
       onMouseLeave={() => setArmed(false)}
       disabled={busy || disabled}
-      className={`rounded p-1.5 transition-all duration-200 disabled:opacity-50 ${
+      className={`inline-flex items-center justify-center rounded p-1.5 transition-all duration-200 disabled:opacity-50 ${
         armed ? armedColorClass : colorClass
       } ${className}`}
       title={armed ? armedTitle : title}
