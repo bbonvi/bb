@@ -322,8 +322,12 @@ export function searchBookmarksUncached(query: SearchQuery = {}): Promise<Bookma
   return fetchApi('/api/bookmarks/search', { method: 'POST', body: query })
 }
 
-export async function createBookmark(data: BookmarkCreate): Promise<Bookmark> {
-  const result = await fetchApi<Bookmark>('/api/bookmarks/create', { method: 'POST', body: data })
+export interface CreateBookmarkResponse extends Bookmark {
+  report: MetadataReport | null
+}
+
+export async function createBookmark(data: BookmarkCreate): Promise<CreateBookmarkResponse> {
+  const result = await fetchApi<CreateBookmarkResponse>('/api/bookmarks/create', { method: 'POST', body: data })
   clearEtagCache('bookmarks')
   return result
 }
@@ -387,7 +391,7 @@ export interface FetcherReport {
 
 export type FetcherStatus =
   | { status: 'Success' }
-  | { status: 'Skip' }
+  | { status: 'Skip'; detail: string }
   | { status: 'Error'; detail: string }
 
 export interface FetcherFields {

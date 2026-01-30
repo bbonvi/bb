@@ -48,6 +48,8 @@ export default function CreateBookmarkModal() {
   const initialTags = useStore((s) => s.createModalInitialTags)
   const openCreateModal = useStore((s) => s.openCreateModal)
   const triggerRefetch = useStore((s) => s.triggerRefetch)
+  const setPendingFetchReport = useStore((s) => s.setPendingFetchReport)
+  const setDetailModalId = useStore((s) => s.setDetailModalId)
   const allTags = useStore((s) => s.tags)
 
   const [form, setForm] = useState<CreateForm>(emptyForm)
@@ -119,7 +121,7 @@ export default function CreateBookmarkModal() {
     setError(null)
 
     try {
-      await createBookmark({
+      const result = await createBookmark({
         url,
         title: form.title.trim() || undefined,
         description: form.description.trim() || undefined,
@@ -130,12 +132,17 @@ export default function CreateBookmarkModal() {
       })
       setOpen(false)
       triggerRefetch()
+      // If sync fetch produced a report, pass it to detail modal
+      if (result.report) {
+        setPendingFetchReport(result.report)
+        setDetailModalId(result.id)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create bookmark')
     } finally {
       setSubmitting(false)
     }
-  }, [form, setOpen, triggerRefetch])
+  }, [form, setOpen, triggerRefetch, setPendingFetchReport, setDetailModalId])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

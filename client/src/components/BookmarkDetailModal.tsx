@@ -32,6 +32,8 @@ export default function BookmarkDetailModal() {
   const setBookmarks = useStore((s) => s.setBookmarks)
   const triggerRefetch = useStore((s) => s.triggerRefetch)
   const allTags = useStore((s) => s.tags)
+  const pendingFetchReport = useStore((s) => s.pendingFetchReport)
+  const setPendingFetchReport = useStore((s) => s.setPendingFetchReport)
   const hiddenTags = useHiddenTags()
   const visibleTags = useMemo(() => {
     const hidden = new Set(hiddenTags)
@@ -132,11 +134,17 @@ export default function BookmarkDetailModal() {
       setEditing(false)
     }
     setError(null)
-    setFetchReport(null)
     setPendingCover(null)
     setPendingIcon(null)
     setCoverPreview(null)
     setIconPreview(null)
+    // Consume pending report from create path, or clear
+    if (pendingFetchReport) {
+      setFetchReport(pendingFetchReport)
+      setPendingFetchReport(null)
+    } else {
+      setFetchReport(null)
+    }
   }, [detailModalId])
 
   const startEdit = useCallback(() => {
@@ -367,15 +375,33 @@ export default function BookmarkDetailModal() {
                                   'text-red-600'
                                 }>
                                   {f.status.status}
-                                  {f.status.status === 'Error' && `: ${f.status.detail}`}
+                                  {(f.status.status === 'Error' || f.status.status === 'Skip') && f.status.detail && `: ${f.status.detail}`}
                                 </span>
                               </td>
                               <td className="py-1 pr-2">{f.duration_ms}ms</td>
                               <td className="py-1">
-                                {f.fields ? Object.entries(f.fields)
-                                  .filter(([, v]) => v !== null && v !== false)
-                                  .map(([k]) => k)
-                                  .join(', ') : '\u2014'}
+                                {f.fields ? (() => {
+                                  const entries = Object.entries(f.fields!)
+                                    .filter(([, v]) => v !== null && v !== false)
+                                  if (entries.length === 0) return '\u2014'
+                                  return (
+                                    <details className="inline">
+                                      <summary className="cursor-pointer">
+                                        {entries.map(([k]) => k).join(', ')}
+                                      </summary>
+                                      <dl className="mt-1 space-y-0.5 pl-2 text-text-muted">
+                                        {entries.map(([k, v]) => (
+                                          <div key={k} className="flex gap-1">
+                                            <dt className="font-medium shrink-0">{k}:</dt>
+                                            <dd className="truncate" title={String(v)}>
+                                              {typeof v === 'string' ? (v.length > 80 ? v.slice(0, 80) + '...' : v) : String(v)}
+                                            </dd>
+                                          </div>
+                                        ))}
+                                      </dl>
+                                    </details>
+                                  )
+                                })() : '\u2014'}
                               </td>
                             </tr>
                           ))}

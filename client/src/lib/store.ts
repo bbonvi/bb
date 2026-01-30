@@ -6,6 +6,7 @@ import type {
   TaskQueue,
   Config,
   Workspace,
+  MetadataReport,
 } from './api'
 
 export interface AppState {
@@ -107,6 +108,10 @@ export interface AppState {
   // Search error (e.g. invalid query expression)
   searchError: string | null
   setSearchError: (error: string | null) => void
+
+  // Pending fetch report (from create path → detail modal)
+  pendingFetchReport: MetadataReport | null
+  setPendingFetchReport: (report: MetadataReport | null) => void
 
   // Refetch trigger — incremented after mutations to force bookmark refetch
   refetchTrigger: number
@@ -316,6 +321,10 @@ export const useStore = create<AppState>()((set, get) => ({
   // Search error
   searchError: null,
   setSearchError: (searchError) => set({ searchError }),
+
+  // Pending fetch report
+  pendingFetchReport: null,
+  setPendingFetchReport: (pendingFetchReport) => set({ pendingFetchReport }),
 
   // Refetch trigger
   refetchTrigger: 0,
