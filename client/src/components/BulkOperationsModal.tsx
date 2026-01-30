@@ -5,7 +5,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
 import {
   searchUpdateBookmarks,
@@ -225,12 +224,13 @@ export function BulkEditModal({
                 /* Replace mode: single input */
                 <label className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-text-muted">New tags</span>
-                  <Input
+                  <input
+                    type="text"
                     value={replaceTags}
                     onChange={(e) => setReplaceTags(e.target.value)}
                     placeholder="rust, webdev"
                     autoFocus
-                    className="bg-surface-hover"
+                    className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
                   />
                   <span className="text-[11px] text-text-dim">
                     All existing tags will be replaced with these.
@@ -242,23 +242,25 @@ export function BulkEditModal({
                   <div className="flex flex-col gap-1">
                     <label className="flex flex-col gap-1">
                       <span className="text-xs font-medium text-danger/80">- Remove tags</span>
-                      <Input
+                      <input
+                        type="text"
                         value={removeTags}
                         onChange={(e) => setRemoveTags(e.target.value)}
                         placeholder="old-tag, deprecated"
                         autoFocus
-                        className="bg-surface-hover"
+                        className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
                       />
                     </label>
                     <RemoveTagPreview input={removeTags} bookmarks={bookmarks} />
                   </div>
                   <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-green-400/80">+ Add tags</span>
-                    <Input
+                    <input
+                      type="text"
                       value={addTags}
                       onChange={(e) => setAddTags(e.target.value)}
                       placeholder="rust, webdev"
-                      className="bg-surface-hover"
+                      className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
                     />
                   </label>
                 </div>

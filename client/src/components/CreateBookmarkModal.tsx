@@ -5,7 +5,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
 import { createBookmark } from '@/lib/api'
 import { TagTokenInput } from '@/components/TagTokenInput'
@@ -180,24 +179,26 @@ export default function CreateBookmarkModal() {
             <span className="text-xs font-medium text-text-muted">
               URL <span className="text-danger">*</span>
             </span>
-            <Input
+            <input
+              type="text"
               value={form.url}
               onChange={(e) => update('url', e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="https://example.com"
               autoFocus
-              className="bg-surface-hover"
+              className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
             />
           </label>
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-text-muted">Title</span>
-            <Input
+            <input
+              type="text"
               value={form.title}
               onChange={(e) => update('title', e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Optional — fetched from page if empty"
-              className="bg-surface-hover"
+              className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
             />
           </label>
 
@@ -223,7 +224,7 @@ export default function CreateBookmarkModal() {
               }}
               rows={3}
               placeholder="Optional"
-              className="rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text outline-none placeholder:text-text-dim focus:ring-1 focus:ring-ring"
+              className="rounded-md border border-white/[0.06] bg-surface px-2.5 py-2 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
             />
           </label>
 

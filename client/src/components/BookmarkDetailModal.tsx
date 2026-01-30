@@ -5,7 +5,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
@@ -475,18 +474,20 @@ function EditForm({
 
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-text-muted">Title</span>
-        <Input
+        <input
+          type="text"
           value={form.title}
           onChange={(e) => update('title', e.target.value)}
-          className="bg-surface-hover"
+          className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
         />
       </label>
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-text-muted">URL</span>
-        <Input
+        <input
+          type="text"
           value={form.url}
           onChange={(e) => update('url', e.target.value)}
-          className="bg-surface-hover"
+          className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
         />
       </label>
       <div className="flex flex-col gap-1">
@@ -504,7 +505,7 @@ function EditForm({
           value={form.description}
           onChange={(e) => update('description', e.target.value)}
           rows={4}
-          className="resize-none rounded-md border border-border bg-surface-hover px-3 py-2 text-sm text-text outline-none focus:ring-1 focus:ring-ring"
+          className="resize-none rounded-md border border-white/[0.06] bg-surface px-2.5 py-2 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
         />
       </label>
     </div>
