@@ -733,25 +733,31 @@ async fn refresh_metadata(
     State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<RefreshMetadataRequest>,
 ) -> Result<axum::Json<RefreshMetadataResponse>, AppError> {
-    let state = state.read().unwrap();
-    let app_service = state.app_service.read().unwrap();
+    // Sync metadata fetch uses reqwest::blocking which panics inside async runtime.
+    // Move the entire operation to a blocking thread.
+    let report = tokio::task::spawn_blocking(move || {
+        let state = state.read().unwrap();
+        let app_service = state.app_service.read().unwrap();
 
-    let scrape_config = app_service
-        .get_config()
-        .map(|c| c.read().unwrap().scrape.clone())
-        .ok();
-    let opts = RefreshMetadataOpts {
-        async_meta: payload.async_meta,
-        meta_opts: MetaOptions {
-            no_headless: payload.no_headless,
-            scrape_config,
-            ..Default::default()
-        },
-    };
+        let scrape_config = app_service
+            .get_config()
+            .map(|c| c.read().unwrap().scrape.clone())
+            .ok();
+        let opts = RefreshMetadataOpts {
+            async_meta: payload.async_meta,
+            meta_opts: MetaOptions {
+                no_headless: payload.no_headless,
+                scrape_config,
+                ..Default::default()
+            },
+        };
 
-    let report = app_service
-        .refresh_metadata(payload.id, opts)
-        .context("Failed to refresh metadata")?;
+        app_service
+            .refresh_metadata(payload.id, opts)
+            .context("Failed to refresh metadata")
+    })
+    .await
+    .map_err(|e| AppError::Other(anyhow::anyhow!("task join error: {e}")))??;
 
     Ok(axum::Json(RefreshMetadataResponse { report }))
 }
