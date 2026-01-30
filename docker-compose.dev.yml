@@ -14,7 +14,7 @@ services:
       - cargo-cache:/usr/local/cargo/registry
       - target-cache:/app/target
     environment:
-      RUST_LOG: "debug,bb=debug,tower_http=debug,axum::rejection=trace"
+      RUST_LOG: "info,bb=info,tower_http=info,axum::rejection=trace"
       RUST_BACKTRACE: "1"
       BB_BASE_PATH: "/app/data"
       # Uncomment to enable bearer token auth for API routes:

@@ -37,10 +37,11 @@ struct SharedState {
 }
 
 async fn start_app(app_service: AppService, base_path: &str) {
-    let storage_mgr = Arc::new(storage::BackendLocal::new(&format!("{base_path}/uploads"))
-        .expect("failed to initialize uploads storage"));
-    let workspace_store = WorkspaceStore::load(base_path)
-        .expect("failed to load workspace store");
+    let storage_mgr = Arc::new(
+        storage::BackendLocal::new(&format!("{base_path}/uploads"))
+            .expect("failed to initialize uploads storage"),
+    );
+    let workspace_store = WorkspaceStore::load(base_path).expect("failed to load workspace store");
     let shared_state = Arc::new(RwLock::new(SharedState {
         app_service: Arc::new(RwLock::new(app_service)),
         storage_mgr,
@@ -53,18 +54,39 @@ async fn start_app(app_service: AppService, base_path: &str) {
         // Favicons
         .nest_service("/favicon.ico", ServeFile::new("client/dist/favicon.ico"))
         .nest_service("/favicon.png", ServeFile::new("client/dist/favicon.png"))
-        .nest_service("/favicon-16x16.png", ServeFile::new("client/dist/favicon-16x16.png"))
-        .nest_service("/favicon-32x32.png", ServeFile::new("client/dist/favicon-32x32.png"))
+        .nest_service(
+            "/favicon-16x16.png",
+            ServeFile::new("client/dist/favicon-16x16.png"),
+        )
+        .nest_service(
+            "/favicon-32x32.png",
+            ServeFile::new("client/dist/favicon-32x32.png"),
+        )
         // PWA icons
         .nest_service("/logo192.png", ServeFile::new("client/dist/logo192.png"))
         .nest_service("/logo512.png", ServeFile::new("client/dist/logo512.png"))
         .nest_service("/logo.png", ServeFile::new("client/dist/logo.png"))
-        .nest_service("/apple-touch-icon.png", ServeFile::new("client/dist/apple-touch-icon.png"))
-        .nest_service("/android-chrome-192x192.png", ServeFile::new("client/dist/android-chrome-192x192.png"))
-        .nest_service("/android-chrome-512x512.png", ServeFile::new("client/dist/android-chrome-512x512.png"))
-        .nest_service("/mstile-150x150.png", ServeFile::new("client/dist/mstile-150x150.png"))
+        .nest_service(
+            "/apple-touch-icon.png",
+            ServeFile::new("client/dist/apple-touch-icon.png"),
+        )
+        .nest_service(
+            "/android-chrome-192x192.png",
+            ServeFile::new("client/dist/android-chrome-192x192.png"),
+        )
+        .nest_service(
+            "/android-chrome-512x512.png",
+            ServeFile::new("client/dist/android-chrome-512x512.png"),
+        )
+        .nest_service(
+            "/mstile-150x150.png",
+            ServeFile::new("client/dist/mstile-150x150.png"),
+        )
         // Manifest and robots
-        .nest_service("/manifest.json", ServeFile::new("client/dist/manifest.json"))
+        .nest_service(
+            "/manifest.json",
+            ServeFile::new("client/dist/manifest.json"),
+        )
         .nest_service("/robots.txt", ServeFile::new("client/dist/robots.txt"));
 
     let uploads_path = format!("{base_path}/uploads");
@@ -150,12 +172,10 @@ pub fn start_daemon(app: crate::app::local::AppLocal, base_path: &str) {
 
     let app_service = if semantic_config.enabled {
         log::info!("Semantic search enabled, initializing service");
-        let semantic_service = std::sync::Arc::new(
-            crate::semantic::SemanticSearchService::new(
-                semantic_config,
-                std::path::PathBuf::from(base_path),
-            )
-        );
+        let semantic_service = std::sync::Arc::new(crate::semantic::SemanticSearchService::new(
+            semantic_config,
+            std::path::PathBuf::from(base_path),
+        ));
         AppService::with_semantic(Box::new(app), semantic_service)
     } else {
         log::info!("Semantic search disabled");
@@ -201,17 +221,27 @@ impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let (status, code, message) = match &self {
             AppError::Reqwest(_) => (StatusCode::BAD_GATEWAY, "GATEWAY_ERROR", self.to_string()),
-            AppError::IO(_) => (StatusCode::INTERNAL_SERVER_ERROR, "IO_ERROR", self.to_string()),
+            AppError::IO(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "IO_ERROR",
+                self.to_string(),
+            ),
             AppError::Base64(_) => (StatusCode::BAD_REQUEST, "BASE64_ERROR", self.to_string()),
-            AppError::SemanticDisabled { message } => {
-                (StatusCode::UNPROCESSABLE_ENTITY, "SEMANTIC_DISABLED", message.clone())
-            }
-            AppError::InvalidThreshold { message } => {
-                (StatusCode::BAD_REQUEST, "INVALID_THRESHOLD", message.clone())
-            }
-            AppError::ModelUnavailable { message } => {
-                (StatusCode::SERVICE_UNAVAILABLE, "MODEL_UNAVAILABLE", message.clone())
-            }
+            AppError::SemanticDisabled { message } => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "SEMANTIC_DISABLED",
+                message.clone(),
+            ),
+            AppError::InvalidThreshold { message } => (
+                StatusCode::BAD_REQUEST,
+                "INVALID_THRESHOLD",
+                message.clone(),
+            ),
+            AppError::ModelUnavailable { message } => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "MODEL_UNAVAILABLE",
+                message.clone(),
+            ),
             AppError::InvalidQuery { message } => {
                 (StatusCode::BAD_REQUEST, "INVALID_QUERY", message.clone())
             }
@@ -226,9 +256,11 @@ impl IntoResponse for AppError {
                 };
                 (status, "WORKSPACE_ERROR", self.to_string())
             }
-            AppError::Other(_) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", self.to_string())
-            }
+            AppError::Other(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                self.to_string(),
+            ),
         };
 
         let body = Json(serde_json::json!({
@@ -247,7 +279,7 @@ pub struct ListBookmarksRequest {
     pub url: Option<String>,
     pub description: Option<String>,
     pub tags: Option<String>,
-        pub query: Option<String>,
+    pub query: Option<String>,
 
     /// Semantic search query text
     #[serde(default)]
@@ -277,16 +309,11 @@ async fn search(
     headers: HeaderMap,
     Json(payload): Json<ListBookmarksRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    log::info!("Search bookmarks request: {:?}", payload);
-
     // Validate threshold before processing
     if let Some(threshold) = payload.threshold {
         if !(0.0..=1.0).contains(&threshold) {
             return Err(AppError::InvalidThreshold {
-                message: format!(
-                    "Threshold must be between 0.0 and 1.0, got {}",
-                    threshold
-                ),
+                message: format!("Threshold must be between 0.0 and 1.0, got {}", threshold),
             });
         }
     }
@@ -318,38 +345,35 @@ async fn search(
         exact: payload.exact,
         limit: payload.limit,
     };
-    log::info!("Search bookmarks with query: {:?}", query);
-
-    let bookmarks = app_service
-        .search_bookmarks(query, false)
-        .map_err(|e| {
-            // Use alternate format to get full anyhow cause chain
-            let full = format!("{:#}", e);
-            if full.contains("invalid search query") {
-                // Use the deepest cause that mentions the parse error
-                // (CHAIN[1] is AppError::Other with Debug backtrace, CHAIN[2] is the clean message)
-                let message = e.chain()
-                    .map(|c| c.to_string())
-                    .filter(|s| s.starts_with("invalid search query"))
-                    .last()
-                    .unwrap_or_else(|| full.clone());
-                // Capitalize first letter for consistency
-                let message = format!("I{}", &message[1..]);
-                AppError::InvalidQuery { message }
-            } else if full.contains("Semantic search is disabled") {
-                AppError::SemanticDisabled {
-                    message: "Semantic search is disabled in configuration".to_string(),
-                }
-            } else if full.contains("model") && full.contains("unavailable")
-                || full.contains("Failed to initialize")
-            {
-                AppError::ModelUnavailable {
-                    message: "Semantic search model is unavailable".to_string(),
-                }
-            } else {
-                AppError::Other(e)
+    let bookmarks = app_service.search_bookmarks(query, false).map_err(|e| {
+        // Use alternate format to get full anyhow cause chain
+        let full = format!("{:#}", e);
+        if full.contains("invalid search query") {
+            // Use the deepest cause that mentions the parse error
+            // (CHAIN[1] is AppError::Other with Debug backtrace, CHAIN[2] is the clean message)
+            let message = e
+                .chain()
+                .map(|c| c.to_string())
+                .filter(|s| s.starts_with("invalid search query"))
+                .last()
+                .unwrap_or_else(|| full.clone());
+            // Capitalize first letter for consistency
+            let message = format!("I{}", &message[1..]);
+            AppError::InvalidQuery { message }
+        } else if full.contains("Semantic search is disabled") {
+            AppError::SemanticDisabled {
+                message: "Semantic search is disabled in configuration".to_string(),
             }
-        })?;
+        } else if full.contains("model") && full.contains("unavailable")
+            || full.contains("Failed to initialize")
+        {
+            AppError::ModelUnavailable {
+                message: "Semantic search model is unavailable".to_string(),
+            }
+        } else {
+            AppError::Other(e)
+        }
+    })?;
 
     // Enrich with fetching status from task queue
     let fetching_ids: HashSet<u64> = task_runner::read_queue_dump()
@@ -376,10 +400,7 @@ async fn search(
         .collect();
 
     let mut response = axum::Json(enriched).into_response();
-    response.headers_mut().insert(
-        "etag",
-        etag.parse().unwrap(),
-    );
+    response.headers_mut().insert("etag", etag.parse().unwrap());
     Ok(response)
 }
 
@@ -448,8 +469,6 @@ async fn create(
         url: payload.url,
         ..Default::default()
     };
-    log::info!("Create bookmark request: {:?}", create);
-
     // Handle base64 image/icon uploads
     if let Some(image_b64) = payload.image_b64 {
         let image_data = base64::engine::general_purpose::STANDARD
@@ -459,11 +478,14 @@ async fn create(
         // Compress preview image to WebP
         let config = app_service.get_config().context("Failed to get config")?;
         let img_config = &config.read().unwrap().images;
-        let compressed = images::compress_image(&image_data, img_config.max_size, img_config.quality)
-            .context("Failed to compress image")?;
+        let compressed =
+            images::compress_image(&image_data, img_config.max_size, img_config.quality)
+                .context("Failed to compress image")?;
 
         let image_id = format!("{}.webp", Eid::new());
-        state.storage_mgr.write(&image_id, &compressed.data)
+        state
+            .storage_mgr
+            .write(&image_id, &compressed.data)
             .context("Failed to write image")?;
         create.image_id = Some(image_id);
     }
@@ -474,12 +496,15 @@ async fn create(
             .decode(icon_b64)
             .context("Failed to decode base64 icon data")?;
         let icon_id = format!("{}.png", Eid::new());
-        state.storage_mgr.write(&icon_id, &icon_data)
+        state
+            .storage_mgr
+            .write(&icon_id, &icon_data)
             .context("Failed to write icon")?;
         create.icon_id = Some(icon_id);
     }
 
-    let scrape_config = app_service.get_config()
+    let scrape_config = app_service
+        .get_config()
         .map(|c| c.read().unwrap().scrape.clone())
         .ok();
     let add_opts = AddOpts {
@@ -578,11 +603,14 @@ async fn update(
         // Compress preview image to WebP (same as create)
         let config = app_service.get_config().context("Failed to get config")?;
         let img_config = &config.read().unwrap().images;
-        let compressed = images::compress_image(&image_data, img_config.max_size, img_config.quality)
-            .context("Failed to compress image")?;
+        let compressed =
+            images::compress_image(&image_data, img_config.max_size, img_config.quality)
+                .context("Failed to compress image")?;
 
         let image_id = format!("{}.webp", Eid::new());
-        state.storage_mgr.write(&image_id, &compressed.data)
+        state
+            .storage_mgr
+            .write(&image_id, &compressed.data)
             .context("Failed to write image")?;
         update.image_id = Some(image_id);
     }
@@ -593,7 +621,9 @@ async fn update(
             .decode(icon_b64)
             .context("Failed to decode base64 icon data")?;
         let icon_id = format!("{}.png", Eid::new());
-        state.storage_mgr.write(&icon_id, &icon_data)
+        state
+            .storage_mgr
+            .write(&icon_id, &icon_data)
             .context("Failed to write icon")?;
         update.icon_id = Some(icon_id);
     }
@@ -628,7 +658,6 @@ async fn search_delete(
     State(state): State<Arc<RwLock<SharedState>>>,
     Json(payload): Json<SearchQuery>,
 ) -> Result<axum::Json<usize>, AppError> {
-    log::info!("Search and delete bookmarks with query: {:?}", payload);
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 
@@ -681,7 +710,8 @@ async fn refresh_metadata(
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 
-    let scrape_config = app_service.get_config()
+    let scrape_config = app_service
+        .get_config()
         .map(|c| c.read().unwrap().scrape.clone())
         .ok();
     let opts = RefreshMetadataOpts {
@@ -1031,7 +1061,11 @@ mod tests {
         use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery};
         use crate::config::{Config, RulesConfig, SemanticSearchConfig};
         use crate::semantic::SemanticSearchService;
-        use axum::{body::Body, routing::{get, post}, Router};
+        use axum::{
+            body::Body,
+            routing::{get, post},
+            Router,
+        };
         use http_body_util::BodyExt;
         use std::path::PathBuf;
         use std::sync::atomic::{AtomicU64, Ordering};
@@ -1055,11 +1089,21 @@ mod tests {
         struct MockStorageManager;
 
         impl StorageManager for MockStorageManager {
-            fn write(&self, _: &str, _: &[u8]) -> std::io::Result<()> { Ok(()) }
-            fn read(&self, _: &str) -> std::io::Result<Vec<u8>> { Ok(vec![]) }
-            fn exists(&self, _: &str) -> bool { false }
-            fn delete(&self, _: &str) -> std::io::Result<()> { Ok(()) }
-            fn list(&self) -> Vec<String> { vec![] }
+            fn write(&self, _: &str, _: &[u8]) -> std::io::Result<()> {
+                Ok(())
+            }
+            fn read(&self, _: &str) -> std::io::Result<Vec<u8>> {
+                Ok(vec![])
+            }
+            fn exists(&self, _: &str) -> bool {
+                false
+            }
+            fn delete(&self, _: &str) -> std::io::Result<()> {
+                Ok(())
+            }
+            fn list(&self) -> Vec<String> {
+                vec![]
+            }
         }
 
         /// Mock backend that supports search and returns configurable results
@@ -1075,7 +1119,10 @@ mod tests {
                 Self { bookmarks, config }
             }
 
-            fn with_config(bookmarks: Vec<Bookmark>, semantic_config: SemanticSearchConfig) -> Self {
+            fn with_config(
+                bookmarks: Vec<Bookmark>,
+                semantic_config: SemanticSearchConfig,
+            ) -> Self {
                 let mut config = Config::default();
                 config.semantic_search = semantic_config;
                 Self { bookmarks, config }
@@ -1103,7 +1150,11 @@ mod tests {
                 unimplemented!()
             }
 
-            fn search_update(&self, _: SearchQuery, _: BookmarkUpdate) -> Result<usize, BackendError> {
+            fn search_update(
+                &self,
+                _: SearchQuery,
+                _: BookmarkUpdate,
+            ) -> Result<usize, BackendError> {
                 unimplemented!()
             }
 
@@ -1131,7 +1182,9 @@ mod tests {
                 Ok(Arc::new(RwLock::new(RulesConfig::default())))
             }
 
-            fn bookmark_version(&self) -> u64 { 0 }
+            fn bookmark_version(&self) -> u64 {
+                0
+            }
         }
 
         /// Build a test router with the given app service
@@ -1343,7 +1396,10 @@ mod tests {
                 download_timeout_secs: 300,
                 semantic_weight: 0.6,
             };
-            let semantic_service = Arc::new(SemanticSearchService::new(sem_config.clone(), test_dir.clone()));
+            let semantic_service = Arc::new(SemanticSearchService::new(
+                sem_config.clone(),
+                test_dir.clone(),
+            ));
 
             let bookmarks = vec![create_bookmark(1, "Test", "Desc")];
             // MockBackend config must match the semantic service config for status endpoint
