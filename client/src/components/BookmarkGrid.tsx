@@ -61,7 +61,7 @@ export function BookmarkGrid() {
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
-    overscan: 8,
+    overscan: 4,
     gap: ROW_GAP,
     getItemKey: (index) => rows[index]?.[0]?.id ?? index, // stable key from first bookmark in row
   })

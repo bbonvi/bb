@@ -19,7 +19,7 @@ export function BookmarkList() {
     count: displayBookmarks.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
-    overscan: 15,
+    overscan: 8,
     gap: ROW_GAP,
     getItemKey: (index) => displayBookmarks[index]?.id ?? index,
   })
