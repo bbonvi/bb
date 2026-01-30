@@ -158,7 +158,7 @@ export function Toolbar() {
   const showFilters = filtersOpen || hasAdvancedFilters
 
   return (
-    <header className="sticky top-0 z-40 glass-toolbar border-b border-white/[0.04]">
+    <header className="sticky top-0 z-40 bg-bg/88 backdrop-blur-xl backdrop-saturate-150 border-b border-white/[0.04]">
       {/* ── Search row ── */}
       <div className="flex items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
         {/* Logo */}
