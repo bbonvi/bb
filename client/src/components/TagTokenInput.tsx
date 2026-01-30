@@ -4,10 +4,10 @@ import { X } from 'lucide-react'
 
 /**
  * Inline token field for tag editing.
- * Chips render inside the input. Space/Enter/Tab commit tags.
- * Backspace with empty input does staged-delete of last tag.
- * Autocomplete dropdown with first item pre-selected.
- * Dropdown rendered via portal so it escapes overflow-hidden and modals.
+ * Chips render inside the input container. The text input floats between
+ * chips based on cursorIdx — click a chip or arrow-key to reposition.
+ * Space/Enter/Tab commit tags. Backspace does staged-delete of the chip
+ * immediately before the cursor. Autocomplete via portal.
  */
 export function TagTokenInput({
   tags,
@@ -24,6 +24,7 @@ export function TagTokenInput({
 }) {
   'use no memo' // Opt out of React Compiler — DOM measurements require refs in effects
   const [input, setInput] = useState('')
+  const [cursorIdx, setCursorIdx] = useState(tags.length)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [highlightIdx, setHighlightIdx] = useState(0)
   const [stagedDelete, setStagedDelete] = useState(false)
@@ -35,6 +36,10 @@ export function TagTokenInput({
   } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Keep cursorIdx in bounds when tags change externally
+  const clampedCursorIdx = Math.min(cursorIdx, tags.length)
+  if (clampedCursorIdx !== cursorIdx) setCursorIdx(clampedCursorIdx) // eslint-disable-line react-hooks/set-state-in-render
 
   const tagsSet = useMemo(() => new Set(tags.map((t) => t.toLowerCase())), [tags])
 
@@ -48,7 +53,7 @@ export function TagTokenInput({
 
   const visible = showSuggestions && suggestions.length > 0
 
-  // Measure container rect and position the portal dropdown
+  // ── Portal dropdown positioning ──────────────────────────────────
   const updateDropdownPos = useCallback(() => {
     if (!containerRef.current) {
       setDropdownPos(null)
@@ -66,7 +71,6 @@ export function TagTokenInput({
     })
   }, [])
 
-  // Reposition on visibility, input change, scroll, resize, and mobile keyboard
   useLayoutEffect(() => {
     if (!visible) {
       setDropdownPos(null) // eslint-disable-line react-hooks/set-state-in-effect
@@ -75,50 +79,38 @@ export function TagTokenInput({
     updateDropdownPos() // eslint-disable-line react-hooks/set-state-in-effect
 
     const vv = window.visualViewport
-    const scrollParents: EventTarget[] = []
-
-    // Walk up to find scrollable ancestors
-    let el: HTMLElement | null = containerRef.current
-    while (el) {
-      if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) {
-        scrollParents.push(el)
-      }
-      el = el.parentElement
-    }
-
     window.addEventListener('scroll', updateDropdownPos, true)
     window.addEventListener('resize', updateDropdownPos)
     vv?.addEventListener('resize', updateDropdownPos)
     vv?.addEventListener('scroll', updateDropdownPos)
-    for (const sp of scrollParents) {
-      sp.addEventListener('scroll', updateDropdownPos)
-    }
 
     return () => {
       window.removeEventListener('scroll', updateDropdownPos, true)
       window.removeEventListener('resize', updateDropdownPos)
       vv?.removeEventListener('resize', updateDropdownPos)
       vv?.removeEventListener('scroll', updateDropdownPos)
-      for (const sp of scrollParents) {
-        sp.removeEventListener('scroll', updateDropdownPos)
-      }
     }
   }, [visible, updateDropdownPos, input])
 
-  const addTag = useCallback(
+  // ── Tag operations (cursor-aware) ────────────────────────────────
+  const insertTag = useCallback(
     (tag: string) => {
       const trimmed = tag.trim()
       if (!trimmed || tagsSet.has(trimmed.toLowerCase())) return
-      onChange([...tags, trimmed])
+      const next = [...tags]
+      next.splice(clampedCursorIdx, 0, trimmed)
+      onChange(next)
+      setCursorIdx(clampedCursorIdx + 1)
     },
-    [tags, onChange, tagsSet],
+    [tags, onChange, tagsSet, clampedCursorIdx],
   )
 
-  const removeTag = useCallback(
-    (tag: string) => {
-      onChange(tags.filter((t) => t !== tag))
+  const removeAtIdx = useCallback(
+    (idx: number) => {
+      onChange(tags.filter((_, i) => i !== idx))
+      if (idx < clampedCursorIdx) setCursorIdx(clampedCursorIdx - 1)
     },
-    [tags, onChange],
+    [tags, onChange, clampedCursorIdx],
   )
 
   const commitTag = useCallback(
@@ -126,18 +118,20 @@ export function TagTokenInput({
       const cleaned = raw.replace(/,/g, ' ').trim()
       if (cleaned) {
         for (const t of cleaned.split(/\s+/)) {
-          if (t) addTag(t)
+          if (t) insertTag(t)
         }
       }
       setInput('')
       setShowSuggestions(false)
       setHighlightIdx(0)
     },
-    [addTag],
+    [insertTag],
   )
 
+  // ── Keyboard ─────────────────────────────────────────────────────
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // Autocomplete navigation
       if (visible) {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
@@ -161,23 +155,58 @@ export function TagTokenInput({
         }
       }
 
+      // Commit raw text
       if (e.key === 'Enter' && input.trim()) {
         e.preventDefault()
         commitTag(input)
         return
       }
 
-      if (e.key === 'Backspace' && input === '' && tags.length > 0) {
+      const caretAtStart = inputRef.current?.selectionStart === 0 && inputRef.current?.selectionEnd === 0
+
+      // Arrow Left at caret 0 with empty input → move cursor left among chips
+      if (e.key === 'ArrowLeft' && input === '' && clampedCursorIdx > 0) {
+        e.preventDefault()
+        setCursorIdx(clampedCursorIdx - 1)
+        setStagedDelete(false)
+        return
+      }
+      // Arrow Left at caret 0 with text → move cursor left (let input handle if there's text and caret not at 0)
+      if (e.key === 'ArrowLeft' && caretAtStart && input !== '' && clampedCursorIdx > 0) {
+        // commit text first, then move
+        e.preventDefault()
+        commitTag(input)
+        setCursorIdx(Math.max(0, clampedCursorIdx)) // commitTag already advanced, step back
+        return
+      }
+
+      // Arrow Right at end of empty input → move cursor right among chips
+      if (e.key === 'ArrowRight' && input === '' && clampedCursorIdx < tags.length) {
+        e.preventDefault()
+        setCursorIdx(clampedCursorIdx + 1)
+        setStagedDelete(false)
+        return
+      }
+
+      // Backspace → staged delete of chip before cursor
+      if (e.key === 'Backspace' && input === '' && clampedCursorIdx > 0) {
         e.preventDefault()
         if (stagedDelete) {
-          removeTag(tags[tags.length - 1])
+          removeAtIdx(clampedCursorIdx - 1)
           setStagedDelete(false)
         } else {
           setStagedDelete(true)
         }
+        return
+      }
+
+      // Delete key → remove chip after cursor
+      if (e.key === 'Delete' && input === '' && clampedCursorIdx < tags.length) {
+        e.preventDefault()
+        removeAtIdx(clampedCursorIdx)
       }
     },
-    [visible, suggestions, highlightIdx, input, tags, stagedDelete, commitTag, removeTag],
+    [visible, suggestions, highlightIdx, input, tags, clampedCursorIdx, stagedDelete, commitTag, removeAtIdx],
   )
 
   const handleChange = useCallback(
@@ -195,6 +224,87 @@ export function TagTokenInput({
     [commitTag],
   )
 
+  // ── Click handler: clicking a chip moves cursor to its position ──
+  const handleChipClick = useCallback(
+    (idx: number) => {
+      setCursorIdx(idx)
+      setStagedDelete(false)
+      inputRef.current?.focus()
+    },
+    [],
+  )
+
+  const handleContainerClick = useCallback(
+    (e: React.MouseEvent) => {
+      // Only handle clicks on the container itself (not chips or input)
+      if (e.target === e.currentTarget || (e.target as HTMLElement).closest('[data-tag-field]')) {
+        setCursorIdx(tags.length)
+        inputRef.current?.focus()
+      }
+    },
+    [tags.length],
+  )
+
+  // ── Build interleaved chips + input ──────────────────────────────
+  const inputElement = (
+    <input
+      key="__input__"
+      ref={inputRef}
+      type="text"
+      value={input}
+      onChange={handleChange}
+      onFocus={() => {
+        setShowSuggestions(true)
+        setHighlightIdx(0)
+      }}
+      onBlur={() => {
+        setTimeout(() => setShowSuggestions(false), 150)
+        setStagedDelete(false)
+        if (input.trim()) commitTag(input)
+      }}
+      onKeyDown={handleKeyDown}
+      className="min-w-[60px] flex-1 bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim"
+      placeholder={tags.length === 0 ? placeholder : ''}
+    />
+  )
+
+  const elements: React.ReactNode[] = []
+  for (let i = 0; i <= tags.length; i++) {
+    if (i === clampedCursorIdx) {
+      elements.push(inputElement)
+    }
+    if (i < tags.length) {
+      const tag = tags[i]
+      const isStaged = stagedDelete && i === clampedCursorIdx - 1
+      elements.push(
+        <span
+          key={tag}
+          className={`flex cursor-pointer items-center gap-0.5 rounded px-1.5 py-px font-mono text-[11px] transition-colors ${
+            isStaged ? 'bg-danger/20 text-danger' : 'bg-surface-active text-text-muted'
+          }`}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            handleChipClick(i)
+          }}
+        >
+          {tag}
+          <button
+            onMouseDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              removeAtIdx(i)
+            }}
+            className="ml-0.5 text-text-dim transition-colors hover:text-danger"
+            tabIndex={-1}
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </span>,
+      )
+    }
+  }
+
+  // ── Dropdown portal ──────────────────────────────────────────────
   const dropdown =
     visible && dropdownPos
       ? createPortal(
@@ -236,50 +346,11 @@ export function TagTokenInput({
   return (
     <div ref={containerRef} className={className ?? ''}>
       <div
+        data-tag-field
         className="flex min-h-[28px] cursor-text flex-wrap items-center gap-1 rounded-md border border-white/[0.06] bg-surface px-1.5 py-1 transition-colors focus-within:border-hi-dim"
-        onClick={() => inputRef.current?.focus()}
+        onClick={handleContainerClick}
       >
-        {tags.map((tag, i) => (
-          <span
-            key={tag}
-            className={`flex items-center gap-0.5 rounded px-1.5 py-px font-mono text-[11px] transition-colors ${
-              stagedDelete && i === tags.length - 1
-                ? 'bg-danger/20 text-danger'
-                : 'bg-surface-active text-text-muted'
-            }`}
-          >
-            {tag}
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                removeTag(tag)
-              }}
-              className="ml-0.5 text-text-dim transition-colors hover:text-danger"
-              tabIndex={-1}
-            >
-              <X className="h-2.5 w-2.5" />
-            </button>
-          </span>
-        ))}
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={handleChange}
-          onFocus={() => {
-            setShowSuggestions(true)
-            setHighlightIdx(0)
-          }}
-          onBlur={() => {
-            setTimeout(() => setShowSuggestions(false), 150)
-            setStagedDelete(false)
-            if (input.trim()) commitTag(input)
-          }}
-          onKeyDown={handleKeyDown}
-          className="min-w-[60px] flex-1 bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim"
-          placeholder={tags.length === 0 ? placeholder : ''}
-        />
+        {elements}
       </div>
       {dropdown}
     </div>
