@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app::{backend::FetchMetadataOpts, local::AppLocal},
     bookmarks,
-    config::Config,
+    config::{Config, RulesConfig},
     eid::Eid,
     storage::{self, StorageManager},
 };
@@ -38,6 +38,7 @@ pub fn start_queue(
     bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
     storage_mgr: Arc<dyn storage::StorageManager>,
     config: Arc<RwLock<Config>>,
+    rules_config: Arc<RwLock<RulesConfig>>,
 ) {
     use std::sync::atomic::Ordering;
 
@@ -65,6 +66,7 @@ pub fn start_queue(
         let task_handle = std::thread::spawn({
             let thread_counter = thread_counter.clone();
             let id = id.clone();
+            let rules_config = rules_config.clone();
             move || {
                 throttle(thread_counter.clone(), config.clone());
 
@@ -75,7 +77,7 @@ pub fn start_queue(
                 let mut attempt = 0u8;
 
                 loop {
-                    let status = task.run(bmark_mgr.clone(), storage_mgr.clone(), config.clone());
+                    let status = task.run(bmark_mgr.clone(), storage_mgr.clone(), config.clone(), rules_config.clone());
 
                     match &status {
                         Status::Error(msg) if attempt < max_retries && is_retryable_error(msg) => {
@@ -308,6 +310,7 @@ impl Task {
         bmark_mgr: Arc<dyn bookmarks::BookmarkManager>,
         storage_mgr: Arc<dyn storage::StorageManager>,
         config: Arc<RwLock<Config>>,
+        rules_config: Arc<RwLock<RulesConfig>>,
     ) -> Status {
         match self {
             Task::FetchMetadata { bmark_id, opts } => {
@@ -343,8 +346,8 @@ impl Task {
 
                 let fetch_meta_result = handle_metadata();
 
-                let rules = &config.read().unwrap().rules;
-                match AppLocal::apply_rules(bmark_id, bmark_mgr.clone(), rules) {
+                let rules_guard = rules_config.read().unwrap();
+                match AppLocal::apply_rules(bmark_id, bmark_mgr.clone(), rules_guard.rules()) {
                     Ok(_) => match fetch_meta_result {
                         Ok(_) => Status::Done,
                         Err(err) => Status::Error(err.to_string()),

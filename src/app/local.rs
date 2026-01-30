@@ -1,6 +1,6 @@
 use crate::{
     bookmarks,
-    config::{Config, ImageConfig},
+    config::{Config, ImageConfig, RulesConfig},
     eid::Eid,
     images,
     metadata::{fetch_meta, Metadata},
@@ -26,6 +26,7 @@ pub struct AppLocal {
     task_queue_handle: Option<std::thread::JoinHandle<()>>,
 
     config: Arc<RwLock<Config>>,
+    rules_config: Arc<RwLock<RulesConfig>>,
 }
 
 impl AppLocal {
@@ -36,6 +37,7 @@ impl AppLocal {
             let bmark_mgr = self.bmark_mgr.clone();
             let storage_mgr = self.storage_mgr.clone();
             let config = self.config.clone();
+            let rules_config = self.rules_config.clone();
 
             let mut queue_dump = task_runner::read_queue_dump();
             let task_list = queue_dump.queue.clone();
@@ -61,7 +63,7 @@ impl AppLocal {
             });
 
             move || {
-                task_runner::start_queue(task_rx, bmark_mgr, storage_mgr, config);
+                task_runner::start_queue(task_rx, bmark_mgr, storage_mgr, config, rules_config);
             }
         });
 
@@ -69,7 +71,7 @@ impl AppLocal {
         self.task_tx = Some(Arc::new(task_tx));
     }
 
-    pub fn new(config: Arc<RwLock<Config>>, path: &str, storage_mgr: BackendLocal) -> Self {
+    pub fn new(config: Arc<RwLock<Config>>, rules_config: Arc<RwLock<RulesConfig>>, path: &str, storage_mgr: BackendLocal) -> Self {
         let bmark_mgr = Arc::new(bookmarks::BackendCsv::load(path).unwrap());
         let storage_mgr = Arc::new(storage_mgr);
 
@@ -84,6 +86,7 @@ impl AppLocal {
             tags_cache: Arc::new(RwLock::new(Vec::new())),
             task_queue_handle: None,
             config,
+            rules_config,
         }
     }
 }
@@ -98,6 +101,10 @@ impl AppBackend for AppLocal {
 
     fn config(&self) -> anyhow::Result<Arc<RwLock<Config>>, AppError> {
         Ok(self.config.clone())
+    }
+
+    fn rules(&self) -> anyhow::Result<Arc<RwLock<RulesConfig>>, AppError> {
+        Ok(self.rules_config.clone())
     }
 
     fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
@@ -138,8 +145,8 @@ impl AppBackend for AppLocal {
             };
 
             // apply rules
-            let rules = &self.config.read().unwrap().rules;
-            Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?;
+            let rules_guard = self.rules_config.read().unwrap();
+            Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules_guard.rules())?;
         };
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
@@ -208,8 +215,8 @@ impl AppBackend for AppLocal {
 
                 // apply rules
                 if !opts.skip_rules {
-                    let rules = &self.config.read().unwrap().rules;
-                    let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?;
+                    let rules_guard = self.rules_config.read().unwrap();
+                    let with_rules = Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules_guard.rules())?;
                     return Ok(with_meta.map(|_| with_rules)?);
                 }
 
@@ -217,8 +224,8 @@ impl AppBackend for AppLocal {
             }
         } else if !opts.skip_rules {
             // if no metadata apply Rules.
-            let rules = &self.config.read().unwrap().rules;
-            return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules)?);
+            let rules_guard = self.rules_config.read().unwrap();
+            return Ok(Self::apply_rules(bmark.id, self.bmark_mgr.clone(), rules_guard.rules())?);
         }
 
         Self::schedule_tags_cache_reval(self.bmark_mgr.clone(), self.tags_cache.clone());
@@ -548,10 +555,16 @@ impl AppLocal {
             tags_cache: Arc::new(RwLock::new(Vec::new())),
             task_queue_handle,
             config,
+            rules_config: Arc::new(RwLock::new(RulesConfig::default())),
         }
     }
 
     pub fn config(&self) -> Arc<RwLock<Config>> {
         self.config.clone()
+    }
+
+    #[allow(dead_code)]
+    pub fn rules_config(&self) -> Arc<RwLock<RulesConfig>> {
+        self.rules_config.clone()
     }
 }

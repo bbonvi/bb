@@ -86,6 +86,8 @@ async fn start_app(app_service: AppService, base_path: &str) {
         .route("/api/bookmarks/tags", post(tags))
         .route("/api/config", get(get_config))
         .route("/api/config", post(update_config))
+        .route("/api/rules", get(get_rules))
+        .route("/api/rules", post(update_rules))
         .route("/api/task_queue", get(task_queue))
         .route("/api/semantic/status", get(semantic_status))
         .route("/api/workspaces", get(list_workspaces))
@@ -731,6 +733,34 @@ async fn update_config(
     Ok(axum::Json(payload))
 }
 
+async fn get_rules(
+    State(state): State<Arc<RwLock<SharedState>>>,
+) -> Result<axum::Json<Vec<crate::rules::Rule>>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
+
+    let rules_config = app_service.get_rules().context("Failed to get rules")?;
+    let rules = rules_config.read().unwrap().rules().to_vec();
+    Ok(axum::Json(rules))
+}
+
+async fn update_rules(
+    State(state): State<Arc<RwLock<SharedState>>>,
+    Json(payload): Json<Vec<crate::rules::Rule>>,
+) -> Result<axum::Json<Vec<crate::rules::Rule>>, AppError> {
+    let state = state.read().unwrap();
+    let app_service = state.app_service.read().unwrap();
+
+    let rules_config = app_service.get_rules().context("Failed to get rules")?;
+    {
+        let mut guard = rules_config.write().unwrap();
+        *guard.rules_mut() = payload.clone();
+        guard.save().map_err(|e| AppError::Other(e))?;
+    }
+
+    Ok(axum::Json(payload))
+}
+
 async fn task_queue() -> Result<axum::Json<QueueDump>, AppError> {
     let queue_dump = task_runner::read_queue_dump();
     Ok(axum::Json(queue_dump))
@@ -964,7 +994,7 @@ mod tests {
         use crate::app::errors::AppError as BackendError;
         use crate::app::service::AppService;
         use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery};
-        use crate::config::{Config, SemanticSearchConfig};
+        use crate::config::{Config, RulesConfig, SemanticSearchConfig};
         use crate::semantic::SemanticSearchService;
         use axum::{body::Body, routing::{get, post}, Router};
         use http_body_util::BodyExt;
@@ -1060,6 +1090,10 @@ mod tests {
 
             fn update_config(&self, _: Config) -> Result<(), BackendError> {
                 unimplemented!()
+            }
+
+            fn rules(&self) -> Result<Arc<RwLock<RulesConfig>>, BackendError> {
+                Ok(Arc::new(RwLock::new(RulesConfig::default())))
             }
 
             fn bookmark_version(&self) -> u64 { 0 }

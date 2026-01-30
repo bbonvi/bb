@@ -1,7 +1,7 @@
 use crate::{
     app::backend::{AddOpts, AppBackend, RefreshMetadataOpts},
     bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery},
-    config::Config,
+    config::{Config, RulesConfig},
     semantic::{content_hash, preprocess_content, SemanticSearchService},
 };
 use anyhow::{Context, Result};
@@ -549,6 +549,16 @@ impl AppService {
         Ok(config)
     }
 
+    /// Get the current rules configuration
+    pub fn get_rules(&self) -> Result<Arc<RwLock<RulesConfig>>> {
+        let rules = self
+            .backend
+            .rules()
+            .context("Failed to get rules configuration")?;
+
+        Ok(rules)
+    }
+
     /// Update the configuration
     pub fn update_config(&self, config: Config) -> Result<()> {
         // Validate the configuration before updating
@@ -698,7 +708,7 @@ mod tests {
     use crate::app::backend::{AddOpts, AppBackend, RefreshMetadataOpts};
     use crate::app::errors::AppError;
     use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate};
-    use crate::config::SemanticSearchConfig;
+    use crate::config::{RulesConfig, SemanticSearchConfig};
     use std::path::PathBuf;
 
     /// Mock backend that returns preconfigured bookmarks
@@ -755,6 +765,10 @@ mod tests {
 
         fn update_config(&self, _: Config) -> anyhow::Result<(), AppError> {
             unimplemented!()
+        }
+
+        fn rules(&self) -> anyhow::Result<Arc<RwLock<RulesConfig>>, AppError> {
+            Ok(Arc::new(RwLock::new(RulesConfig::default())))
         }
 
         fn bookmark_version(&self) -> u64 { 0 }

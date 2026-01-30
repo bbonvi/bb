@@ -1,6 +1,6 @@
 use crate::{
     app::{backend::AppBackend, local::AppLocal, remote::AppRemote, service::AppService},
-    config::Config,
+    config::{Config, RulesConfig},
     semantic::SemanticSearchService,
     storage,
 };
@@ -25,8 +25,9 @@ impl AppFactory {
         } else {
             // Local mode: create semantic service if config available
             let config = Self::create_config(&paths.base_path)?;
+            let rules_config = Self::create_rules_config(&paths.base_path)?;
 
-            let backend = Self::create_local_backend(&paths, config.clone())?;
+            let backend = Self::create_local_backend(&paths, config.clone(), rules_config)?;
 
             // Create semantic search service
             let semantic_config = config.read().unwrap().semantic_search.clone();
@@ -43,10 +44,12 @@ impl AppFactory {
     fn create_local_backend(
         paths: &AppPaths,
         config: Arc<RwLock<Config>>,
+        rules_config: Arc<RwLock<RulesConfig>>,
     ) -> Result<Box<dyn AppBackend>> {
         let storage_mgr = storage::BackendLocal::new(&paths.uploads_path)?;
         Ok(Box::new(AppLocal::new(
             config,
+            rules_config,
             &paths.bookmarks_path,
             storage_mgr,
         )))
@@ -55,9 +58,10 @@ impl AppFactory {
     /// Create a local application instance
     pub fn create_local_app(paths: &AppPaths) -> Result<AppLocal> {
         let config = Arc::new(RwLock::new(Config::load_with(&paths.base_path)?));
+        let rules_config = Arc::new(RwLock::new(RulesConfig::load_with(&paths.base_path)?));
         let storage = storage::BackendLocal::new(&paths.uploads_path)?;
 
-        Ok(AppLocal::new(config, &paths.bookmarks_path, storage))
+        Ok(AppLocal::new(config, rules_config, &paths.bookmarks_path, storage))
     }
 
     /// Get application paths with validation
@@ -81,8 +85,14 @@ impl AppFactory {
     pub fn create_config(base_path: &str) -> Result<Arc<RwLock<Config>>> {
         let config = Config::load_with(base_path)?;
         Self::validate_config(&config)?;
-        
+
         Ok(Arc::new(RwLock::new(config)))
+    }
+
+    /// Create rules configuration
+    pub fn create_rules_config(base_path: &str) -> Result<Arc<RwLock<RulesConfig>>> {
+        let rules_config = RulesConfig::load_with(base_path)?;
+        Ok(Arc::new(RwLock::new(rules_config)))
     }
 
     /// Get the base path for the application
@@ -142,22 +152,11 @@ impl AppFactory {
         if config.task_queue_max_threads == 0 {
             anyhow::bail!("Task queue max threads cannot be 0");
         }
-        
+
         if config.task_queue_max_threads > 100 {
             anyhow::bail!("Task queue max threads cannot exceed 100");
         }
-        
-        // Validate rules
-        for (idx, rule) in config.rules.iter().enumerate() {
-            if rule.url.is_none()
-                && rule.title.is_none()
-                && rule.description.is_none()
-                && rule.tags.is_none()
-            {
-                anyhow::bail!("Rule #{} is empty - at least one field must be specified", idx + 1);
-            }
-        }
-        
+
         Ok(())
     }
 }

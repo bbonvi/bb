@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 
-use crate::{bookmarks, config::Config, metadata::MetaOptions};
+use crate::{bookmarks, config::{Config, RulesConfig}, metadata::MetaOptions};
 
 use super::errors::AppError;
 
@@ -36,6 +36,7 @@ pub trait AppBackend: Send + Sync {
     fn config(&self) -> anyhow::Result<Arc<RwLock<Config>>, AppError>;
     #[allow(dead_code)]
     fn update_config(&self, config: Config) -> anyhow::Result<(), AppError>;
+    fn rules(&self) -> anyhow::Result<Arc<RwLock<RulesConfig>>, AppError>;
     fn bookmark_version(&self) -> u64;
 }
 

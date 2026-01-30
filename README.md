@@ -228,7 +228,8 @@ docker compose run --rm -i bb bb import < backup.tar.gz
 
 **Included in backups:**
 - `bookmarks.csv` — All bookmark data
-- `config.yaml` — Configuration
+- `config.yaml` — Configuration (user settings, read-only at runtime)
+- `rules.yaml` — Automated rules (managed by the application)
 - `workspaces.yaml` — Workspace definitions
 - `uploads/` — Preview images and favicons
 

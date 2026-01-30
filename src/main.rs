@@ -172,9 +172,9 @@ fn main() -> anyhow::Result<()> {
         Command::Rule { action } => {
             let _lock = acquire_cli_lock(base_path)?;
             let app_service = app::AppFactory::create_app_service(&paths)?;
-            let config = app_service.get_config()?;
-            let mut conf = config.write().unwrap();
-            cli::handle_rule(action, &mut conf)
+            let rules_config = app_service.get_rules()?;
+            let mut rules = rules_config.write().unwrap();
+            cli::handle_rule(action, &mut rules)
         }
 
         Command::Compress { dry_run, yes } => {

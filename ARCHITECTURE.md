@@ -113,11 +113,17 @@ Called from `BackendCsv::search()` when a `keyword` is present on the query.
 
 ### 4. Configuration (`src/config.rs`)
 
-YAML config at `~/.local/share/bb/config.yaml`:
+Configuration is split into two files:
+
+- **`config.yaml`** — User settings (effectively read-only at runtime). Contains `task_queue_max_threads`, `task_queue_max_retries`, `semantic_search`, `images`, `scrape`.
+- **`rules.yaml`** — Automated rules (machine-managed via `RulesConfig`). Separated to preserve user comments in `config.yaml`, since rules are the only frequently mutated data.
+
+On first load after upgrade, rules are automatically migrated from `config.yaml` to `rules.yaml`.
+
 ```yaml
+# config.yaml
 task_queue_max_threads: 4
-task_queue_max_retries: 3  # NEW: max retries for metadata fetch failures
-rules: []
+task_queue_max_retries: 3
 semantic_search:
   enabled: false
   model: "all-MiniLM-L6-v2"
@@ -130,6 +136,15 @@ scrape:
     - https
   blocked_hosts: []
   block_private_ips: true
+```
+
+```yaml
+# rules.yaml
+rules:
+- url: example.com
+  action: !UpdateBookmark
+    tags:
+    - example
 ```
 
 Config validation returns `Result<(), Vec<String>>` for proper error propagation. Invalid configs fail early with descriptive messages listing all validation errors.
@@ -555,7 +570,8 @@ Error types: `SemanticDisabled`, `InvalidThreshold`, `ModelUnavailable`, `Embedd
 
 ## Thread Safety
 
-- `Arc<RwLock<Config>>` — shared configuration
+- `Arc<RwLock<Config>>` — shared configuration (read-only at runtime)
+- `Arc<RwLock<RulesConfig>>` — shared rules (read/write)
 - `Arc<RwLock<WorkspaceStore>>` — workspace persistence
 - `Arc<dyn BookmarkManager>` — cloned per worker
 - `Mutex<Option<SemanticState>>` — lazy-loaded semantic state

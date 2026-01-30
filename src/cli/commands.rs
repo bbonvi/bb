@@ -155,9 +155,10 @@ impl AddCommand {
                 current_tags,
             };
 
-            let config = app_service.get_config()
+            let rules_config = app_service.get_rules()
                 .map_err(|e| crate::cli::errors::CliError::configuration(e.to_string()))?;
-            let rules = &config.read().unwrap().rules;
+            let rules_guard = rules_config.read().unwrap();
+            let rules = rules_guard.rules();
 
             if let Some(u) = url {
                 for rule in rules.iter() {
@@ -359,7 +360,7 @@ impl RuleCommand {
         Ok(Self { action })
     }
 
-    pub fn execute(self, config: &mut crate::config::Config) -> CliResult<()> {
+    pub fn execute(self, rules_config: &mut crate::config::RulesConfig) -> CliResult<()> {
         match self.action {
             RuleAction::Add {
                 url,
@@ -380,15 +381,15 @@ impl RuleCommand {
                     },
                     comment: None,
                 };
-                config.rules.insert(0, rule);
-                config.save()
+                rules_config.rules_mut().insert(0, rule);
+                rules_config.save()
                     .map_err(|e| crate::cli::errors::CliError::storage(e.to_string()))?;
             }
             RuleAction::Delete => {
                 return Err(crate::cli::errors::CliError::not_supported("Delete rule"));
             }
             RuleAction::List => {
-                for (idx, rule) in config.rules.iter().enumerate() {
+                for (idx, rule) in rules_config.rules().iter().enumerate() {
                     if let Some(comment) = &rule.comment {
                         println!("Rule #{} // {comment}", idx + 1);
                     } else {

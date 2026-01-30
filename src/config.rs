@@ -4,6 +4,7 @@ use crate::{
 };
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
+use serde_yml::Value;
 
 const TASK_QUEUE_MAX_THREADS: u16 = 4;
 const DEFAULT_TASK_QUEUE_MAX_RETRIES: u8 = 3;
@@ -170,8 +171,6 @@ pub struct Config {
     #[serde(default = "task_queue_max_retries")]
     pub task_queue_max_retries: u8,
     #[serde(default)]
-    pub rules: Vec<Rule>,
-    #[serde(default)]
     pub semantic_search: SemanticSearchConfig,
     #[serde(default)]
     pub images: ImageConfig,
@@ -195,7 +194,6 @@ impl Default for Config {
         Self {
             task_queue_max_threads: TASK_QUEUE_MAX_THREADS,
             task_queue_max_retries: DEFAULT_TASK_QUEUE_MAX_RETRIES,
-            rules: Vec::new(),
             semantic_search: SemanticSearchConfig::default(),
             images: ImageConfig::default(),
             scrape: ScrapeConfig::default(),
@@ -222,22 +220,6 @@ impl Config {
                 "task_queue_max_retries must be between 1 and 10, got {}",
                 self.task_queue_max_retries
             ));
-        }
-
-        // validate rules
-        for (idx, rule) in self.rules.iter().enumerate() {
-            if rule.url.is_none()
-                && rule.title.is_none()
-                && rule.description.is_none()
-                && rule.tags.is_none()
-            {
-                let idx = idx + 1;
-                errors.push(format!("rule #{idx} is empty"));
-            }
-
-            Rule::is_string_matches(&rule.url.clone().unwrap_or_default(), "");
-            Rule::is_string_matches(&rule.title.clone().unwrap_or_default(), "");
-            Rule::is_string_matches(&rule.description.clone().unwrap_or_default(), "");
         }
 
         // validate semantic_search config
@@ -306,8 +288,14 @@ impl Config {
             anyhow::bail!("config validation failed:\n{}", errors.join("\n"));
         }
 
-        // resave in case config version needs an upgrade
-        if config_str != serde_yml::to_string(&config).unwrap() {
+        // resave in case config version needs an upgrade (structural comparison
+        // avoids spurious resaves from formatting/comment differences)
+        let original_value: Value = serde_yml::from_str(&config_str)
+            .unwrap_or(Value::Null);
+        let current_value: Value = serde_yml::from_str(
+            &serde_yml::to_string(&config).unwrap()
+        ).unwrap_or(Value::Null);
+        if original_value != current_value {
             config.save()?;
         }
 
@@ -323,5 +311,150 @@ impl Config {
         store.write("config.yaml", config_str.as_bytes())
             .context("failed to write config file")?;
         Ok(())
+    }
+}
+
+/// Separate configuration for rules, stored in `rules.yaml`.
+///
+/// Rules are the only frequently machine-mutated data. Splitting them out
+/// keeps `config.yaml` effectively read-only for the application, preserving
+/// user comments.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RulesConfig {
+    #[serde(default)]
+    pub rules: Vec<Rule>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    base_path: String,
+}
+
+impl Default for RulesConfig {
+    fn default() -> Self {
+        Self {
+            rules: Vec::new(),
+            base_path: String::new(),
+        }
+    }
+}
+
+impl RulesConfig {
+    /// Create a RulesConfig from a Vec of rules (used by remote backend).
+    pub fn from_rules(rules: Vec<Rule>) -> Self {
+        Self {
+            rules,
+            base_path: String::new(),
+        }
+    }
+
+    pub fn load_with(base_path: &str) -> anyhow::Result<Self> {
+        let store = storage::BackendLocal::new(base_path)
+            .context("failed to initialize rules storage")?;
+
+        if store.exists("rules.yaml") {
+            // Normal path: rules.yaml exists
+            let rules_str =
+                String::from_utf8(store.read("rules.yaml").context("failed to read rules.yaml")?)
+                    .context("rules.yaml is not valid utf8")?;
+            let mut rules_config: Self =
+                serde_yml::from_str(&rules_str).context("rules.yaml is malformed")?;
+            rules_config.base_path = base_path.to_string();
+
+            if let Err(errors) = rules_config.validate() {
+                anyhow::bail!("rules validation failed:\n{}", errors.join("\n"));
+            }
+
+            return Ok(rules_config);
+        }
+
+        // Migration: check if config.yaml has a rules key
+        if store.exists("config.yaml") {
+            let config_str =
+                String::from_utf8(store.read("config.yaml").context("failed to read config.yaml")?)
+                    .context("config.yaml is not valid utf8")?;
+
+            let config_value: Value =
+                serde_yml::from_str(&config_str).unwrap_or(Value::Null);
+
+            if let Value::Mapping(ref map) = config_value {
+                if map.contains_key(&Value::String("rules".to_string())) {
+                    // Extract rules from config.yaml
+                    let rules_value = map.get(&Value::String("rules".to_string()))
+                        .cloned()
+                        .unwrap_or(Value::Sequence(vec![]));
+
+                    let rules: Vec<Rule> = serde_yml::from_value(rules_value)
+                        .unwrap_or_default();
+
+                    let rules_config = Self {
+                        rules,
+                        base_path: base_path.to_string(),
+                    };
+
+                    // Save rules.yaml
+                    rules_config.save().context("failed to write migrated rules.yaml")?;
+
+                    // Resave config.yaml without the rules key
+                    let mut new_map = map.clone();
+                    new_map.remove(&Value::String("rules".to_string()));
+                    let new_config_str = serde_yml::to_string(&Value::Mapping(new_map))
+                        .context("failed to serialize config without rules")?;
+                    store.write("config.yaml", new_config_str.as_bytes())
+                        .context("failed to resave config.yaml after migration")?;
+
+                    log::info!("migrated rules from config.yaml to rules.yaml");
+                    return Ok(rules_config);
+                }
+            }
+        }
+
+        // Fresh start: create empty rules.yaml
+        let mut rules_config = Self::default();
+        rules_config.base_path = base_path.to_string();
+        rules_config.save().context("failed to write default rules.yaml")?;
+        Ok(rules_config)
+    }
+
+    pub fn save(&self) -> anyhow::Result<()> {
+        let store = storage::BackendLocal::new(&self.base_path)
+            .context("failed to initialize rules storage")?;
+
+        let rules_str = serde_yml::to_string(&self)
+            .context("failed to serialize rules config")?;
+        store.write("rules.yaml", rules_str.as_bytes())
+            .context("failed to write rules.yaml")?;
+        Ok(())
+    }
+
+    pub fn rules(&self) -> &[Rule] {
+        &self.rules
+    }
+
+    pub fn rules_mut(&mut self) -> &mut Vec<Rule> {
+        &mut self.rules
+    }
+
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
+        for (idx, rule) in self.rules.iter().enumerate() {
+            if rule.url.is_none()
+                && rule.title.is_none()
+                && rule.description.is_none()
+                && rule.tags.is_none()
+            {
+                let idx = idx + 1;
+                errors.push(format!("rule #{idx} is empty"));
+            }
+
+            Rule::is_string_matches(&rule.url.clone().unwrap_or_default(), "");
+            Rule::is_string_matches(&rule.title.clone().unwrap_or_default(), "");
+            Rule::is_string_matches(&rule.description.clone().unwrap_or_default(), "");
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }

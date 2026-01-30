@@ -5,7 +5,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 
-use crate::{bookmarks, config::Config, web::TotalResponse};
+use crate::{bookmarks, config::{Config, RulesConfig}, rules::Rule, web::TotalResponse};
 
 use super::{backend::*, errors::AppError};
 
@@ -112,6 +112,11 @@ impl AppBackend for AppRemote {
         let resp = self.post("/api/config").json(&config).send()?;
 
         Ok(handle_response(resp)?)
+    }
+    fn rules(&self) -> anyhow::Result<Arc<RwLock<RulesConfig>>, AppError> {
+        let resp = self.get("/api/rules").send()?;
+        let rules: Vec<Rule> = handle_response(resp)?;
+        Ok(Arc::new(RwLock::new(RulesConfig::from_rules(rules))))
     }
     fn refresh_metadata(&self, id: u64, opts: RefreshMetadataOpts) -> anyhow::Result<(), AppError> {
         let resp = self

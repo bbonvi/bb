@@ -75,7 +75,6 @@ export interface BulkUpdate {
 export interface Config {
   task_queue_max_threads: number
   hidden_by_default: string[]
-  rules: Rule[]
   semantic_search?: {
     enabled: boolean
     model: string

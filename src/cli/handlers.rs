@@ -1,7 +1,7 @@
 use crate::{
     app::service::AppService,
     bookmarks::{BookmarkManager, SearchQuery},
-    config::Config,
+    config::{Config, RulesConfig},
     storage::StorageManager,
     cli::commands::{SearchCommand, AddCommand, MetaCommand, RuleCommand, CompressCommand, AddOptions, RuleAction, RuleUpdateAction, SearchCommandParams},
 };
@@ -99,7 +99,7 @@ pub fn handle_meta(url: String, no_headless: bool, always_headless: bool, scrape
     meta_command.execute().map_err(|e| anyhow::anyhow!(e))
 }
 
-pub fn handle_rule(action: super::types::RulesArgs, config: &mut Config) -> Result<()> {
+pub fn handle_rule(action: super::types::RulesArgs, rules_config: &mut RulesConfig) -> Result<()> {
     let rule_action = match action {
         super::types::RulesArgs::Add {
             url,
@@ -133,7 +133,7 @@ pub fn handle_rule(action: super::types::RulesArgs, config: &mut Config) -> Resu
     };
 
     let rule_command = RuleCommand::new(rule_action)?;
-    rule_command.execute(config).map_err(|e| anyhow::anyhow!(e))
+    rule_command.execute(rules_config).map_err(|e| anyhow::anyhow!(e))
 }
 
 pub fn handle_compress<S: StorageManager>(

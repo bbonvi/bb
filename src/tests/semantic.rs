@@ -178,7 +178,7 @@ mod backend_integration {
     use crate::app::errors::AppError;
     use crate::app::service::AppService;
     use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery};
-    use crate::config::{Config, SemanticSearchConfig};
+    use crate::config::{Config, RulesConfig, SemanticSearchConfig};
     use crate::semantic::{content_hash, preprocess_content, SemanticSearchService};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -291,6 +291,9 @@ mod backend_integration {
 
         fn update_config(&self, _: Config) -> Result<(), AppError> {
             unimplemented!()
+        }
+        fn rules(&self) -> Result<Arc<RwLock<RulesConfig>>, AppError> {
+            Ok(Arc::new(RwLock::new(RulesConfig::default())))
         }
         fn bookmark_version(&self) -> u64 { 0 }
     }
@@ -818,7 +821,7 @@ mod index_maintenance {
     use crate::app::errors::AppError;
     use crate::app::service::AppService;
     use crate::bookmarks::{Bookmark, BookmarkCreate, BookmarkUpdate, SearchQuery};
-    use crate::config::{Config, SemanticSearchConfig};
+    use crate::config::{Config, RulesConfig, SemanticSearchConfig};
     use crate::semantic::{content_hash, SemanticSearchService};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -919,6 +922,9 @@ mod index_maintenance {
 
         fn update_config(&self, _: Config) -> Result<(), AppError> {
             unimplemented!()
+        }
+        fn rules(&self) -> Result<Arc<RwLock<RulesConfig>>, AppError> {
+            Ok(Arc::new(RwLock::new(RulesConfig::default())))
         }
         fn bookmark_version(&self) -> u64 { 0 }
     }
@@ -1294,6 +1300,9 @@ mod index_maintenance {
 
         fn update_config(&self, _: Config) -> Result<(), AppError> {
             unimplemented!()
+        }
+        fn rules(&self) -> Result<Arc<RwLock<RulesConfig>>, AppError> {
+            Ok(Arc::new(RwLock::new(RulesConfig::default())))
         }
         fn bookmark_version(&self) -> u64 { 0 }
     }
