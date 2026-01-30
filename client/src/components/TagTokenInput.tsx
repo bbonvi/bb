@@ -283,7 +283,7 @@ export function TagTokenInput({
         if (input.trim()) commitTag(input)
       }}
       onKeyDown={handleKeyDown}
-      style={atEnd ? undefined : { width: input ? `${Math.max(2, input.length + 1)}ch` : '2px' }}
+      style={atEnd ? undefined : { width: input ? `${input.length + 1}ch` : 0 }}
       className={`bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim ${
         atEnd ? 'min-w-[60px] flex-1' : 'flex-none'
       }`}
