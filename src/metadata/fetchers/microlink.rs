@@ -44,7 +44,10 @@ impl MicrolinkFetcher {
     }
 
     fn extract_microlink_metadata(resp: &Value) -> Option<MicrolinkResult> {
-        if resp.get("status")?.as_str()? != "success" {
+        let status = resp.get("status").and_then(|v| v.as_str()).unwrap_or("unknown");
+        if status != "success" {
+            let message = resp.get("message").and_then(|v| v.as_str()).unwrap_or("unknown");
+            log::warn!("microlink error: status={status} message={message}");
             return None;
         }
         let data = resp.get("data")?;

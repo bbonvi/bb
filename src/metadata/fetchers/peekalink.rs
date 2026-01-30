@@ -44,8 +44,9 @@ impl PeekalinkFetcher {
     }
 
     fn extract_metadata_from_value(resp: &Value) -> Option<PeekalinkResult> {
-        log::info!("resp: {:?}", resp);
-        if !resp.get("ok")?.as_bool()? {
+        if !resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+            let error = resp.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
+            log::warn!("peekalink error: {error}");
             return None;
         }
 

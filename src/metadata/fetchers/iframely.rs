@@ -86,7 +86,11 @@ impl MetadataFetcher for IframelyFetcher {
             .send()?
             .json::<Value>()?;
 
-        log::info!("iframely response status fields: {:?}", resp.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+        if let Some(error) = resp.get("error").and_then(|v| v.as_str()) {
+            let status = resp.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
+            log::warn!("iframely error: status={status} error={error}");
+            return Ok(None);
+        }
 
         let result = match Self::extract_metadata(&resp) {
             Some(r) => r,
