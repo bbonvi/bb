@@ -878,39 +878,39 @@ function RuleEditor({
 
       {/* Conditions */}
       <div>
-        <h4 className="mb-2 text-xs font-semibold text-text">Conditions</h4>
+        <h4 className="mb-2 text-xs font-semibold text-text">Match when</h4>
         <div className="flex flex-col gap-3">
           <div>
-            <label className={labelClass}>URL pattern</label>
+            <label className={labelClass}>URL contains</label>
             <input
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onBlur={() => saveField({ url: url || undefined })}
               className={inputClass}
-              placeholder="e.g. github.com/*"
+              placeholder="e.g. github.com"
             />
           </div>
           <div>
-            <label className={labelClass}>Title pattern</label>
+            <label className={labelClass}>Title contains</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={() => saveField({ title: title || undefined })}
               className={inputClass}
-              placeholder="e.g. *tutorial*"
+              placeholder="e.g. tutorial"
             />
           </div>
           <div>
-            <label className={labelClass}>Description pattern</label>
+            <label className={labelClass}>Description contains</label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               onBlur={() => saveField({ description: description || undefined })}
               className={inputClass}
-              placeholder="e.g. *rust*"
+              placeholder="e.g. rust"
             />
           </div>
           <div>
@@ -921,11 +921,11 @@ function RuleEditor({
               onChange={(e) => setQuery(e.target.value)}
               onBlur={() => saveField({ query: query || undefined })}
               className={`${inputClass} font-mono`}
-              placeholder="Supports: #tag, .title, >desc, :url, and, or, not, quotes, parens"
+              placeholder="#tag, .title, >desc, :url, and, or, not, quotes, parens"
             />
           </div>
           <div>
-            <label className={labelClass}>Required tags</label>
+            <label className={labelClass}>Has tags</label>
             <SimpleTagInput tags={conditionTags} onAdd={addConditionTag} onRemove={removeConditionTag} placeholder="Enter to add tag" />
           </div>
         </div>
