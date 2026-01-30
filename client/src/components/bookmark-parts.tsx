@@ -97,7 +97,7 @@ export function FetchingIndicator() {
 // ─── URL display ───────────────────────────────────────────────────
 export function UrlDisplay({ url }: { url: string }) {
   return (
-    <span className="block truncate font-mono text-[11px] text-text-dim">
+    <span onClick={(e) => e.stopPropagation()} className="block truncate font-mono text-[11px] text-text-dim cursor-pointer">
       {url}
     </span>
   )

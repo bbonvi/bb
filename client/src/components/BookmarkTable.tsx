@@ -82,7 +82,7 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
       <CardActions bookmarkId={bookmark.id} variant="row" />
       {/* Title */}
       <div className="min-w-0 flex-[3]">
-        <span className="block truncate text-sm text-text hover:text-hi">
+        <span onClick={(e) => e.stopPropagation()} className="block truncate text-sm text-text hover:text-hi cursor-pointer">
           <Favicon iconId={bookmark.icon_id} />{' '}
           {bookmark.title || bookmark.url}
         </span>
@@ -91,7 +91,7 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
 
       {/* URL */}
       <div className="hidden min-w-0 flex-[2] sm:block">
-        <span className="block truncate font-mono text-[11px] text-text-dim">
+        <span onClick={(e) => e.stopPropagation()} className="block truncate font-mono text-[11px] text-text-dim cursor-pointer">
           {bookmark.url}
         </span>
       </div>
