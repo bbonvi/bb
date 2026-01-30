@@ -342,9 +342,24 @@ async fn search(
     let state = state.read().unwrap();
     let app_service = state.app_service.read().unwrap();
 
-    // ETag support
+    // Collect fetching IDs early so they contribute to ETag
+    let fetching_ids: HashSet<u64> = task_runner::read_queue_dump()
+        .queue
+        .iter()
+        .filter_map(|td| match (&td.task, &td.status) {
+            (
+                task_runner::Task::FetchMetadata { bmark_id, .. },
+                task_runner::Status::Pending | task_runner::Status::InProgress,
+            ) => Some(*bmark_id),
+            _ => None,
+        })
+        .collect();
+
+    // ETag support — includes fetching state so indicator updates propagate
     let version = app_service.bookmark_version();
-    let etag = format!("W/\"v{}\"", version);
+    let mut sorted_fetching: Vec<u64> = fetching_ids.iter().copied().collect();
+    sorted_fetching.sort_unstable();
+    let etag = format!("W/\"v{}-f{:?}\"", version, sorted_fetching);
 
     if let Some(if_none_match) = headers.get("if-none-match") {
         if let Ok(val) = if_none_match.to_str() {
@@ -395,19 +410,6 @@ async fn search(
             AppError::Other(e)
         }
     })?;
-
-    // Enrich with fetching status from task queue
-    let fetching_ids: HashSet<u64> = task_runner::read_queue_dump()
-        .queue
-        .iter()
-        .filter_map(|td| match (&td.task, &td.status) {
-            (
-                task_runner::Task::FetchMetadata { bmark_id, .. },
-                task_runner::Status::Pending | task_runner::Status::InProgress,
-            ) => Some(*bmark_id),
-            _ => None,
-        })
-        .collect();
 
     let enriched: Vec<BookmarkResponse> = bookmarks
         .into_iter()
