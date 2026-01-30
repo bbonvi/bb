@@ -358,7 +358,7 @@ export default function BookmarkDetailModal() {
               {/* Content */}
               <div className="flex flex-col gap-4 px-4 pt-4 pb-0 sm:px-6 sm:pt-6">
                 {error && (
-                  <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+                  <div className="rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
                     {error}
                   </div>
                 )}

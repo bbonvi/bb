@@ -177,7 +177,7 @@ export default function CreateBookmarkModal() {
         {/* Body */}
         <div className="flex flex-col gap-3 p-4 sm:p-6">
           {error && (
-            <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+            <div className="rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
               {error}
             </div>
           )}

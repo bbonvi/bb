@@ -20,7 +20,7 @@ export function Thumbnail({
     <div className={`relative overflow-hidden ${className}`}>
       {/* Fallback — always rendered, visible until image loads */}
       <div
-        className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-hover to-surface transition-opacity duration-150 ${
+        className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br from-surface-hover to-surface transition-opacity duration-100 ${
           hasImage && loaded ? 'opacity-0' : 'opacity-100'
         }`}
       >
@@ -36,7 +36,7 @@ export function Thumbnail({
           loading="lazy"
           onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-100 ${
             loaded ? 'opacity-100' : 'opacity-0'
           }`}
         />

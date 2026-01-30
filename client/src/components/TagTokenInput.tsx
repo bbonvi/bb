@@ -343,7 +343,7 @@ export function TagTokenInput({
               minWidth: 160,
               zIndex: 99999,
             }}
-            className="max-h-32 overflow-y-auto rounded-md border border-white/[0.08] bg-surface shadow-lg"
+            className="max-h-32 overflow-y-auto rounded-md border border-white/[0.06] bg-surface shadow-lg"
           >
             {suggestions.map((s, i) => (
               <button
