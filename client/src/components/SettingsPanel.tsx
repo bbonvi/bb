@@ -712,13 +712,25 @@ function RulesManager() {
     setSelectedIndex(updated.length - 1)
   }
 
-  function handleDelete(index: number) {
+  async function handleDelete(index: number) {
     const updated = draftRules.filter((_, i) => i !== index)
     setDraftRules(updated)
     if (updated.length === 0) {
       setSelectedIndex(null)
     } else if (selectedIndex !== null && selectedIndex >= updated.length) {
       setSelectedIndex(updated.length - 1)
+    }
+    // Persist immediately — delete already has its own confirmation dialog
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await updateRules(updated)
+      setSavedRules(result)
+      setDraftRules(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete rule')
+    } finally {
+      setSaving(false)
     }
   }
 
