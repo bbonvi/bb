@@ -720,7 +720,8 @@ function RulesManager() {
   }
 
   function ruleLabel(rule: Rule, index: number): string {
-    return rule.comment || rule.url || rule.title || rule.query || `Rule ${index + 1}`
+    const label = rule.comment || rule.url || rule.title || rule.query || 'Empty rule'
+    return `${index + 1}. ${label}`
   }
 
   if (loading) {
@@ -796,6 +797,9 @@ function RuleEditor({
   onUpdate: (patch: Partial<Rule>) => void
   onDelete: () => void
 }) {
+  const tags = useStore((s) => s.tags)
+  const hiddenTags = useHiddenTags()
+
   const [url, setUrl] = useState(rule.url ?? '')
   const [title, setTitle] = useState(rule.title ?? '')
   const [description, setDescription] = useState(rule.description ?? '')
@@ -803,6 +807,10 @@ function RuleEditor({
   const [comment, setComment] = useState(rule.comment ?? '')
   const [actionTitle, setActionTitle] = useState(rule.action.UpdateBookmark.title ?? '')
   const [actionDesc, setActionDesc] = useState(rule.action.UpdateBookmark.description ?? '')
+
+  // Tag input state for TagListEditor
+  const [condTagInput, setCondTagInput] = useState('')
+  const [actionTagInput, setActionTagInput] = useState('')
 
   function saveField(patch: Partial<Rule>) {
     onUpdate(patch)
@@ -819,13 +827,31 @@ function RuleEditor({
     })
   }
 
-  const conditionTags = rule.tags ?? []
-  const actionTags = rule.action.UpdateBookmark.tags ?? []
+  const conditionTags = useMemo(() => rule.tags ?? [], [rule.tags])
+  const actionTags = useMemo(() => rule.action.UpdateBookmark.tags ?? [], [rule.action.UpdateBookmark.tags])
+
+  // Visible tags for autocomplete (exclude hidden + already-used)
+  const hiddenSet = useMemo(() => new Set(hiddenTags), [hiddenTags])
+  const visibleTags = useMemo(() => tags.filter((t) => !hiddenSet.has(t)), [tags, hiddenSet])
+
+  const condExisting = useMemo(() => new Set([...conditionTags, ...actionTags]), [conditionTags, actionTags])
+  const condSuggestions = useMemo(() => {
+    if (!condTagInput) return []
+    const lower = condTagInput.toLowerCase()
+    return visibleTags.filter((t) => !condExisting.has(t) && t.toLowerCase().includes(lower)).slice(0, 8)
+  }, [condTagInput, visibleTags, condExisting])
+
+  const actionSuggestions = useMemo(() => {
+    if (!actionTagInput) return []
+    const lower = actionTagInput.toLowerCase()
+    return visibleTags.filter((t) => !condExisting.has(t) && t.toLowerCase().includes(lower)).slice(0, 8)
+  }, [actionTagInput, visibleTags, condExisting])
 
   function addConditionTag(tag: string) {
     const trimmed = tag.trim()
     if (!trimmed || conditionTags.includes(trimmed)) return
     onUpdate({ tags: [...conditionTags, trimmed] })
+    setCondTagInput('')
   }
 
   function removeConditionTag(tag: string) {
@@ -844,6 +870,7 @@ function RuleEditor({
         },
       },
     })
+    setActionTagInput('')
   }
 
   function removeActionTag(tag: string) {
@@ -859,166 +886,135 @@ function RuleEditor({
   }
 
   const inputClass = 'h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim'
-  const labelClass = 'mb-1 block text-[11px] font-medium uppercase tracking-wider text-text-dim'
+  const labelClass = 'shrink-0 w-24 text-[11px] text-text-dim pt-1.5'
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Comment */}
-      <div>
-        <label className={labelClass}>Comment</label>
+    <div className="flex flex-col gap-0 overflow-y-auto">
+      {/* Comment — subtle top bar */}
+      <div className="flex items-center gap-2 pb-3">
         <input
           type="text"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           onBlur={() => saveField({ comment: comment || undefined })}
-          className={inputClass}
-          placeholder="Optional note about this rule"
+          className="h-7 flex-1 rounded-md border border-transparent bg-transparent px-2 text-xs text-text-muted outline-none transition-colors hover:border-white/[0.06] focus:border-hi-dim focus:bg-surface"
+          placeholder="Add a note..."
         />
+        <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-7 w-7 shrink-0" />
       </div>
 
-      {/* Conditions */}
-      <div>
-        <h4 className="mb-2 text-xs font-semibold text-text">Match when</h4>
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className={labelClass}>URL contains</label>
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              onBlur={() => saveField({ url: url || undefined })}
-              className={inputClass}
-              placeholder="e.g. github.com"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Title contains</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => saveField({ title: title || undefined })}
-              className={inputClass}
-              placeholder="e.g. tutorial"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Description contains</label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={() => saveField({ description: description || undefined })}
-              className={inputClass}
-              placeholder="e.g. rust"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Search query</label>
+      {/* IF — Conditions */}
+      <div className="rounded-t-lg border border-white/[0.06] bg-hi-subtle px-4 py-3">
+        <div className="mb-2.5 flex items-center gap-2">
+          <span className="rounded bg-hi-dim px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-hi">if</span>
+          <span className="text-[11px] text-text-dim">all conditions match</span>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Query</span>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onBlur={() => saveField({ query: query || undefined })}
               className={`${inputClass} font-mono`}
-              placeholder="#tag, .title, >desc, :url, and, or, not, quotes, parens"
+              placeholder="#tag .title >desc :url and or not"
             />
           </div>
-          <div>
-            <label className={labelClass}>Has tags</label>
-            <SimpleTagInput tags={conditionTags} onAdd={addConditionTag} onRemove={removeConditionTag} placeholder="Enter to add tag" />
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>URL</span>
+            <input
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onBlur={() => saveField({ url: url || undefined })}
+              className={inputClass}
+              placeholder="substring or r/regex/"
+            />
+          </div>
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Title</span>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => saveField({ title: title || undefined })}
+              className={inputClass}
+              placeholder="substring or r/regex/"
+            />
+          </div>
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Description</span>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={() => saveField({ description: description || undefined })}
+              className={inputClass}
+              placeholder="substring or r/regex/"
+            />
+          </div>
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Has tags</span>
+            <div className="min-w-0 flex-1">
+              <TagListEditor
+                tags={conditionTags}
+                input={condTagInput}
+                setInput={setCondTagInput}
+                suggestions={condSuggestions}
+                onAdd={addConditionTag}
+                onRemove={removeConditionTag}
+                placeholder="Add tag"
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Actions */}
-      <div>
-        <h4 className="mb-2 text-xs font-semibold text-text">Actions</h4>
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className={labelClass}>Set title</label>
+      {/* THEN — Actions */}
+      <div className="rounded-b-lg border border-t-0 border-white/[0.06] bg-surface/40 px-4 py-3">
+        <div className="mb-2.5">
+          <span className="rounded bg-surface-active px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-text-muted">then</span>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Set title</span>
             <input
               type="text"
               value={actionTitle}
               onChange={(e) => setActionTitle(e.target.value)}
               onBlur={() => saveActionField('title', actionTitle)}
               className={inputClass}
+              placeholder="Override title"
             />
           </div>
-          <div>
-            <label className={labelClass}>Set description</label>
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Set description</span>
             <input
               type="text"
               value={actionDesc}
               onChange={(e) => setActionDesc(e.target.value)}
               onBlur={() => saveActionField('description', actionDesc)}
               className={inputClass}
+              placeholder="Override description"
             />
           </div>
-          <div>
-            <label className={labelClass}>Append tags</label>
-            <SimpleTagInput tags={actionTags} onAdd={addActionTag} onRemove={removeActionTag} placeholder="Enter to add tag" />
+          <div className="flex items-start gap-2">
+            <span className={labelClass}>Add tags</span>
+            <div className="min-w-0 flex-1">
+              <TagListEditor
+                tags={actionTags}
+                input={actionTagInput}
+                setInput={setActionTagInput}
+                suggestions={actionSuggestions}
+                onAdd={addActionTag}
+                onRemove={removeActionTag}
+                placeholder="Add tag"
+              />
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Delete */}
-      <div className="pt-2">
-        <DeleteButton onDelete={onDelete} iconClass="h-3.5 w-3.5" className="h-8 w-8" />
-      </div>
-    </div>
-  )
-}
-
-// ─── Simple Tag Input ─────────────────────────────────────────────
-
-function SimpleTagInput({
-  tags,
-  onAdd,
-  onRemove,
-  placeholder,
-}: {
-  tags: string[]
-  onAdd: (tag: string) => void
-  onRemove: (tag: string) => void
-  placeholder: string
-}) {
-  const [input, setInput] = useState('')
-
-  return (
-    <div>
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            onAdd(input)
-            setInput('')
-          }
-        }}
-        className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim"
-        placeholder={placeholder}
-      />
-      {tags.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="flex items-center gap-1 rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-text-muted"
-            >
-              <button
-                onClick={() => onRemove(tag)}
-                className="text-text-dim transition-colors hover:text-danger"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -1043,12 +1039,45 @@ function TagListEditor({
   placeholder: string
 }) {
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [dropUp, setDropUp] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Recompute drop direction on show, scroll, resize (iOS keyboard), and visualViewport changes
+  const recomputeDropDirection = useCallback(() => {
+    if (!inputRef.current) return
+    const rect = inputRef.current.getBoundingClientRect()
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+    const spaceBelow = viewportHeight - rect.bottom
+    setDropUp(spaceBelow < 160)
+  }, [])
+
+  useEffect(() => {
+    if (!showSuggestions || suggestions.length === 0) return
+    recomputeDropDirection()
+
+    // Listen for viewport changes (scroll, resize, iOS keyboard)
+    const vv = window.visualViewport
+    const scrollParent = inputRef.current?.closest('[class*="overflow"]') as HTMLElement | null
+
+    window.addEventListener('resize', recomputeDropDirection)
+    vv?.addEventListener('resize', recomputeDropDirection)
+    vv?.addEventListener('scroll', recomputeDropDirection)
+    scrollParent?.addEventListener('scroll', recomputeDropDirection)
+
+    return () => {
+      window.removeEventListener('resize', recomputeDropDirection)
+      vv?.removeEventListener('resize', recomputeDropDirection)
+      vv?.removeEventListener('scroll', recomputeDropDirection)
+      scrollParent?.removeEventListener('scroll', recomputeDropDirection)
+    }
+  }, [showSuggestions, suggestions.length, recomputeDropDirection])
 
   return (
     <div>
       {/* Input + suggestions */}
       <div className="relative">
         <input
+          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -1064,7 +1093,9 @@ function TagListEditor({
           placeholder={placeholder}
         />
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute top-full left-0 z-10 mt-1 max-h-32 w-full overflow-y-auto rounded-md border border-white/[0.08] bg-surface shadow-lg">
+          <div className={`absolute left-0 z-50 max-h-32 w-full overflow-y-auto rounded-md border border-white/[0.08] bg-surface shadow-lg ${
+            dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+          }`}>
             {suggestions.map((s) => (
               <button
                 key={s}
