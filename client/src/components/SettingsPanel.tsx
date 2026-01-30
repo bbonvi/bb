@@ -1041,95 +1041,176 @@ function TagListEditor({
   placeholder: string
 }) {
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [highlightIdx, setHighlightIdx] = useState(-1)
+  const [stagedDelete, setStagedDelete] = useState(false)
   const [dropUp, setDropUp] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Recompute drop direction on show, scroll, resize (iOS keyboard), and visualViewport changes
+  const visible = showSuggestions && suggestions.length > 0
+
+  // Recompute drop direction
   const recomputeDropDirection = useCallback(() => {
-    if (!inputRef.current) return
-    const rect = inputRef.current.getBoundingClientRect()
-    const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-    const spaceBelow = viewportHeight - rect.bottom
-    setDropUp(spaceBelow < 160)
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const vh = window.visualViewport?.height ?? window.innerHeight
+    setDropUp(vh - rect.bottom < 160)
   }, [])
 
   useEffect(() => {
-    if (!showSuggestions || suggestions.length === 0) return
+    if (!visible) return
     recomputeDropDirection()
-
-    // Listen for viewport changes (scroll, resize, iOS keyboard)
     const vv = window.visualViewport
-    const scrollParent = inputRef.current?.closest('[class*="overflow"]') as HTMLElement | null
-
     window.addEventListener('resize', recomputeDropDirection)
     vv?.addEventListener('resize', recomputeDropDirection)
-    vv?.addEventListener('scroll', recomputeDropDirection)
-    scrollParent?.addEventListener('scroll', recomputeDropDirection)
-
     return () => {
       window.removeEventListener('resize', recomputeDropDirection)
       vv?.removeEventListener('resize', recomputeDropDirection)
-      vv?.removeEventListener('scroll', recomputeDropDirection)
-      scrollParent?.removeEventListener('scroll', recomputeDropDirection)
     }
-  }, [showSuggestions, suggestions.length, recomputeDropDirection])
+  }, [visible, recomputeDropDirection])
+
+  const commitTag = useCallback((tag: string) => {
+    const cleaned = tag.replace(/,/g, ' ').trim()
+    if (!cleaned) return
+    // Split on spaces to handle pasted multi-tag strings
+    for (const t of cleaned.split(/\s+/)) {
+      if (t) onAdd(t)
+    }
+    setInput('')
+    setShowSuggestions(false)
+    setHighlightIdx(-1)
+  }, [onAdd, setInput])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Autocomplete navigation
+    if (visible) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setHighlightIdx(i => (i + 1) % suggestions.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setHighlightIdx(i => (i <= 0 ? suggestions.length - 1 : i - 1))
+        return
+      }
+      if ((e.key === 'Tab' || e.key === 'Enter') && highlightIdx >= 0) {
+        e.preventDefault()
+        commitTag(suggestions[highlightIdx])
+        return
+      }
+      if (e.key === 'Escape') {
+        setShowSuggestions(false)
+        setHighlightIdx(-1)
+        return
+      }
+    }
+
+    // Commit on Enter/Tab (no suggestion highlighted)
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      if (input.trim()) {
+        e.preventDefault()
+        commitTag(input)
+        return
+      }
+      // Tab with empty input: let it pass through for normal tab behavior
+      if (e.key === 'Tab') return
+    }
+
+    // Backspace-to-delete: staged delete pattern
+    if (e.key === 'Backspace' && input === '' && tags.length > 0) {
+      e.preventDefault()
+      if (stagedDelete) {
+        onRemove(tags[tags.length - 1])
+        setStagedDelete(false)
+      } else {
+        setStagedDelete(true)
+      }
+    }
+  }, [visible, suggestions, highlightIdx, input, tags, stagedDelete, commitTag, onRemove])
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value
+    // Auto-replace commas with spaces; if space typed, commit the preceding token
+    const cleaned = raw.replace(/,/g, ' ')
+    if (cleaned.endsWith(' ') && cleaned.trim()) {
+      commitTag(cleaned)
+    } else {
+      setInput(cleaned)
+      setShowSuggestions(true)
+      setHighlightIdx(-1)
+      setStagedDelete(false)
+    }
+  }, [commitTag, setInput])
 
   return (
-    <div>
-      {/* Input + suggestions */}
-      <div className="relative">
+    <div ref={containerRef} className="relative">
+      {/* Inline token field */}
+      <div
+        className="flex min-h-[28px] cursor-text flex-wrap items-center gap-1 rounded-md border border-white/[0.06] bg-surface px-1.5 py-1 transition-colors focus-within:border-hi-dim"
+        onClick={() => inputRef.current?.focus()}
+      >
+        {tags.map((tag, i) => (
+          <span
+            key={tag}
+            className={`flex items-center gap-0.5 rounded px-1.5 py-px font-mono text-[11px] transition-colors ${
+              stagedDelete && i === tags.length - 1
+                ? 'bg-danger/20 text-danger'
+                : 'bg-surface-active text-text-muted'
+            }`}
+          >
+            {tag}
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onRemove(tag)
+              }}
+              className="ml-0.5 text-text-dim transition-colors hover:text-danger"
+              tabIndex={-1}
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </span>
+        ))}
         <input
           ref={inputRef}
           type="text"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleChange}
           onFocus={() => setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              onAdd(input)
-            }
+          onBlur={() => {
+            setTimeout(() => setShowSuggestions(false), 150)
+            setStagedDelete(false)
+            // Commit any remaining text on blur
+            if (input.trim()) commitTag(input)
           }}
-          className="h-7 w-full rounded-md border border-white/[0.06] bg-surface px-2 text-xs text-text outline-none transition-colors focus:border-hi-dim"
-          placeholder={placeholder}
+          onKeyDown={handleKeyDown}
+          className="min-w-[60px] flex-1 bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim"
+          placeholder={tags.length === 0 ? placeholder : ''}
         />
-        {showSuggestions && suggestions.length > 0 && (
-          <div className={`absolute left-0 z-50 max-h-32 w-full overflow-y-auto rounded-md border border-white/[0.08] bg-surface shadow-lg ${
-            dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
-          }`}>
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  onAdd(s)
-                }}
-                className="block w-full px-2 py-1 text-left text-xs text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* Tag chips */}
-      {tags.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="flex items-center gap-1 rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-text-muted"
+      {/* Autocomplete dropdown */}
+      {visible && (
+        <div className={`absolute left-0 z-50 max-h-32 w-full overflow-y-auto rounded-md border border-white/[0.08] bg-surface shadow-lg ${
+          dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+        }`}>
+          {suggestions.map((s, i) => (
+            <button
+              key={s}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                commitTag(s)
+              }}
+              className={`block w-full px-2 py-1 text-left text-xs transition-colors ${
+                i === highlightIdx
+                  ? 'bg-surface-hover text-text'
+                  : 'text-text-muted hover:bg-surface-hover hover:text-text'
+              }`}
             >
-              <button
-                onClick={() => onRemove(tag)}
-                className="text-text-dim transition-colors hover:text-danger"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-              {tag}
-            </span>
+              {s}
+            </button>
           ))}
         </div>
       )}
