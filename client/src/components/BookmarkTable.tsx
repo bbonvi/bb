@@ -82,30 +82,18 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
       <CardActions bookmarkId={bookmark.id} variant="row" />
       {/* Title */}
       <div className="min-w-0 flex-[3]">
-        <a
-          href={bookmark.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="block truncate text-sm text-text hover:text-hi"
-        >
+        <span className="block truncate text-sm text-text hover:text-hi">
           <Favicon iconId={bookmark.icon_id} />{' '}
           {bookmark.title || bookmark.url}
-        </a>
+        </span>
         {bookmark.fetching && <FetchingIndicator />}
       </div>
 
       {/* URL */}
       <div className="hidden min-w-0 flex-[2] sm:block">
-        <a
-          href={bookmark.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="block truncate font-mono text-[11px] text-text-dim hover:text-text-muted"
-        >
+        <span className="block truncate font-mono text-[11px] text-text-dim">
           {bookmark.url}
-        </a>
+        </span>
       </div>
 
       {/* Tags */}

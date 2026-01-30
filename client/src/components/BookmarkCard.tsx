@@ -39,16 +39,10 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
         )}
       </div>
       <div className="flex flex-col gap-1.5 p-3">
-        <a
-          href={bookmark.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="line-clamp-2 text-sm font-medium leading-snug text-text hover:text-hi"
-        >
+        <span className="line-clamp-2 text-sm font-medium leading-snug text-text hover:text-hi">
           <Favicon iconId={bookmark.icon_id} />{' '}
           {bookmark.title || bookmark.url}
-        </a>
+        </span>
 
         <UrlDisplay url={bookmark.url} />
         <Tags tags={bookmark.tags} hiddenTags={hiddenTags} />

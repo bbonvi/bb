@@ -97,15 +97,9 @@ export function FetchingIndicator() {
 // ─── URL display ───────────────────────────────────────────────────
 export function UrlDisplay({ url }: { url: string }) {
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className="block truncate font-mono text-[11px] text-text-dim hover:text-text-muted"
-    >
+    <span className="block truncate font-mono text-[11px] text-text-dim">
       {url}
-    </a>
+    </span>
   )
 }
 
