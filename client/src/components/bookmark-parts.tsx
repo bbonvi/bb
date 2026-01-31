@@ -73,6 +73,7 @@ export function Favicon({
         <img
           src={fileUrl(iconId!)}
           alt=""
+          loading="lazy"
           onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
           className={`relative h-full w-full rounded-sm object-contain transition-opacity duration-100 ${

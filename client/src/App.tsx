@@ -75,9 +75,9 @@ function AppShell() {
   }, [openCreateModal])
 
   return (
-    <div className="h-screen overflow-y-auto bg-bg">
+    <div className="flex h-screen flex-col bg-bg">
       <Toolbar />
-      <main>
+      <main className="min-h-0 flex-1">
         {viewMode === 'grid' && <BookmarkGrid />}
         {viewMode === 'cards' && <BookmarkList />}
         {viewMode === 'table' && <BookmarkTable />}
