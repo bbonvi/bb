@@ -97,6 +97,10 @@ async fn start_app(app_service: AppService, base_path: &str) {
 
     let uploads = Router::new()
         .nest_service("/api/file/", ServeDir::new(&uploads_path))
+        .layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("public, max-age=31536000, immutable"),
+        ))
         .layer(auth_layer.clone());
 
     let api = Router::new()

@@ -36,7 +36,7 @@ serde_yml = "0.0.11"
 thiserror = "1.0.63"
 tokio = { version = "1.39.2", features = ["rt", "signal", "rt-multi-thread"] }
 tower = "0.5"
-tower-http = { version = "0.5.2", features = ["fs", "trace"] }
+tower-http = { version = "0.5.2", features = ["fs", "trace", "set-header"] }
 tracing = { version = "0.1.40", features = ["log"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 # ulid = { version = "1.1.3" }
