@@ -19,6 +19,7 @@ import {
   updateRules,
   searchBookmarks,
   searchBookmarksUncached,
+  clearEtagCache,
 } from '@/lib/api'
 import type { Workspace, Rule } from '@/lib/api'
 import { DeleteButton } from './bookmark-parts'
@@ -440,6 +441,7 @@ function WorkspaceEditor({
       })
       await refreshWorkspaces()
       if (useStore.getState().activeWorkspaceId === workspace.id) {
+        clearEtagCache('bookmarks')
         useStore.getState().triggerRefetch()
       }
     } catch (err) {
