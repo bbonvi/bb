@@ -439,6 +439,9 @@ function WorkspaceEditor({
         view_prefs: workspace.view_prefs,
       })
       await refreshWorkspaces()
+      if (useStore.getState().activeWorkspaceId === workspace.id) {
+        useStore.getState().triggerRefetch()
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save workspace')
     } finally {
