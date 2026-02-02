@@ -16,6 +16,20 @@ import {
 import { X, Pencil, Trash2, AlertTriangle, CircleHelp } from 'lucide-react'
 import { ConfirmButton } from '@/components/bookmark-parts'
 import { TagTokenInput } from '@/components/TagTokenInput'
+import { mergeWorkspaceQuery } from '@/lib/workspaceFilters'
+import type { Workspace } from '@/lib/api'
+
+/** Apply active workspace filters then convert to bulk query shape. */
+function toEffectiveBulkQuery(searchQuery: SearchQuery): BulkSearchQuery {
+  const { activeWorkspaceId, workspaces } = useStore.getState()
+  const activeWorkspace = activeWorkspaceId
+    ? workspaces.find((w: Workspace) => w.id === activeWorkspaceId)
+    : null
+  const effective = activeWorkspace
+    ? mergeWorkspaceQuery(searchQuery, activeWorkspace)
+    : searchQuery
+  return toBulkQuery(effective)
+}
 
 // Convert store SearchQuery (comma-separated tags) to BulkSearchQuery (JSON array tags)
 function toBulkQuery(q: SearchQuery): BulkSearchQuery {
@@ -127,7 +141,7 @@ export function BulkEditModal({
     setError(null)
 
     try {
-      const query = toBulkQuery(searchQuery)
+      const query = toEffectiveBulkQuery(searchQuery)
       const update = replaceMode
         ? { tags: replaceTags }
         : {
@@ -320,7 +334,7 @@ export function BulkDeleteModal({
     setError(null)
 
     try {
-      const query = toBulkQuery(searchQuery)
+      const query = toEffectiveBulkQuery(searchQuery)
       const deleted = await searchDeleteBookmarks(query)
       setResult(deleted)
       const { searchQuery: sq } = useStore.getState()
