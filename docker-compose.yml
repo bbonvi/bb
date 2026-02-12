@@ -27,8 +27,9 @@ services:
       RUST_LOG: ${RUST_LOG:-info,bb=info,tower_http::trace::on_response=warn}
       CHROME_PATH: /usr/bin/chromium
       BB_AUTH_TOKEN: ${BB_AUTH_TOKEN:?BB_AUTH_TOKEN is required}
-      # Optional: external API for link previews
+      # Optional: external APIs for link previews
       PEEKALINK_API_KEY: ${PEEKALINK_API_KEY:-}
+      IFRAMELY_API_KEY: ${IFRAMELY_API_KEY:-}
       # Optional: proxy for metadata fetching (uncomment if needed).
       # WARNING: Do not set to empty string — ureq (used by fastembed's
       # HuggingFace Hub client) parses "" as a proxy URL, causing DNS
