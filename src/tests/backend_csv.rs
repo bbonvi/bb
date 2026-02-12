@@ -696,6 +696,55 @@ fn query_with_tag_prefix_search() {
 }
 
 #[test]
+fn query_with_id_prefix_search() {
+    let (mgr, _tmp) = fresh_mgr();
+    seed(&mgr, 3);
+
+    let results = mgr
+        .search(SearchQuery {
+            query: Some("=1".into()),
+            ..Default::default()
+        })
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, 1);
+}
+
+#[test]
+fn query_with_id_prefix_or_keeps_multiple_matches() {
+    let (mgr, _tmp) = fresh_mgr();
+    seed(&mgr, 3);
+
+    let results = mgr
+        .search(SearchQuery {
+            query: Some("=1 or #tag2".into()),
+            ..Default::default()
+        })
+        .unwrap();
+
+    assert_eq!(results.len(), 2);
+    assert!(results.iter().any(|b| b.id == 1));
+    assert!(results.iter().any(|b| b.id == 2));
+}
+
+#[test]
+fn query_with_conflicting_explicit_id_and_id_prefix_returns_empty() {
+    let (mgr, _tmp) = fresh_mgr();
+    seed(&mgr, 3);
+
+    let results = mgr
+        .search(SearchQuery {
+            id: Some(0),
+            query: Some("=1".into()),
+            ..Default::default()
+        })
+        .unwrap();
+
+    assert!(results.is_empty());
+}
+
+#[test]
 fn empty_and_whitespace_query_returns_all() {
     let (mgr, _tmp) = fresh_mgr();
     seed(&mgr, 4);

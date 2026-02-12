@@ -476,6 +476,38 @@ impl BookmarkManager for BackendCsv {
             return Ok(bmarks.clone());
         }
 
+        let parsed_query_filter = if let Some(query_str) = &query.query {
+            let query_str = query_str.trim();
+            if query_str.is_empty() {
+                None
+            } else {
+                Some(
+                    crate::search_query::parse(query_str)
+                        .map_err(|e| anyhow::anyhow!("invalid search query: {}", e))?,
+                )
+            }
+        } else {
+            None
+        };
+
+        let constrained_id = match (
+            query.id,
+            parsed_query_filter
+                .as_ref()
+                .map(crate::search_query::required_id_constraint),
+        ) {
+            (Some(id), Some(crate::search_query::RequiredId::Exact(required_id)))
+                if id != required_id =>
+            {
+                return Ok(vec![]);
+            }
+            (Some(_), Some(crate::search_query::RequiredId::Unsatisfiable)) => return Ok(vec![]),
+            (Some(id), _) => Some(id),
+            (None, Some(crate::search_query::RequiredId::Exact(required_id))) => Some(required_id),
+            (None, Some(crate::search_query::RequiredId::Unsatisfiable)) => return Ok(vec![]),
+            (None, _) => None,
+        };
+
         let query_tags = query.tags.map(|tags| {
             let tags = tags.clone();
             tags.iter()
@@ -492,16 +524,8 @@ impl BookmarkManager for BackendCsv {
                 .collect::<Vec<_>>()
         });
 
-        for bookmark in bmarks.iter() {
-            let mut has_match = false;
-
-            if let Some(id) = &query.id {
-                if bookmark.id == *id {
-                    has_match = true;
-                } else {
-                    continue;
-                }
-            };
+        let evaluate_bookmark = |bookmark: &Bookmark| -> anyhow::Result<bool> {
+            let mut has_match = constrained_id.is_some();
 
             if let Some(url) = &query.url {
                 if query.exact && bookmark.url.eq_ignore_ascii_case(url)
@@ -509,7 +533,7 @@ impl BookmarkManager for BackendCsv {
                 {
                     has_match = true;
                 } else {
-                    continue;
+                    return Ok(false);
                 }
             };
 
@@ -519,7 +543,7 @@ impl BookmarkManager for BackendCsv {
                 {
                     has_match = true;
                 } else {
-                    continue;
+                    return Ok(false);
                 }
             };
 
@@ -529,7 +553,7 @@ impl BookmarkManager for BackendCsv {
                 {
                     has_match = true;
                 } else {
-                    continue;
+                    return Ok(false);
                 }
             };
 
@@ -562,34 +586,40 @@ impl BookmarkManager for BackendCsv {
                     }
 
                     if !has_match {
-                        continue;
+                        return Ok(false);
                     }
                 }
             };
 
             // Query search — structured query language with field prefixes,
             // boolean operators, quoted phrases, and parenthesized grouping.
-            if let Some(query_str) = &query.query {
-                let query_str = query_str.trim();
-                if !query_str.is_empty() {
-                    let filter = crate::search_query::parse(query_str)
-                        .map_err(|e| anyhow::anyhow!("invalid search query: {}", e))?;
-                    if !crate::search_query::eval(&filter, bookmark) {
-                        continue;
-                    }
-                    has_match = true;
+            if let Some(filter) = &parsed_query_filter {
+                if !crate::search_query::eval(filter, bookmark) {
+                    return Ok(false);
                 }
-            };
+                has_match = true;
+            }
 
-            if has_match {
+            Ok(has_match)
+        };
+
+        if let Some(id) = constrained_id {
+            if let Some(bookmark) = bmarks.iter().find(|bookmark| bookmark.id == id) {
+                if evaluate_bookmark(bookmark)? {
+                    output.push(bookmark.clone());
+                }
+            }
+            return Ok(output);
+        }
+
+        for bookmark in bmarks.iter() {
+            if evaluate_bookmark(bookmark)? {
                 output.push(bookmark.clone());
             }
 
-            let id_query = query.id.is_some();
             let limit_reached =
                 query.limit.is_some() && output.len() >= query.limit.unwrap_or_default();
-
-            if id_query || limit_reached {
+            if limit_reached {
                 break;
             }
         }

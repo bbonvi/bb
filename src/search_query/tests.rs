@@ -1,5 +1,5 @@
 use crate::bookmarks::Bookmark;
-use super::{parse, parse_tolerant, eval, matches};
+use super::{eval, matches, parse, parse_tolerant, required_id_constraint, RequiredId};
 use super::parser::{SearchFilter, FieldTarget};
 
 fn make_bookmark(title: &str, desc: &str, url: &str, tags: &[&str]) -> Bookmark {
@@ -271,6 +271,24 @@ fn test_id_prefix_exact() {
     assert!(matches("=42", &bm).unwrap());
     assert!(!matches("=4", &bm).unwrap());
     assert!(!matches("=abc", &bm).unwrap());
+}
+
+#[test]
+fn test_required_id_constraint_exact() {
+    let f = parse("=42 and rust").unwrap();
+    assert_eq!(required_id_constraint(&f), RequiredId::Exact(42));
+}
+
+#[test]
+fn test_required_id_constraint_unsatisfiable() {
+    let f = parse("=42 and =43").unwrap();
+    assert_eq!(required_id_constraint(&f), RequiredId::Unsatisfiable);
+}
+
+#[test]
+fn test_required_id_constraint_or_is_not_strict() {
+    let f = parse("=42 or rust").unwrap();
+    assert_eq!(required_id_constraint(&f), RequiredId::None);
 }
 
 #[test]

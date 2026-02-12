@@ -6,6 +6,8 @@ mod parser;
 use crate::bookmarks::Bookmark;
 
 pub use eval::eval;
+pub use eval::required_id_constraint;
+pub use eval::RequiredId;
 pub use parser::SearchFilter;
 
 use lexer::Token;
