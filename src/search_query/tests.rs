@@ -83,6 +83,12 @@ fn test_strict_bare_colon_literal() {
 }
 
 #[test]
+fn test_strict_bare_equals_literal() {
+    let f = parse("=").unwrap();
+    assert_eq!(f, SearchFilter::Term(FieldTarget::All, "=".into()));
+}
+
+#[test]
 fn test_strict_only_and_becomes_literal() {
     // `and` alone → literal word "and"
     let f = parse("and").unwrap();
@@ -256,6 +262,15 @@ fn test_url_prefix() {
     let bm = make_bookmark("", "", "https://github.com/foo", &[]);
     assert!(matches(":github.com", &bm).unwrap());
     assert!(!matches(":gitlab.com", &bm).unwrap());
+}
+
+#[test]
+fn test_id_prefix_exact() {
+    let mut bm = make_bookmark("", "", "", &[]);
+    bm.id = 42;
+    assert!(matches("=42", &bm).unwrap());
+    assert!(!matches("=4", &bm).unwrap());
+    assert!(!matches("=abc", &bm).unwrap());
 }
 
 #[test]

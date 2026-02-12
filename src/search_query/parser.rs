@@ -9,6 +9,7 @@ pub enum FieldTarget {
     Title,
     Description,
     Url,
+    Id,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,6 +129,7 @@ fn prefix_to_field(p: Prefix) -> FieldTarget {
         Prefix::Title => FieldTarget::Title,
         Prefix::Description => FieldTarget::Description,
         Prefix::Url => FieldTarget::Url,
+        Prefix::Id => FieldTarget::Id,
     }
 }
 

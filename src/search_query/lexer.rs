@@ -4,6 +4,7 @@ pub enum Prefix {
     Title,       // .
     Description, // >
     Url,         // :
+    Id,          // =
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,12 +60,13 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 let s = read_quoted(&chars, &mut i);
                 tokens.push(Token::QuotedString(s));
             }
-            '#' | '.' | '>' | ':' => {
+            '#' | '.' | '>' | ':' | '=' => {
                 let prefix = match chars[i] {
                     '#' => Prefix::Tag,
                     '.' => Prefix::Title,
                     '>' => Prefix::Description,
                     ':' => Prefix::Url,
+                    '=' => Prefix::Id,
                     _ => unreachable!(),
                 };
                 i += 1;
@@ -80,6 +82,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                             Prefix::Title => ".",
                             Prefix::Description => ">",
                             Prefix::Url => ":",
+                            Prefix::Id => "=",
                         };
                         tokens.push(Token::Word(literal.to_string()));
                     } else {

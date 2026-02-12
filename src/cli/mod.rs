@@ -46,7 +46,7 @@ pub enum Command {
         #[clap(short = 'g', long, allow_hyphen_values = true)]
         tags: Option<String>,
 
-        /// Search query across title, description, url, and tags (use #tag for tag search)
+        /// Search query across title, description, url, and tags (use #tag for tag search, =id for bookmark id search)
         #[clap(short = 'k', long)]
         query: Option<String>,
 

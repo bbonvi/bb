@@ -234,7 +234,7 @@ Search bookmark
 * `-t`, `--title <TITLE>` — Bookmark title
 * `-d`, `--description <DESCRIPTION>` — Bookmark description
 * `-g`, `--tags <TAGS>` — Bookmark tags
-* `-k`, `--query <QUERY>` — Search query across title, description, url, and tags (use #tag for tag search)
+* `-k`, `--query <QUERY>` — Search query across title, description, url, and tags (use `#tag` for tag search, `=id` for bookmark id search)
 * `-i`, `--id <ID>` — id
 * `-e`, `--exact` — Exact search. False by default
 
@@ -366,7 +366,7 @@ Create new rule
 * `--title <TITLE>` — A regex matching bookmark title
 * `--description <DESCRIPTION>` — A regex matching bookmark description
 * `--tags <TAGS>` — A list of tags bookmark will be matched by (all tags has to match)
-* `--query <QUERY>` — A search query string evaluated via the search query language (supports `#tag`, `.title`, `>desc`, `:url`, `and`, `or`, `not`, quoted phrases, parens). AND-ed with other conditions
+* `--query <QUERY>` — A search query string evaluated via the search query language (supports `#tag`, `.title`, `>desc`, `:url`, `=id`, `and`, `or`, `not`, quoted phrases, parens). AND-ed with other conditions
 
 
 
@@ -406,4 +406,3 @@ UNIMPLEMENTED! Edit config.yaml directly
     This document was generated automatically by
     <a href="https://crates.io/crates/clap-markdown"><code>clap-markdown</code></a>.
 </i></small>
-

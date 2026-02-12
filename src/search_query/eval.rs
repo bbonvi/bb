@@ -26,6 +26,7 @@ fn eval_term(field: &FieldTarget, term: &str, bm: &Bookmark) -> bool {
         FieldTarget::Title => bm.title.to_lowercase().contains(&term_lower),
         FieldTarget::Description => bm.description.to_lowercase().contains(&term_lower),
         FieldTarget::Url => bm.url.to_lowercase().contains(&term_lower),
+        FieldTarget::Id => term.parse::<u64>().is_ok_and(|id| bm.id == id),
         FieldTarget::All => {
             // Substring across title, description, url; for tags use substring contains
             bm.title.to_lowercase().contains(&term_lower)

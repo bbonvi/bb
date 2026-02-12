@@ -14,7 +14,7 @@
 ## Features
 
 - **Tags**: Categorize bookmarks with tags. Tags are hierarchical — use `/` to create nested categories (e.g. `dev/rust`, `dev/python`). Searching for a parent tag matches all children: filtering by `dev` also matches `dev/rust` and `dev/python`. This applies to both tag filters and the `#` query prefix.
-- **Rules**: Create custom rules using YAML configuration. Define matching queries for titles, URLs, or descriptions, and apply actions based on those matches. Rules also support an optional `query` condition — a search query string evaluated via the search query language (supports `#tag`, `.title`, `>desc`, `:url`, `and`, `or`, `not`, quoted phrases, parens). The query condition is AND-ed with other conditions. For example, bb can automatically assign tag "dev" for every url containing "github.com", or use `query: "#work and :github.com"` to match bookmarks tagged "work" with GitHub URLs. Rules can be managed via the Web UI Settings panel or the CLI.
+- **Rules**: Create custom rules using YAML configuration. Define matching queries for titles, URLs, or descriptions, and apply actions based on those matches. Rules also support an optional `query` condition — a search query string evaluated via the search query language (supports `#tag`, `.title`, `>desc`, `:url`, `=id`, `and`, `or`, `not`, quoted phrases, parens). The query condition is AND-ed with other conditions. For example, bb can automatically assign tag "dev" for every url containing "github.com", or use `query: "#work and :github.com"` to match bookmarks tagged "work" with GitHub URLs. Rules can be managed via the Web UI Settings panel or the CLI.
 - **Scrape Metadata**: When you create a bookmark, bb fetches metadata through a multi-stage pipeline: URLs are normalized (tracking params stripped, hosts lowercased), then bb fans out parallel requests to oEmbed, Plain HTML, Microlink, and Peekalink fetchers. Results are merged field-by-field by priority. Images are validated via magic byte detection, decode check, and minimum resolution (>32x32) to filter out tracking pixels and corrupt data. Headless Chrome is used as fallback when no validated image is found. The Chrome instance includes fingerprint spoofing (deviceMemory, maxTouchPoints, WebGL vendor/renderer, AudioContext) to bypass bot detection. Failed metadata tasks are retried up to 3 times (configurable) with exponential backoff (5s × 2^attempt + jitter) for transient errors (5xx, timeout); 4xx errors are terminal. You can also upload custom cover images and favicons per bookmark via the Web UI.
 - **Web UI**: Manage your bookmarks through a user-friendly web interface built with Vite, React, and shadcn/ui. Stores screenshots and favicons for quick reference. Installable as a PWA with share target and protocol handler support — share URLs directly from your browser or OS into bb.
 - **Workspaces**: Organize bookmarks into filtered views. Each workspace defines tag whitelist/blacklist and an optional filter query. Bookmarks matching the workspace filters appear automatically. Workspaces are persisted in `workspaces.yaml` and managed via the Web UI settings panel or the REST API. Drag-and-drop reordering is supported.
@@ -41,6 +41,7 @@ The `query` field supports a structured query language with field prefixes, bool
 | `.` | title | `.youtube` — substring, case-insensitive |
 | `>` | description | `>tutorial` — substring, case-insensitive |
 | `:` | url | `:github.com` — substring, case-insensitive |
+| `=` | id | `=42` — exact bookmark id match |
 | (none) | all fields | `video` — substring across title, description, url, tags |
 
 ### Quoted Phrases
@@ -61,7 +62,7 @@ Group sub-expressions: `(#video and .youtube) or (#audio and .spotify)`
 
 ### Backslash Escaping
 
-Search prefix characters literally: `\#hashtag`, `\:colon`, `\.dot`, `\>arrow`
+Search prefix characters literally: `\#hashtag`, `\:colon`, `\.dot`, `\>arrow`, `\=id`
 
 ### Examples
 
@@ -71,6 +72,7 @@ rust async                        → bookmarks mentioning both "rust" and "asyn
 ."getting started"                → title contains the phrase "getting started"
 >"deploy to production"           → description contains "deploy to production"
 :stackoverflow.com                → URL contains "stackoverflow.com"
+=42                               → bookmark with id 42
 #dev/backend or #dev/frontend     → hierarchical tag match on either subtree
 (#python or #rust) .tutorial      → tutorials tagged python or rust
 not #read :arxiv.org              → unread papers from arxiv
@@ -389,5 +391,4 @@ BB_ADDR=http://localhost:8080 BB_AUTH_TOKEN=your-secret-token-here bb search
 | `EDITOR`              | Your default text editor                              | `vim`                 | `nvim`                  |
 | `SHELL`               | Shell to launch editor with                           | `/usr/sbin/bash`      | `/bin/bash`             |
 | `IFRAMELY_API_KEY`    | Iframely API key for rich metadata extraction         |                       | `abc123...`             |
-
 

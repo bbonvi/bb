@@ -100,14 +100,14 @@ src/search_query/
 └── tests.rs    # Unit tests
 ```
 
-- **Field prefixes**: `#tag`, `.title`, `>description`, `:url`, bare = all fields
+- **Field prefixes**: `#tag`, `.title`, `>description`, `:url`, `=id`, bare = all fields
 - **Boolean operators**: `and`, `or`, `not` with standard precedence (`not` > `and` > `or`)
 - **Implicit AND**: space-separated terms are AND-joined
 - **Quoted phrases**: `."multi word term"`
 - **Parenthesized grouping**: `(#a or #b) and .title`
 - **Backslash escaping**: `\#literal` searches prefix characters literally
 
-Tag matching is exact + hierarchical (`#dev` matches tag `dev/rust`). All other fields use case-insensitive substring matching.
+Tag matching is exact + hierarchical (`#dev` matches tag `dev/rust`). ID matching (`=42`) is exact numeric equality. All other fields use case-insensitive substring matching.
 
 Called from `BackendCsv::search()` when a `query` field is present on the search request.
 
