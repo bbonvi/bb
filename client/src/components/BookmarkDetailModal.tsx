@@ -312,7 +312,8 @@ export default function BookmarkDetailModal() {
                 </button>
                 {currentIndex >= 0 && (
                   <span className="ml-2 font-mono text-[11px] text-text-dim">
-                    {currentIndex + 1}/{displayBookmarks.length}
+                    {currentIndex + 1}/{displayBookmarks.length}{' '}
+                    <span className="text-text-dim/60">#{detailModalId}</span>
                   </span>
                 )}
               </div>
