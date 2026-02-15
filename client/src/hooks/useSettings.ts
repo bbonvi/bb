@@ -2,6 +2,8 @@ import { useCallback, useSyncExternalStore } from 'react'
 
 export interface GlobalSettings {
   showCatchAllWorkspace: boolean
+  showTagAutocomplete: boolean
+  tagAutocompleteSubstringMatch: boolean
   globalIgnoredTags: string[]
   pollIntervalNormal: number   // ms, default 5000
   pollIntervalBusy: number     // ms, default 1500
@@ -10,6 +12,8 @@ export interface GlobalSettings {
 
 const DEFAULTS: GlobalSettings = {
   showCatchAllWorkspace: true,
+  showTagAutocomplete: true,
+  tagAutocompleteSubstringMatch: false,
   globalIgnoredTags: [],
   pollIntervalNormal: 5000,
   pollIntervalBusy: 1500,

@@ -96,6 +96,8 @@ The Web UI settings panel (gear icon) has two sections:
 
 - **Preferences**
   - **Show catch-all workspace** — display a "---" option in the workspace selector to view all bookmarks regardless of workspace.
+  - **Show tag autocomplete** — toggles visibility of tag suggestion dropdowns while typing. Keyboard autocomplete (Enter/Tab) still works even when hidden.
+  - **Autocomplete substring match** — when enabled, tag autocomplete matches anywhere in the tag. Disabled by default, so autocomplete uses group/tag prefix matching.
   - **Polling intervals** — configure how often the UI refreshes data in the background (separate intervals for normal, busy, and hidden-tab states).
   - **Globally ignored tags** — bookmarks with these tags are completely hidden everywhere in the UI. Useful for archiving or soft-deleting without removing data.
 
@@ -391,4 +393,3 @@ BB_ADDR=http://localhost:8080 BB_AUTH_TOKEN=your-secret-token-here bb search
 | `EDITOR`              | Your default text editor                              | `vim`                 | `nvim`                  |
 | `SHELL`               | Shell to launch editor with                           | `/usr/sbin/bash`      | `/bin/bash`             |
 | `IFRAMELY_API_KEY`    | Iframely API key for rich metadata extraction         |                       | `abc123...`             |
-

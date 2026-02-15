@@ -1073,6 +1073,20 @@ function GeneralSettings({ visibleTags }: { visibleTags: string[] }) {
         onChange={(v) => updateSettings({ showCatchAllWorkspace: v })}
       />
 
+      <ToggleSetting
+        label="Show tag autocomplete"
+        description="Show tag suggestion dropdowns while typing (keyboard autocomplete still works when hidden)"
+        checked={settings.showTagAutocomplete}
+        onChange={(v) => updateSettings({ showTagAutocomplete: v })}
+      />
+
+      <ToggleSetting
+        label="Autocomplete substring match"
+        description="Match tags by any substring instead of only group/tag prefixes (off by default)"
+        checked={settings.tagAutocompleteSubstringMatch}
+        onChange={(v) => updateSettings({ tagAutocompleteSubstringMatch: v })}
+      />
+
       {/* Polling intervals */}
       <div>
         <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-text-dim">

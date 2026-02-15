@@ -1,6 +1,25 @@
 import { useState, useLayoutEffect, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import { useStore } from '@/lib/store'
+import { useSettings } from '@/hooks/useSettings'
+
+function matchesAutocompleteTag(tag: string, query: string, substringMatch: boolean): boolean {
+  const normalizedTag = tag.toLowerCase()
+  const normalizedQuery = query.toLowerCase()
+  if (substringMatch) {
+    return normalizedTag.includes(normalizedQuery)
+  }
+  if (normalizedTag.startsWith(normalizedQuery)) {
+    return true
+  }
+  if (!normalizedTag.includes('/')) {
+    return false
+  }
+  return normalizedTag
+    .split('/')
+    .some((part) => part.length > 0 && part.startsWith(normalizedQuery))
+}
 
 /**
  * Inline token field for tag editing.
@@ -23,6 +42,8 @@ export function TagTokenInput({
   className?: string
 }) {
   'use no memo' // Opt out of React Compiler — DOM measurements require refs in effects
+  const [settings] = useSettings()
+  const existingTags = useStore((s) => s.tags)
   const [input, setInput] = useState('')
   const [cursorIdx, setCursorIdx] = useState(tags.length)
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -39,19 +60,24 @@ export function TagTokenInput({
 
   // Keep cursorIdx in bounds when tags change externally
   const clampedCursorIdx = Math.min(cursorIdx, tags.length)
-  if (clampedCursorIdx !== cursorIdx) setCursorIdx(clampedCursorIdx) // eslint-disable-line react-hooks/set-state-in-render
+  if (clampedCursorIdx !== cursorIdx) setCursorIdx(clampedCursorIdx)
 
   const tagsSet = useMemo(() => new Set(tags.map((t) => t.toLowerCase())), [tags])
+  const existingTagsSet = useMemo(
+    () => new Set(existingTags.map((t) => t.toLowerCase())),
+    [existingTags],
+  )
 
   const suggestions = useMemo(() => {
     if (!input.trim()) return []
-    const lower = input.toLowerCase()
+    const lower = input.trim().toLowerCase()
     return availableTags
-      .filter((t) => t.toLowerCase().includes(lower) && !tagsSet.has(t.toLowerCase()))
+      .filter((t) => matchesAutocompleteTag(t, lower, settings.tagAutocompleteSubstringMatch) && !tagsSet.has(t.toLowerCase()))
       .slice(0, 8)
-  }, [input, availableTags, tagsSet])
+  }, [input, availableTags, tagsSet, settings.tagAutocompleteSubstringMatch])
 
-  const visible = showSuggestions && suggestions.length > 0
+  const suggestionsVisible = showSuggestions && suggestions.length > 0
+  const dropdownVisible = settings.showTagAutocomplete && suggestionsVisible
 
   // ── Portal dropdown positioning ──────────────────────────────────
   const updateDropdownPos = useCallback(() => {
@@ -72,11 +98,11 @@ export function TagTokenInput({
   }, [])
 
   useLayoutEffect(() => {
-    if (!visible) {
-      setDropdownPos(null) // eslint-disable-line react-hooks/set-state-in-effect
+    if (!dropdownVisible) {
+      setDropdownPos(null)
       return
     }
-    updateDropdownPos() // eslint-disable-line react-hooks/set-state-in-effect
+    updateDropdownPos()
 
     const vv = window.visualViewport
     window.addEventListener('scroll', updateDropdownPos, true)
@@ -90,7 +116,7 @@ export function TagTokenInput({
       vv?.removeEventListener('resize', updateDropdownPos)
       vv?.removeEventListener('scroll', updateDropdownPos)
     }
-  }, [visible, updateDropdownPos, input])
+  }, [dropdownVisible, updateDropdownPos, input, suggestions.length])
 
   // ── Tag operations (cursor-aware) ────────────────────────────────
   const insertTag = useCallback(
@@ -132,20 +158,25 @@ export function TagTokenInput({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       // Autocomplete navigation
-      if (visible) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault()
-          setHighlightIdx((i) => (i + 1) % suggestions.length)
-          return
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          setHighlightIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
-          return
+      if (suggestionsVisible) {
+        if (settings.showTagAutocomplete) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHighlightIdx((i) => (i + 1) % suggestions.length)
+            return
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHighlightIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+            return
+          }
         }
         if (e.key === 'Tab' || e.key === 'Enter') {
           e.preventDefault()
-          commitTag(suggestions[highlightIdx] ?? suggestions[0])
+          const selected = settings.showTagAutocomplete
+            ? (suggestions[highlightIdx] ?? suggestions[0])
+            : suggestions[0]
+          commitTag(selected)
           return
         }
         if (e.key === 'Escape') {
@@ -206,7 +237,7 @@ export function TagTokenInput({
         removeAtIdx(clampedCursorIdx)
       }
     },
-    [visible, suggestions, highlightIdx, input, tags, clampedCursorIdx, stagedDelete, commitTag, removeAtIdx],
+    [suggestionsVisible, settings.showTagAutocomplete, suggestions, highlightIdx, input, tags, clampedCursorIdx, stagedDelete, commitTag, removeAtIdx],
   )
 
   const handleChange = useCallback(
@@ -299,11 +330,16 @@ export function TagTokenInput({
     if (i < tags.length) {
       const tag = tags[i]
       const isStaged = stagedDelete && i === clampedCursorIdx - 1
+      const existsInBookmarks = existingTagsSet.has(tag.toLowerCase())
       elements.push(
         <span
           key={tag}
           className={`flex cursor-pointer items-center gap-0.5 rounded px-1.5 py-px font-mono text-[11px] transition-colors ${
-            isStaged ? 'bg-danger/20 text-danger' : 'bg-surface-active text-text-muted'
+            isStaged
+              ? 'bg-danger/20 text-danger'
+              : existsInBookmarks
+                ? 'bg-emerald-500/[0.12] text-emerald-200/80'
+                : 'bg-surface-active text-text-muted'
           }`}
           onMouseDown={(e) => {
             e.preventDefault()
@@ -329,7 +365,7 @@ export function TagTokenInput({
 
   // ── Dropdown portal ──────────────────────────────────────────────
   const dropdown =
-    visible && dropdownPos
+    dropdownVisible && dropdownPos
       ? createPortal(
           <div
             style={{
