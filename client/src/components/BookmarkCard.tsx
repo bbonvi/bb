@@ -32,7 +32,7 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
         bookmark.fetching
           ? 'fetching-glow'
           : selected
-            ? "z-10 border-hi/55 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.016),0_0_0_1px_rgba(107,138,253,0.12),0_0_96px_18px_rgba(107,138,253,0.085)]"
+            ? "z-10 border-hi/55 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.016),0_0_0_1px_rgba(107,138,253,0.12)]"
             : 'border-white/[0.06] hover:border-white/[0.15]'
       }`}
     >
@@ -46,7 +46,12 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
         )}
       </div>
       <div className="flex flex-col gap-1.5 p-3">
-        <span onClick={(e) => e.stopPropagation()} className="mt-1.5 line-clamp-2 cursor-pointer text-[15.5px] font-semibold leading-snug tracking-[-0.01em] text-text hover:text-hi">
+        <span
+          onClick={(e) => e.stopPropagation()}
+          className={`mt-1.5 line-clamp-2 cursor-pointer text-[16px] font-semibold leading-snug tracking-[-0.01em] ${
+            selected ? 'text-white hover:text-white' : 'text-text hover:text-hi'
+          }`}
+        >
           <Favicon iconId={bookmark.icon_id} />{' '}
           {bookmark.title || bookmark.url}
         </span>

@@ -108,14 +108,19 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
         bookmark.fetching
           ? 'border-l-2 border-l-hi-dim'
           : selected
-            ? "z-10 border-l-2 border-l-hi/65 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.014),0_0_80px_14px_rgba(107,138,253,0.065)]"
+            ? "z-10 border-l-2 border-l-hi/65 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.014)]"
             : 'hover:bg-surface-hover'
       }`}
     >
       <CardActions bookmarkId={bookmark.id} variant="row" />
       {/* Title */}
       <div className="min-w-0 flex-[3]">
-        <span onClick={(e) => e.stopPropagation()} className="mt-1 block truncate cursor-pointer text-[15.5px] font-semibold tracking-[-0.01em] text-text hover:text-hi">
+        <span
+          onClick={(e) => e.stopPropagation()}
+          className={`mt-1 block truncate cursor-pointer text-[16px] font-semibold tracking-[-0.01em] ${
+            selected ? 'text-white hover:text-white' : 'text-text hover:text-hi'
+          }`}
+        >
           <Favicon iconId={bookmark.icon_id} />{' '}
           {bookmark.title || bookmark.url}
         </span>
