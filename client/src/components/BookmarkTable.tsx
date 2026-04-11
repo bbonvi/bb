@@ -2,7 +2,7 @@ import { useRef, useMemo, memo, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
-import { Favicon, TagChip, CardActions, FetchingIndicator } from './bookmark-parts'
+import { Favicon, TagChip, CardActions, FetchingIndicator, ArmedDeleteOverlay } from './bookmark-parts'
 import { ViewEmptyState } from './BookmarkGrid'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useScrollResetOnSearch } from '@/hooks/useScrollResetOnSearch'
@@ -84,12 +84,14 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const setSelectedBookmarkId = useStore((s) => s.setSelectedBookmarkId)
   const selectedBookmarkId = useStore((s) => s.selectedBookmarkId)
+  const armedDeleteBookmarkId = useStore((s) => s.armedDeleteBookmarkId)
   const hiddenTags = useHiddenTags()
   const visibleTags = useMemo(
     () => bookmark.tags.filter((t) => !hiddenTags.includes(t)),
     [bookmark.tags, hiddenTags],
   )
   const selected = selectedBookmarkId === bookmark.id
+  const deleteArmed = armedDeleteBookmarkId === bookmark.id
 
   return (
     <a
@@ -107,11 +109,14 @@ const TableRow = memo(function TableRow({ bookmark }: { bookmark: Bookmark }) {
       className={`group relative z-0 flex items-center gap-3 border-b border-white/[0.03] px-4 py-2 no-underline ${
         bookmark.fetching
           ? 'border-l-2 border-l-hi-dim'
+          : deleteArmed
+            ? "z-10 border-l-2 border-l-danger shadow-[inset_0_0_0_999px_rgba(239,68,68,0.055)]"
           : selected
             ? "z-10 border-l-2 border-l-hi/65 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.014)]"
             : 'hover:bg-surface-hover'
       }`}
     >
+      {deleteArmed && <ArmedDeleteOverlay variant="row" />}
       <CardActions bookmarkId={bookmark.id} variant="row" />
       {/* Title */}
       <div className="min-w-0 flex-[3]">

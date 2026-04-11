@@ -47,6 +47,8 @@ export interface AppState {
   setDetailModalId: (id: number | null) => void
   selectedBookmarkId: number | null
   setSelectedBookmarkId: (id: number | null) => void
+  armedDeleteBookmarkId: number | null
+  setArmedDeleteBookmarkId: (id: number | null) => void
 
   // Create modal
   createModalOpen: boolean
@@ -215,10 +217,17 @@ export const useStore = create<AppState>()((set, get) => ({
   setDetailModalId: (detailModalId) =>
     set((state) => ({
       detailModalId,
+      armedDeleteBookmarkId: null,
       selectedBookmarkId: detailModalId ?? state.selectedBookmarkId,
     })),
   selectedBookmarkId: null,
-  setSelectedBookmarkId: (selectedBookmarkId) => set({ selectedBookmarkId }),
+  setSelectedBookmarkId: (selectedBookmarkId) =>
+    set((state) => ({
+      selectedBookmarkId,
+      armedDeleteBookmarkId: state.armedDeleteBookmarkId === selectedBookmarkId ? state.armedDeleteBookmarkId : null,
+    })),
+  armedDeleteBookmarkId: null,
+  setArmedDeleteBookmarkId: (armedDeleteBookmarkId) => set({ armedDeleteBookmarkId }),
 
   // Create modal
   createModalOpen: false,

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { deleteBookmark } from '@/lib/api'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useStore } from '@/lib/store'
@@ -29,9 +29,26 @@ function isViewportJumpKey(key: string): boolean {
 
 export function useGlobalShortcuts() {
   const { displayBookmarks } = useDisplayBookmarks()
-  const deleteArmRef = useRef<{ id: number | null; expiresAt: number }>({ id: null, expiresAt: 0 })
+  const deleteArmTimeoutRef = useRef<number | null>(null)
   const initializedSelectionRef = useRef(false)
   const searchQuery = useStore((s) => s.searchQuery)
+
+  const clearDeleteArm = useCallback(() => {
+    if (deleteArmTimeoutRef.current !== null) {
+      window.clearTimeout(deleteArmTimeoutRef.current)
+      deleteArmTimeoutRef.current = null
+    }
+    useStore.getState().setArmedDeleteBookmarkId(null)
+  }, [])
+
+  const armDelete = useCallback((bookmarkId: number) => {
+    clearDeleteArm()
+    useStore.getState().setArmedDeleteBookmarkId(bookmarkId)
+    deleteArmTimeoutRef.current = window.setTimeout(() => {
+      deleteArmTimeoutRef.current = null
+      useStore.getState().setArmedDeleteBookmarkId(null)
+    }, ARM_TIMEOUT_MS)
+  }, [clearDeleteArm])
 
   useEffect(() => {
     const state = useStore.getState()
@@ -39,12 +56,16 @@ export function useGlobalShortcuts() {
     if (state.selectedBookmarkId === null) return
     if (displayBookmarks.some((bookmark) => bookmark.id === state.selectedBookmarkId)) return
     state.setSelectedBookmarkId(null)
-  }, [displayBookmarks])
+    state.setArmedDeleteBookmarkId(null)
+  }, [armDelete, clearDeleteArm, displayBookmarks])
 
   useEffect(() => {
-    useStore.getState().setSelectedBookmarkId(null)
-    deleteArmRef.current = { id: null, expiresAt: 0 }
-  }, [searchQuery])
+    const state = useStore.getState()
+    state.setSelectedBookmarkId(null)
+    clearDeleteArm()
+  }, [clearDeleteArm, searchQuery])
+
+  useEffect(() => clearDeleteArm, [clearDeleteArm])
 
   useEffect(() => {
     if (initializedSelectionRef.current) return
@@ -63,7 +84,7 @@ export function useGlobalShortcuts() {
     }
 
     requestAnimationFrame(assignInitialSelection)
-  }, [displayBookmarks])
+  }, [armDelete, clearDeleteArm, displayBookmarks])
 
   useEffect(() => {
     const handler = async (e: KeyboardEvent) => {
@@ -223,10 +244,9 @@ export function useGlobalShortcuts() {
 
       if (e.key === 'd' && state.selectedBookmarkId !== null) {
         e.preventDefault()
-        const now = Date.now()
-        const armed = deleteArmRef.current.id === state.selectedBookmarkId && deleteArmRef.current.expiresAt > now
+        const armed = state.armedDeleteBookmarkId === state.selectedBookmarkId
         if (!armed) {
-          deleteArmRef.current = { id: state.selectedBookmarkId, expiresAt: now + ARM_TIMEOUT_MS }
+          armDelete(state.selectedBookmarkId)
           return
         }
 
@@ -236,14 +256,14 @@ export function useGlobalShortcuts() {
         const current = useStore.getState().bookmarks
         useStore.getState().setBookmarks(current.filter((bookmark) => bookmark.id !== selectedId))
         useStore.getState().setSelectedBookmarkId(nextSelectedId)
-        deleteArmRef.current = { id: null, expiresAt: 0 }
+        clearDeleteArm()
         return
       }
 
       if (e.key === 'x') {
-        if (deleteArmRef.current.id !== null) {
+        if (state.armedDeleteBookmarkId !== null) {
           e.preventDefault()
-          deleteArmRef.current = { id: null, expiresAt: 0 }
+          clearDeleteArm()
         }
       }
     }
@@ -269,7 +289,7 @@ export function useGlobalShortcuts() {
       window.removeEventListener('keydown', handler, true)
       window.removeEventListener('keydown', inputHandler, true)
     }
-  }, [displayBookmarks])
+  }, [armDelete, clearDeleteArm, displayBookmarks])
 }
 
 function getNavigationDelta(key: string, viewMode: 'grid' | 'cards' | 'table', columns: number): number {

@@ -5,6 +5,21 @@ import { useStore } from '@/lib/store'
 import { openBookmarkDetailInEditMode } from '@/lib/bookmarkDetailModal'
 import { CircleHelp, Pencil, Trash2, Upload } from 'lucide-react'
 
+export function ArmedDeleteOverlay({ variant = 'card' }: { variant?: 'card' | 'row' }) {
+  const containerClass = variant === 'row'
+    ? 'absolute inset-0 z-20 flex items-center justify-center bg-danger/12 backdrop-blur-[2px]'
+    : 'absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] bg-danger/12 backdrop-blur-[2px]'
+  const labelClass = variant === 'row'
+    ? 'rounded-md border border-danger/35 bg-bg/88 px-3 py-1.5 text-[11px] font-medium text-red-200 shadow-sm backdrop-blur-sm'
+    : 'rounded-lg border border-danger/35 bg-bg/88 px-3 py-2 text-center text-xs font-medium text-red-200 shadow-sm backdrop-blur-sm'
+
+  return (
+    <div className={containerClass}>
+      <span className={labelClass}>Press <kbd className="font-mono text-[0.95em] text-white">D</kbd> again to delete</span>
+    </div>
+  )
+}
+
 // ─── Thumbnail with styled fallback ────────────────────────────────
 export function Thumbnail({
   bookmark,
