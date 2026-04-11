@@ -10,7 +10,7 @@ import { useHiddenTags } from '@/hooks/useHiddenTags'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { updateBookmark, deleteBookmark, refreshMetadata, toBase64, fileUrl } from '@/lib/api'
 import type { Bookmark, MetadataReport } from '@/lib/api'
-import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone, FetchingIndicator } from './bookmark-parts'
+import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone, FetchingIndicator, ConfirmButton } from './bookmark-parts'
 import { TagTokenInput } from '@/components/TagTokenInput'
 import {
   ChevronLeft,
@@ -20,7 +20,11 @@ import {
   X,
   Check,
   ExternalLink,
+  CircleHelp,
 } from 'lucide-react'
+import { getNextBookmarkIdAfterDelete } from '@/lib/bookmarkSelection'
+
+const ARM_TIMEOUT_MS = 1200
 
 export default function BookmarkDetailModal() {
   const detailModalId = useStore((s) => s.detailModalId)
@@ -56,6 +60,9 @@ export default function BookmarkDetailModal() {
   // Per-bookmark report cache — survives navigation within the modal session
   const reportCache = useRef<Map<number, MetadataReport>>(new Map())
   const [fetchReport, setFetchReport] = useState<MetadataReport | null>(null)
+  const [deleteArmed, setDeleteArmed] = useState(false)
+  const [refreshArmed, setRefreshArmed] = useState(false)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
 
   const setReportForBookmark = useCallback((id: number, report: MetadataReport | null) => {
     if (report) {
@@ -151,6 +158,8 @@ export default function BookmarkDetailModal() {
     setPendingIcon(null)
     setCoverPreview(null)
     setIconPreview(null)
+    setDeleteArmed(false)
+    setRefreshArmed(false)
     // Consume pending report from create path, restore from cache, or clear
     if (pendingFetchReport && detailModalId !== null) {
       reportCache.current.set(detailModalId, pendingFetchReport)
@@ -165,7 +174,11 @@ export default function BookmarkDetailModal() {
     if (detailModalId === null) {
       reportCache.current.clear()
     }
-  }, [detailModalId])
+  }, [detailModalEdit, bookmark, hiddenTags, pendingFetchReport, detailModalId, setPendingFetchReport])
+
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 })
+  }, [detailModalId, editing])
 
   const startEdit = useCallback(() => {
     if (!bookmark) return
@@ -218,13 +231,14 @@ export default function BookmarkDetailModal() {
     if (!bookmark) return
     setError(null)
     try {
+      const nextSelectedId = getNextBookmarkIdAfterDelete(displayBookmarks, bookmark.id)
       await deleteBookmark(bookmark.id)
       setBookmarks(bookmarks.filter((b) => b.id !== bookmark.id))
-      setDetailModalId(null)
+      setDetailModalId(nextSelectedId)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete')
     }
-  }, [bookmark, bookmarks, setBookmarks, setDetailModalId])
+  }, [bookmark, bookmarks, displayBookmarks, setBookmarks, setDetailModalId])
 
   const setFetchingOptimistic = useCallback((id: number, fetching: boolean) => {
     const state = useStore.getState()
@@ -256,6 +270,16 @@ export default function BookmarkDetailModal() {
     }
   }, [bookmark, triggerRefetch, setReportForBookmark, setFetchingOptimistic, markDirty, clearDirty])
 
+  const armAction = useCallback((kind: 'delete' | 'refresh') => {
+    if (kind === 'delete') {
+      setDeleteArmed(true)
+      window.setTimeout(() => setDeleteArmed(false), ARM_TIMEOUT_MS)
+      return
+    }
+    setRefreshArmed(true)
+    window.setTimeout(() => setRefreshArmed(false), ARM_TIMEOUT_MS)
+  }, [])
+
   // Keyboard: arrows for nav, Ctrl+Enter to save, Escape to discard edit first
   useEffect(() => {
     if (detailModalId === null) return
@@ -272,12 +296,56 @@ export default function BookmarkDetailModal() {
         }
         return
       }
-      if (e.key === 'ArrowLeft' && canPrev) navigate(-1)
-      if (e.key === 'ArrowRight' && canNext) navigate(1)
+      if (e.key === 'e' && !bookmark?.fetching) {
+        e.preventDefault()
+        startEdit()
+        return
+      }
+      if (e.key === 'o') {
+        e.preventDefault()
+        window.open(bookmark?.url, '_blank', 'noopener,noreferrer')
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        window.open(bookmark?.url, '_blank', 'noopener,noreferrer')
+        return
+      }
+      if (e.key === 'x') {
+        e.preventDefault()
+        if (deleteArmed || refreshArmed) {
+          setDeleteArmed(false)
+          setRefreshArmed(false)
+        } else {
+          setDetailModalId(null)
+        }
+        return
+      }
+      if ((e.key === 'ArrowLeft' || e.key === 'h') && canPrev) {
+        e.preventDefault()
+        navigate(-1)
+        return
+      }
+      if ((e.key === 'ArrowRight' || e.key === 'l') && canNext) {
+        e.preventDefault()
+        navigate(1)
+        return
+      }
+      if (e.key === 'd') {
+        e.preventDefault()
+        if (!deleteArmed) armAction('delete')
+        else void handleDelete()
+        return
+      }
+      if (e.key === 'r' && !bookmark?.fetching && !refreshing) {
+        e.preventDefault()
+        if (!refreshArmed) armAction('refresh')
+        else void handleRefreshMetadata()
+      }
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [detailModalId, editing, saving, canPrev, canNext, navigate, saveEdit, cancelEdit])
+  }, [detailModalId, editing, saving, canPrev, canNext, navigate, saveEdit, cancelEdit, startEdit, deleteArmed, refreshArmed, handleDelete, handleRefreshMetadata, bookmark, refreshing, armAction, setDetailModalId])
 
   const open = detailModalId !== null && bookmark !== null
 
@@ -328,7 +396,7 @@ export default function BookmarkDetailModal() {
             </div>
 
             {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto">
+            <div ref={bodyRef} className="flex-1 overflow-y-auto">
               {/* Thumbnail — wraps in drop zone during edit mode */}
               {editing ? (
                 <div className="relative">
@@ -473,7 +541,12 @@ export default function BookmarkDetailModal() {
             {/* Footer actions */}
             <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-3 sm:px-6">
               <div className="flex items-center gap-2">
-                <DeleteButton onDelete={handleDelete} iconClass="h-4 w-4" />
+                <DeleteButton
+                  onDelete={handleDelete}
+                  iconClass="h-4 w-4"
+                  armed={deleteArmed}
+                  onArmedChange={setDeleteArmed}
+                />
               </div>
               <div className="flex items-center gap-2">
                 {editing ? (
@@ -488,15 +561,18 @@ export default function BookmarkDetailModal() {
                   </>
                 ) : (
                   <>
-                    <button
-                      tabIndex={-1}
-                      onClick={handleRefreshMetadata}
+                    <ConfirmButton
+                      onConfirm={handleRefreshMetadata}
+                      armed={refreshArmed}
+                      onArmedChange={setRefreshArmed}
                       disabled={refreshing || bookmark.fetching}
-                      className="rounded p-1.5 text-text-muted transition-colors hover:bg-surface-hover hover:text-text disabled:opacity-30 disabled:hover:bg-transparent"
                       title="Refresh metadata"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${refreshing || bookmark.fetching ? 'animate-spin' : ''}`} />
-                    </button>
+                      armedTitle="Click again to confirm refresh"
+                      icon={<RefreshCw className={`h-4 w-4 ${refreshing || bookmark.fetching ? 'animate-spin' : ''}`} />}
+                      armedIcon={<CircleHelp className="h-4 w-4" />}
+                      colorClass="text-text-muted hover:bg-surface-hover hover:text-text"
+                      armedColorClass="bg-hi-dim text-text"
+                    />
                     <button
                       tabIndex={-1}
                       onClick={startEdit}
@@ -606,6 +682,16 @@ function EditForm({
         </span>
       </div>
 
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-text-muted">Tags</span>
+        <TagTokenInput
+          tags={form.tags}
+          onChange={(tags) => onChange({ ...form, tags })}
+          availableTags={availableTags}
+          placeholder="Add tag"
+          autoFocus
+        />
+      </div>
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-text-muted">Title</span>
         <input
@@ -624,15 +710,6 @@ function EditForm({
           className="h-8 w-full rounded-md border border-white/[0.06] bg-surface px-2.5 text-xs text-text outline-none transition-colors placeholder:text-text-dim focus:border-hi-dim"
         />
       </label>
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-text-muted">Tags</span>
-        <TagTokenInput
-          tags={form.tags}
-          onChange={(tags) => onChange({ ...form, tags })}
-          availableTags={availableTags}
-          placeholder="Add tag"
-        />
-      </div>
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-text-muted">Description</span>
         <textarea

@@ -5,6 +5,8 @@ import { BookmarkCard } from './BookmarkCard'
 import { EmptyState } from './bookmark-parts'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useAutoColumns, MAX_GRID_WIDTH } from '@/hooks/useResponsive'
+import { useScrollResetOnSearch } from '@/hooks/useScrollResetOnSearch'
+import { isBookmarkFullyVisible, smoothScrollElementToCenter, smoothScrollVirtualIndexToCenter } from '@/lib/selectionScroll'
 
 const ROW_GAP = 16
 const ESTIMATED_ROW_HEIGHT = 330
@@ -22,7 +24,9 @@ export function BookmarkGrid() {
   const columns = useStore((s) => s.columns)
   const setColumns = useStore((s) => s.setColumns)
   const isUserLoading = useStore((s) => s.isUserLoading)
+  const selectedBookmarkId = useStore((s) => s.selectedBookmarkId)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
+  useScrollResetOnSearch(parentRef, displayBookmarks.length)
 
   // Auto-compute columns from container width, with scroll preservation
   const [autoCols, colsRef] = useAutoColumns()
@@ -57,6 +61,7 @@ export function BookmarkGrid() {
     [displayBookmarks, columns],
   )
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
@@ -65,6 +70,10 @@ export function BookmarkGrid() {
     gap: ROW_GAP,
     getItemKey: (index) => rows[index]?.[0]?.id ?? index, // stable key from first bookmark in row
   })
+
+  const selectedIndex = selectedBookmarkId === null
+    ? -1
+    : displayBookmarks.findIndex((bookmark) => bookmark.id === selectedBookmarkId)
 
   // Scroll to preserved bookmark after layout settles
   useEffect(() => {
@@ -75,6 +84,22 @@ export function BookmarkGrid() {
     const newRow = Math.floor(target / columns)
     virtualizer.scrollToIndex(newRow, { align: 'start' })
   }, [columns, virtualizer])
+
+  useEffect(() => {
+    if (selectedIndex < 0) return
+    const rowIndex = Math.floor(selectedIndex / columns)
+    const container = parentRef.current
+    if (!container) return
+    if (selectedBookmarkId !== null && isBookmarkFullyVisible(container, selectedBookmarkId)) return
+
+    const target = container.querySelector<HTMLElement>(`[data-bookmark-id="${selectedBookmarkId}"]`)
+    if (target) {
+      smoothScrollElementToCenter(container, target)
+      return
+    }
+
+    smoothScrollVirtualIndexToCenter(container, virtualizer.scrollToIndex, rowIndex)
+  }, [selectedIndex, selectedBookmarkId, columns, virtualizer])
 
   // Re-measure visible rows after bookmark data changes (new bookmark, metadata fetch, etc.)
   // measureElement must be called on actual DOM nodes — measure() alone only clears the cache
@@ -92,7 +117,7 @@ export function BookmarkGrid() {
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
   return (
-    <div ref={setRefs} className="h-full overflow-auto p-4">
+    <div ref={setRefs} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto p-4 focus:outline-none">
       <div
         className={`relative mx-auto w-full transition-opacity duration-150 ${isUserLoading ? 'opacity-40' : ''}`}
         style={{ height: virtualizer.getTotalSize(), maxWidth: MAX_GRID_WIDTH }}

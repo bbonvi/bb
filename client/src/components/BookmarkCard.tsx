@@ -10,23 +10,30 @@ interface BookmarkCardProps {
 
 export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCardProps) {
   const setDetailModalId = useStore((s) => s.setDetailModalId)
+  const setSelectedBookmarkId = useStore((s) => s.setSelectedBookmarkId)
+  const selectedBookmarkId = useStore((s) => s.selectedBookmarkId)
   const hiddenTags = useHiddenTags()
+  const selected = selectedBookmarkId === bookmark.id
 
   return (
     <a
+      data-bookmark-id={bookmark.id}
       href={bookmark.url}
       target="_blank"
       rel="noopener noreferrer"
+      onMouseDownCapture={() => setSelectedBookmarkId(bookmark.id)}
       onClick={(e) => {
         if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
           e.preventDefault()
           setDetailModalId(bookmark.id)
         }
       }}
-      className={`group relative flex flex-col overflow-hidden rounded-lg border bg-surface transition-[border-color] duration-150 no-underline ${
+      className={`group relative z-0 flex flex-col overflow-visible rounded-lg border bg-surface no-underline ${
         bookmark.fetching
           ? 'fetching-glow'
-          : 'border-white/[0.06] hover:border-white/[0.15]'
+          : selected
+            ? "z-10 border-hi/55 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.016),0_0_0_1px_rgba(107,138,253,0.12),0_0_96px_18px_rgba(107,138,253,0.085)]"
+            : 'border-white/[0.06] hover:border-white/[0.15]'
       }`}
     >
       <CardActions bookmarkId={bookmark.id} />
@@ -39,14 +46,14 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
         )}
       </div>
       <div className="flex flex-col gap-1.5 p-3">
-        <span onClick={(e) => e.stopPropagation()} className="line-clamp-2 text-sm font-medium leading-snug text-text hover:text-hi cursor-pointer">
+        <span onClick={(e) => e.stopPropagation()} className="mt-1.5 line-clamp-2 cursor-pointer text-[15.5px] font-semibold leading-snug tracking-[-0.01em] text-text hover:text-hi">
           <Favicon iconId={bookmark.icon_id} />{' '}
           {bookmark.title || bookmark.url}
         </span>
 
-        <UrlDisplay url={bookmark.url} />
-        <Tags tags={bookmark.tags} hiddenTags={hiddenTags} />
-        <Description text={bookmark.description} />
+        <UrlDisplay url={bookmark.url} selected={selected} />
+        <Tags tags={bookmark.tags} hiddenTags={hiddenTags} selected={selected} />
+        <Description text={bookmark.description} selected={selected} />
       </div>
     </a>
   )

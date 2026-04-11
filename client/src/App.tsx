@@ -6,6 +6,7 @@ import { BookmarkList } from '@/components/BookmarkList'
 import { BookmarkTable } from '@/components/BookmarkTable'
 import { usePolling } from '@/hooks/usePolling'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useStore } from '@/lib/store'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -22,6 +23,7 @@ const SettingsPanel = lazy(() => import('@/components/SettingsPanel'))
 function AppShell() {
   usePolling()
   useDocumentTitle()
+  useGlobalShortcuts()
 
   // Single subscription for all needed state
   const {

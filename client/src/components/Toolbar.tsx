@@ -179,20 +179,16 @@ export function Toolbar() {
           <SearchIcon className="pointer-events-none absolute left-3 text-text-dim" />
           <input
             ref={searchInputRef}
+            data-main-search-input="true"
+            data-search-input="true"
             type="text"
             value={localPrimary}
             onChange={(e) => setLocalPrimary(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') { e.stopPropagation(); searchInputRef.current?.select() }
+              if (e.key === 'Escape') { e.stopPropagation(); searchInputRef.current?.blur() }
               else if (e.key === 'Enter') {
                 flushPrimary(localPrimary)
-                const el = searchInputRef.current
-                if (el) {
-                  el.classList.remove('search-flash')
-                  void el.offsetWidth
-                  el.classList.add('search-flash')
-                  el.addEventListener('animationend', () => el.classList.remove('search-flash'), { once: true })
-                }
+                searchInputRef.current?.blur()
               }
             }}
             autoFocus
@@ -213,6 +209,7 @@ export function Toolbar() {
           <button
             tabIndex={-1}
             onClick={() => setFiltersOpen(!showFilters)}
+            data-filter-toggle="true"
             className={`absolute right-1.5 flex h-6 items-center gap-1 rounded-md px-1.5 text-xs transition-colors ${
               showFilters
                 ? 'bg-hi-dim text-text'
@@ -232,6 +229,7 @@ export function Toolbar() {
         {workspacesAvailable && (
           <div className="relative shrink-0">
             <select
+              data-workspace-select="true"
               value={activeWorkspaceId ?? ''}
               onChange={(e) => {
                 const v = e.target.value
@@ -442,9 +440,16 @@ const FilterField = memo(function FilterField({
         {label}
       </span>
       <input
+        data-search-input="true"
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' || e.key === 'Enter') {
+            e.preventDefault()
+            ;(e.currentTarget as HTMLInputElement).blur()
+          }
+        }}
         className={`h-7 w-full sm:w-28 rounded-md border bg-surface px-2 text-sm outline-none transition-colors ${
           value
             ? 'border-hi/20 text-text'

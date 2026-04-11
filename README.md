@@ -83,9 +83,12 @@ not #read :arxiv.org              → unread papers from arxiv
 - **Paste a URL anywhere** to instantly open the create bookmark modal with the URL pre-filled (as long as focus isn't in a text field).
 - **Ctrl+N** opens the create bookmark modal.
 - **Ctrl+Enter** saves edits in the detail modal.
-- **Left/Right arrow keys** navigate between bookmarks in the detail view.
+- **Normal view shortcuts**: `i` focuses search, `,` opens settings, `w` focuses workspaces, `s` toggles advanced filters, `p` pins the current query, `a` toggles Show All, `v` cycles grid/list/table.
+- **Keyboard navigation**: arrow keys or `h/j/k/l` start from the first visible bookmark, then move the current selection; `e` edits the selected bookmark and `d` deletes it with a double press.
+- **Detail modal shortcuts**: `e` enters edit mode, `d` deletes with a double press, `r` refreshes metadata with a double press, and `h/l` or left/right navigate between bookmarks.
 - **Click any tag** to add it as a search filter.
 - **Double-click the delete button** to confirm deletion (first click arms, second executes).
+- **Enter/Escape blur search fields** so you can drop back to keyboard navigation quickly.
 - **Drag & drop or paste images** onto the cover or favicon area in edit mode to upload custom images.
 - **URL parameters are persisted** — any query parameters in the URL are applied on load. Supported params: `workspace`, `query`, `tags`, `title`, `url`, `description`, `semantic`, `all`. For example, `/?workspace=Dev&query=rust&tags=lang` opens the Dev workspace with "rust" in the query field and "lang" as a tag filter. Bookmark this URL to always start with a specific view.
 - **`?action=create`** — opens the create bookmark modal on page load. Combine with other params to pre-fill fields: `/?action=create&url=https://example.com&title=Example&tags=reading` opens the modal with those values already populated.

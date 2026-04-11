@@ -96,9 +96,14 @@ export function FetchingIndicator() {
 }
 
 // ─── URL display ───────────────────────────────────────────────────
-export function UrlDisplay({ url }: { url: string }) {
+export function UrlDisplay({ url, selected = false }: { url: string; selected?: boolean }) {
   return (
-    <span onClick={(e) => e.stopPropagation()} className="block truncate font-mono text-[11px] text-text-dim cursor-pointer">
+    <span
+      onClick={(e) => e.stopPropagation()}
+      className={`block truncate cursor-pointer font-mono text-[11px] ${
+        selected ? 'text-text-muted' : 'text-text-dim'
+      }`}
+    >
       {url}
     </span>
   )
@@ -108,9 +113,11 @@ export function UrlDisplay({ url }: { url: string }) {
 export function Tags({
   tags,
   hiddenTags,
+  selected = false,
 }: {
   tags: string[]
   hiddenTags: string[]
+  selected?: boolean
 }) {
   const visible = useMemo(
     () => tags.filter((t) => !hiddenTags.includes(t)),
@@ -122,13 +129,13 @@ export function Tags({
   return (
     <div className="flex flex-wrap gap-1">
       {visible.map((tag) => (
-        <TagChip key={tag} tag={tag} />
+        <TagChip key={tag} tag={tag} selected={selected} />
       ))}
     </div>
   )
 }
 
-export function TagChip({ tag }: { tag: string }) {
+export function TagChip({ tag, selected = false }: { tag: string; selected?: boolean }) {
   const setSearchQuery = useStore((s) => s.setSearchQuery)
 
   const handleClick = useCallback(
@@ -149,7 +156,9 @@ export function TagChip({ tag }: { tag: string }) {
     <button
       tabIndex={-1}
       onClick={handleClick}
-      className="rounded-md bg-surface-hover px-1.5 py-0.5 font-mono text-[11px] text-text-muted transition-colors hover:bg-surface-active hover:text-text"
+      className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] hover:bg-surface-active hover:text-text ${
+        selected ? 'bg-surface-active text-text' : 'bg-surface-hover text-text-muted'
+      }`}
     >
       #{tag}
     </button>
@@ -160,9 +169,11 @@ export function TagChip({ tag }: { tag: string }) {
 export function Description({
   text,
   lineClamp = 3,
+  selected = false,
 }: {
   text: string
   lineClamp?: number
+  selected?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [clamped, setClamped] = useState(false)
@@ -182,7 +193,9 @@ export function Description({
     <div className="relative">
       <p
         ref={ref}
-        className={`text-xs leading-relaxed text-text-muted ${
+        className={`text-xs leading-relaxed ${
+          selected ? 'text-[#a3a3b2]' : 'text-text-muted'
+        } ${
           !expanded ? 'overflow-hidden' : ''
         }`}
         style={!expanded ? { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: lineClamp } : undefined}
@@ -223,6 +236,8 @@ export function ConfirmButton({
   disabled = false,
   children,
   armedChildren,
+  armed: controlledArmed,
+  onArmedChange,
 }: {
   onConfirm: () => void | Promise<void>
   icon?: React.ReactNode
@@ -237,9 +252,13 @@ export function ConfirmButton({
   disabled?: boolean
   children?: React.ReactNode
   armedChildren?: React.ReactNode
+  armed?: boolean
+  onArmedChange?: (armed: boolean) => void
 }) {
-  const [armed, setArmed] = useState(false)
+  const [uncontrolledArmed, setUncontrolledArmed] = useState(false)
   const [busy, setBusy] = useState(false)
+  const armed = controlledArmed ?? uncontrolledArmed
+  const setArmed = onArmedChange ?? setUncontrolledArmed
 
   const handleClick = useCallback(
     async (e: React.MouseEvent) => {
@@ -259,7 +278,7 @@ export function ConfirmButton({
         setArmed(false)
       }
     },
-    [armed, onConfirm, stopPropagation],
+    [armed, onConfirm, stopPropagation, setArmed],
   )
 
   const defaultIcon = <Trash2 className={iconClass} />
@@ -305,11 +324,15 @@ export function DeleteButton({
   iconClass,
   className,
   stopPropagation,
+  armed,
+  onArmedChange,
 }: {
   onDelete: () => void | Promise<void>
   iconClass?: string
   className?: string
   stopPropagation?: boolean
+  armed?: boolean
+  onArmedChange?: (armed: boolean) => void
 }) {
   return (
     <ConfirmButton
@@ -319,6 +342,8 @@ export function DeleteButton({
       stopPropagation={stopPropagation}
       title="Delete"
       armedTitle="Click again to confirm"
+      armed={armed}
+      onArmedChange={onArmedChange}
     />
   )
 }
@@ -351,23 +376,26 @@ function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
   const openDetailInEditMode = useStore((s) => s.openDetailInEditMode)
   const setBookmarks = useStore((s) => s.setBookmarks)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
+  const setSelectedBookmarkId = useStore((s) => s.setSelectedBookmarkId)
   const fetching = useStore((s) => s.bookmarks.find((b) => b.id === bookmarkId)?.fetching)
 
   const handleEdit = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       e.preventDefault()
+      setSelectedBookmarkId(bookmarkId)
       openDetailInEditMode(bookmarkId)
     },
-    [bookmarkId, openDetailInEditMode],
+    [bookmarkId, openDetailInEditMode, setSelectedBookmarkId],
   )
 
   const handleDelete = useCallback(async () => {
+    setSelectedBookmarkId(bookmarkId)
     await deleteBookmark(bookmarkId)
     const current = useStore.getState().bookmarks
     setBookmarks(current.filter((b) => b.id !== bookmarkId))
     if (useStore.getState().detailModalId === bookmarkId) setDetailModalId(null)
-  }, [bookmarkId, setBookmarks, setDetailModalId])
+  }, [bookmarkId, setBookmarks, setDetailModalId, setSelectedBookmarkId])
 
   return (
     <>

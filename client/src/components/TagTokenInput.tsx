@@ -34,12 +34,14 @@ export function TagTokenInput({
   availableTags = [],
   placeholder = 'Add tag',
   className,
+  autoFocus = false,
 }: {
   tags: string[]
   onChange: (tags: string[]) => void
   availableTags?: string[]
   placeholder?: string
   className?: string
+  autoFocus?: boolean
 }) {
   'use no memo' // Opt out of React Compiler — DOM measurements require refs in effects
   const [settings] = useSettings()
@@ -321,6 +323,7 @@ export function TagTokenInput({
         if (input.trim()) commitTag(input)
       }}
       onKeyDown={handleKeyDown}
+      autoFocus={autoFocus}
       style={atEnd ? undefined : { width: input ? `${input.length + 1}ch` : '1px', margin: input ? undefined : '0 -4.5px' }}
       className={`bg-transparent font-mono text-xs text-text outline-none placeholder:text-text-dim ${
         atEnd ? 'min-w-[60px] flex-1' : 'flex-none'
