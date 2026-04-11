@@ -30,6 +30,7 @@ function isViewportJumpKey(key: string): boolean {
 export function useGlobalShortcuts() {
   const { displayBookmarks } = useDisplayBookmarks()
   const deleteArmRef = useRef<{ id: number | null; expiresAt: number }>({ id: null, expiresAt: 0 })
+  const initializedSelectionRef = useRef(false)
   const searchQuery = useStore((s) => s.searchQuery)
 
   useEffect(() => {
@@ -44,6 +45,25 @@ export function useGlobalShortcuts() {
     useStore.getState().setSelectedBookmarkId(null)
     deleteArmRef.current = { id: null, expiresAt: 0 }
   }, [searchQuery])
+
+  useEffect(() => {
+    if (initializedSelectionRef.current) return
+    if (displayBookmarks.length === 0) return
+
+    const state = useStore.getState()
+    if (state.detailModalId !== null || state.selectedBookmarkId !== null) {
+      initializedSelectionRef.current = true
+      return
+    }
+
+    const assignInitialSelection = () => {
+      const firstVisibleId = getFirstVisibleBookmarkId(getBookmarkViewport()) ?? displayBookmarks[0].id
+      useStore.getState().setSelectedBookmarkId(firstVisibleId)
+      initializedSelectionRef.current = true
+    }
+
+    requestAnimationFrame(assignInitialSelection)
+  }, [displayBookmarks])
 
   useEffect(() => {
     const handler = async (e: KeyboardEvent) => {
