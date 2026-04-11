@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { deleteBookmark } from '@/lib/api'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useStore } from '@/lib/store'
+import { openBookmarkDetailInEditMode } from '@/lib/bookmarkDetailModal'
 import {
   cycleViewMode,
   focusBookmarkViewport,
@@ -183,7 +184,7 @@ export function useGlobalShortcuts() {
 
       if (e.key === 'e' && state.selectedBookmarkId !== null) {
         e.preventDefault()
-        state.openDetailInEditMode(state.selectedBookmarkId)
+        openBookmarkDetailInEditMode(state.selectedBookmarkId)
         return
       }
 

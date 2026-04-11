@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import type { Bookmark } from '@/lib/api'
 import { fileUrl, deleteBookmark } from '@/lib/api'
 import { useStore } from '@/lib/store'
+import { openBookmarkDetailInEditMode } from '@/lib/bookmarkDetailModal'
 import { CircleHelp, Pencil, Trash2, Upload } from 'lucide-react'
 
 // ─── Thumbnail with styled fallback ────────────────────────────────
@@ -373,7 +374,6 @@ export function CardActions({ bookmarkId, variant = 'card' }: { bookmarkId: numb
 }
 
 function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
-  const openDetailInEditMode = useStore((s) => s.openDetailInEditMode)
   const setBookmarks = useStore((s) => s.setBookmarks)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
   const setSelectedBookmarkId = useStore((s) => s.setSelectedBookmarkId)
@@ -384,9 +384,9 @@ function CardActionsInner({ bookmarkId }: { bookmarkId: number }) {
       e.stopPropagation()
       e.preventDefault()
       setSelectedBookmarkId(bookmarkId)
-      openDetailInEditMode(bookmarkId)
+      openBookmarkDetailInEditMode(bookmarkId)
     },
-    [bookmarkId, openDetailInEditMode, setSelectedBookmarkId],
+    [bookmarkId, setSelectedBookmarkId],
   )
 
   const handleDelete = useCallback(async () => {

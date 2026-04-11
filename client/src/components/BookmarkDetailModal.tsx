@@ -12,6 +12,7 @@ import { updateBookmark, deleteBookmark, refreshMetadata, toBase64, fileUrl } fr
 import type { Bookmark, MetadataReport } from '@/lib/api'
 import { Thumbnail, Favicon, Tags, UrlDisplay, DeleteButton, ImageDropZone, FetchingIndicator, ConfirmButton } from './bookmark-parts'
 import { TagTokenInput } from '@/components/TagTokenInput'
+import { consumePendingDetailEditRequest } from '@/lib/bookmarkDetailModal'
 import {
   ChevronLeft,
   ChevronRight,
@@ -28,9 +29,7 @@ const ARM_TIMEOUT_MS = 1200
 
 export default function BookmarkDetailModal() {
   const detailModalId = useStore((s) => s.detailModalId)
-  const detailModalEdit = useStore((s) => s.detailModalEdit)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
-  const setDetailModalEdit = useStore((s) => s.setDetailModalEdit)
   const bookmarks = useStore((s) => s.bookmarks)
   const markDirty = useStore((s) => s.markDirty)
   const clearDirty = useStore((s) => s.clearDirty)
@@ -64,6 +63,14 @@ export default function BookmarkDetailModal() {
   const [deleteArmed, setDeleteArmed] = useState(false)
   const [refreshArmed, setRefreshArmed] = useState(false)
   const bodyRef = useRef<HTMLDivElement | null>(null)
+  const lastModalBookmarkIdRef = useRef<number | null>(null)
+
+  const toEditForm = useCallback((nextBookmark: Bookmark): EditFormState => ({
+    title: nextBookmark.title,
+    description: nextBookmark.description,
+    url: nextBookmark.url,
+    tags: nextBookmark.tags.filter((t) => !hiddenTags.includes(t)),
+  }), [hiddenTags])
 
   const setReportForBookmark = useCallback((id: number, report: MetadataReport | null) => {
     if (report) {
@@ -132,28 +139,16 @@ export default function BookmarkDetailModal() {
     [currentIndex, displayBookmarks, setDetailModalId],
   )
 
-  // Exit edit mode when bookmark starts fetching
+  // Reset transient modal state only when the viewed bookmark actually changes.
   useEffect(() => {
-    if (bookmark?.fetching && editing) {
-      setEditing(false)
-      setError(null)
-    }
-  }, [bookmark?.fetching, editing])
+    if (lastModalBookmarkIdRef.current === detailModalId) return
+    lastModalBookmarkIdRef.current = detailModalId
 
-  // Reset state when modal opens/closes or bookmark changes
-  useEffect(() => {
-    if (detailModalEdit && bookmark) {
-      setEditForm({
-        title: bookmark.title,
-        description: bookmark.description,
-        url: bookmark.url,
-        tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)),
-      })
-      setEditing(true)
-      setDetailModalEdit(false)
-    } else {
-      setEditing(false)
+    const startEditing = detailModalId !== null && bookmark !== null && consumePendingDetailEditRequest(detailModalId)
+    if (startEditing && bookmark) {
+      setEditForm(toEditForm(bookmark))
     }
+    setEditing(startEditing)
     setError(null)
     setRefreshing(false)
     setPendingCover(null)
@@ -162,12 +157,7 @@ export default function BookmarkDetailModal() {
     setIconPreview(null)
     setDeleteArmed(false)
     setRefreshArmed(false)
-    // Consume pending report from create path, restore from cache, or clear
-    if (pendingFetchReport && detailModalId !== null) {
-      reportCache.current.set(detailModalId, pendingFetchReport)
-      setFetchReport(pendingFetchReport)
-      setPendingFetchReport(null)
-    } else if (detailModalId !== null && reportCache.current.has(detailModalId)) {
+    if (detailModalId !== null && reportCache.current.has(detailModalId)) {
       setFetchReport(reportCache.current.get(detailModalId)!)
     } else {
       setFetchReport(null)
@@ -176,7 +166,23 @@ export default function BookmarkDetailModal() {
     if (detailModalId === null) {
       reportCache.current.clear()
     }
-  }, [detailModalEdit, bookmark, hiddenTags, pendingFetchReport, detailModalId, setPendingFetchReport, setDetailModalEdit])
+  }, [bookmark, detailModalId, toEditForm])
+
+  useEffect(() => {
+    if (pendingFetchReport && detailModalId !== null) {
+      reportCache.current.set(detailModalId, pendingFetchReport)
+      setFetchReport(pendingFetchReport)
+      setPendingFetchReport(null)
+      return
+    }
+    if (detailModalId !== null && reportCache.current.has(detailModalId)) {
+      setFetchReport(reportCache.current.get(detailModalId)!)
+      return
+    }
+    if (detailModalId === null) {
+      setFetchReport(null)
+    }
+  }, [detailModalId, pendingFetchReport, setPendingFetchReport])
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 })
@@ -184,22 +190,15 @@ export default function BookmarkDetailModal() {
 
   const startEdit = useCallback(() => {
     if (!bookmark) return
-    setEditForm({
-      title: bookmark.title,
-      description: bookmark.description,
-      url: bookmark.url,
-      tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)),
-    })
-    setDetailModalEdit(false)
+    setEditForm(toEditForm(bookmark))
     setEditing(true)
     setError(null)
-  }, [bookmark, hiddenTags, setDetailModalEdit])
+  }, [bookmark, toEditForm])
 
   const cancelEdit = useCallback(() => {
-    setDetailModalEdit(false)
     setEditing(false)
     setError(null)
-  }, [setDetailModalEdit])
+  }, [])
 
   const saveEdit = useCallback(async () => {
     if (!bookmark) return
@@ -222,7 +221,6 @@ export default function BookmarkDetailModal() {
       const updated = await updateBookmark(payload)
       // Update in local bookmarks array
       setBookmarks(bookmarks.map((b) => (b.id === updated.id ? updated : b)))
-      setDetailModalEdit(false)
       setEditing(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save')
@@ -230,7 +228,7 @@ export default function BookmarkDetailModal() {
       clearDirty(bookmark.id)
       setSaving(false)
     }
-  }, [bookmark, editForm, pendingCover, pendingIcon, bookmarks, markDirty, clearDirty, setBookmarks, setDetailModalEdit])
+  }, [bookmark, editForm, pendingCover, pendingIcon, bookmarks, markDirty, clearDirty, setBookmarks])
 
   const handleDelete = useCallback(async () => {
     if (!bookmark) return
