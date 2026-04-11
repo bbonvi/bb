@@ -264,7 +264,7 @@ export function useGlobalShortcuts() {
         return
       }
 
-      if (e.key === 'x') {
+      if (e.key === 'x' || e.key === 'Escape') {
         if (state.armedDeleteBookmarkId !== null) {
           e.preventDefault()
           clearDeleteArm()
