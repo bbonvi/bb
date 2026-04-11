@@ -186,6 +186,13 @@ export function TagTokenInput({
         }
       }
 
+      // Commit raw text without letting Tab escape the field when it acts as confirm.
+      if (e.key === 'Tab' && input.trim()) {
+        e.preventDefault()
+        commitTag(input)
+        return
+      }
+
       // Commit raw text
       if (e.key === 'Enter' && input.trim()) {
         e.preventDefault()
