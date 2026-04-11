@@ -52,6 +52,7 @@ export function getVisibleBookmarkIds(container: HTMLElement | null): number[] {
 
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
+  if (target.closest('[data-workspace-select="true"]')) return false
   return !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"], [role="combobox"]')
 }
 
