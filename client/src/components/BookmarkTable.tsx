@@ -15,6 +15,7 @@ export function BookmarkTable() {
   const parentRef = useRef<HTMLDivElement>(null)
   const isUserLoading = useStore((s) => s.isUserLoading)
   const selectedBookmarkId = useStore((s) => s.selectedBookmarkId)
+  const selectedBookmarkRevealSeq = useStore((s) => s.selectedBookmarkRevealSeq)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
   useScrollResetOnSearch(parentRef, displayBookmarks.length)
 
@@ -44,7 +45,7 @@ export function BookmarkTable() {
     }
 
     smoothScrollVirtualIndexToCenter(container, virtualizer.scrollToIndex, selectedIndex)
-  }, [selectedIndex, selectedBookmarkId, virtualizer])
+  }, [selectedIndex, selectedBookmarkId, selectedBookmarkRevealSeq, virtualizer])
 
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 

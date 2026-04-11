@@ -25,6 +25,7 @@ export function BookmarkGrid() {
   const setColumns = useStore((s) => s.setColumns)
   const isUserLoading = useStore((s) => s.isUserLoading)
   const selectedBookmarkId = useStore((s) => s.selectedBookmarkId)
+  const selectedBookmarkRevealSeq = useStore((s) => s.selectedBookmarkRevealSeq)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
   useScrollResetOnSearch(parentRef, displayBookmarks.length)
 
@@ -99,7 +100,7 @@ export function BookmarkGrid() {
     }
 
     smoothScrollVirtualIndexToCenter(container, virtualizer.scrollToIndex, rowIndex)
-  }, [selectedIndex, selectedBookmarkId, columns, virtualizer])
+  }, [selectedIndex, selectedBookmarkId, selectedBookmarkRevealSeq, columns, virtualizer])
 
   // Re-measure visible rows after bookmark data changes (new bookmark, metadata fetch, etc.)
   // measureElement must be called on actual DOM nodes — measure() alone only clears the cache

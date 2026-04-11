@@ -225,18 +225,21 @@ export function useGlobalShortcuts() {
 
       if (e.key === 'e' && state.selectedBookmarkId !== null) {
         e.preventDefault()
+        state.revealSelectedBookmark()
         openBookmarkDetailInEditMode(state.selectedBookmarkId)
         return
       }
 
       if (e.key === 'Enter' && state.selectedBookmarkId !== null) {
         e.preventDefault()
+        state.revealSelectedBookmark()
         state.setDetailModalId(state.selectedBookmarkId)
         return
       }
 
       if (e.key === 'o' && state.selectedBookmarkId !== null) {
         e.preventDefault()
+        state.revealSelectedBookmark()
         const bookmark = displayBookmarks.find((item) => item.id === state.selectedBookmarkId)
         if (bookmark) window.open(bookmark.url, '_blank', 'noopener,noreferrer')
         return
@@ -244,6 +247,7 @@ export function useGlobalShortcuts() {
 
       if (e.key === 'd' && state.selectedBookmarkId !== null) {
         e.preventDefault()
+        state.revealSelectedBookmark()
         const armed = state.armedDeleteBookmarkId === state.selectedBookmarkId
         if (!armed) {
           armDelete(state.selectedBookmarkId)
