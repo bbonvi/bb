@@ -46,6 +46,7 @@ export interface AppState {
   detailModalId: number | null
   detailModalEdit: boolean
   setDetailModalId: (id: number | null) => void
+  setDetailModalEdit: (editing: boolean) => void
   openDetailInEditMode: (id: number) => void
   selectedBookmarkId: number | null
   setSelectedBookmarkId: (id: number | null) => void
@@ -221,6 +222,7 @@ export const useStore = create<AppState>()((set, get) => ({
       detailModalEdit: false,
       selectedBookmarkId: detailModalId ?? state.selectedBookmarkId,
     })),
+  setDetailModalEdit: (detailModalEdit) => set({ detailModalEdit }),
   openDetailInEditMode: (id) => set({ detailModalId: id, detailModalEdit: true, selectedBookmarkId: id }),
   selectedBookmarkId: null,
   setSelectedBookmarkId: (selectedBookmarkId) => set({ selectedBookmarkId }),

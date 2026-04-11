@@ -30,6 +30,7 @@ export default function BookmarkDetailModal() {
   const detailModalId = useStore((s) => s.detailModalId)
   const detailModalEdit = useStore((s) => s.detailModalEdit)
   const setDetailModalId = useStore((s) => s.setDetailModalId)
+  const setDetailModalEdit = useStore((s) => s.setDetailModalEdit)
   const bookmarks = useStore((s) => s.bookmarks)
   const markDirty = useStore((s) => s.markDirty)
   const clearDirty = useStore((s) => s.clearDirty)
@@ -149,6 +150,7 @@ export default function BookmarkDetailModal() {
         tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)),
       })
       setEditing(true)
+      setDetailModalEdit(false)
     } else {
       setEditing(false)
     }
@@ -174,7 +176,7 @@ export default function BookmarkDetailModal() {
     if (detailModalId === null) {
       reportCache.current.clear()
     }
-  }, [detailModalEdit, bookmark, hiddenTags, pendingFetchReport, detailModalId, setPendingFetchReport])
+  }, [detailModalEdit, bookmark, hiddenTags, pendingFetchReport, detailModalId, setPendingFetchReport, setDetailModalEdit])
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 })
@@ -188,14 +190,16 @@ export default function BookmarkDetailModal() {
       url: bookmark.url,
       tags: bookmark.tags.filter((t) => !hiddenTags.includes(t)),
     })
+    setDetailModalEdit(false)
     setEditing(true)
     setError(null)
-  }, [bookmark, hiddenTags])
+  }, [bookmark, hiddenTags, setDetailModalEdit])
 
   const cancelEdit = useCallback(() => {
+    setDetailModalEdit(false)
     setEditing(false)
     setError(null)
-  }, [])
+  }, [setDetailModalEdit])
 
   const saveEdit = useCallback(async () => {
     if (!bookmark) return
@@ -218,6 +222,7 @@ export default function BookmarkDetailModal() {
       const updated = await updateBookmark(payload)
       // Update in local bookmarks array
       setBookmarks(bookmarks.map((b) => (b.id === updated.id ? updated : b)))
+      setDetailModalEdit(false)
       setEditing(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save')
@@ -225,7 +230,7 @@ export default function BookmarkDetailModal() {
       clearDirty(bookmark.id)
       setSaving(false)
     }
-  }, [bookmark, editForm, pendingCover, pendingIcon, bookmarks, markDirty, clearDirty, setBookmarks])
+  }, [bookmark, editForm, pendingCover, pendingIcon, bookmarks, markDirty, clearDirty, setBookmarks, setDetailModalEdit])
 
   const handleDelete = useCallback(async () => {
     if (!bookmark) return
