@@ -126,6 +126,10 @@ export interface AppState {
 export type { Workspace } from './api'
 
 const emptySearchQuery: SearchQuery = {}
+const emptySelectionState = {
+  selectedBookmarkId: null,
+  armedDeleteBookmarkId: null,
+}
 
 function searchQueryFromUrl(): SearchQuery {
   const p = new URLSearchParams(window.location.search)
@@ -168,11 +172,11 @@ export const useStore = create<AppState>()((set, get) => ({
   setSearchQuery: (searchQuery) => {
     const current = get().searchQuery
     const changed = JSON.stringify(current) !== JSON.stringify(searchQuery)
-    set({ searchQuery, bookmarksFresh: false, ...(changed && { isUserLoading: true }) })
+    set({ searchQuery, bookmarksFresh: false, ...(changed && { isUserLoading: true, ...emptySelectionState }) })
   },
   clearSearch: () => {
     const changed = JSON.stringify(get().searchQuery) !== JSON.stringify(emptySearchQuery)
-    set({ searchQuery: emptySearchQuery, bookmarksFresh: false, ...(changed && { isUserLoading: true }) })
+    set({ searchQuery: emptySearchQuery, bookmarksFresh: false, ...(changed && { isUserLoading: true, ...emptySelectionState }) })
   },
 
   // UI
@@ -185,10 +189,13 @@ export const useStore = create<AppState>()((set, get) => ({
     set({ viewMode })
   },
   setColumns: (columns) => set({ columns }),
-  setShuffle: (shuffle) => set({ shuffle }),
+  setShuffle: (shuffle) => {
+    const changed = get().shuffle !== shuffle
+    set({ shuffle, ...(changed && emptySelectionState) })
+  },
   setShowAll: (showAll) => {
     const changed = get().showAll !== showAll
-    set({ showAll, bookmarksFresh: false, ...(changed && { isUserLoading: true }) })
+    set({ showAll, bookmarksFresh: false, ...(changed && { isUserLoading: true, ...emptySelectionState }) })
   },
   pinToUrl: () => {
     const { searchQuery, showAll, activeWorkspaceId, workspaces } = get()
@@ -289,7 +296,7 @@ export const useStore = create<AppState>()((set, get) => ({
     } else {
       localStorage.removeItem('bb:activeWorkspaceId')
     }
-    set({ activeWorkspaceId, ...(changed && { isUserLoading: true }) })
+    set({ activeWorkspaceId, ...(changed && { isUserLoading: true, ...emptySelectionState }) })
   },
   setWorkspacesAvailable: (workspacesAvailable) => set({ workspacesAvailable }),
 

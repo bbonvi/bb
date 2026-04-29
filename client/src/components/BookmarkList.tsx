@@ -1,4 +1,4 @@
-import { useRef, memo, useEffect } from 'react'
+import { useRef, memo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useStore } from '@/lib/store'
 import { useHiddenTags } from '@/hooks/useHiddenTags'
@@ -6,7 +6,7 @@ import { Favicon, Thumbnail, UrlDisplay, Tags, Description, CardActions, Fetchin
 import { ViewEmptyState } from './BookmarkGrid'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useScrollResetOnSearch } from '@/hooks/useScrollResetOnSearch'
-import { isBookmarkFullyVisible, smoothScrollElementToCenter, smoothScrollVirtualIndexToCenter } from '@/lib/selectionScroll'
+import { useRevealSelectedBookmark } from '@/hooks/useRevealSelectedBookmark'
 import type { Bookmark } from '@/lib/api'
 
 const ESTIMATED_ROW_HEIGHT = 140
@@ -16,7 +16,6 @@ export function BookmarkList() {
   const parentRef = useRef<HTMLDivElement>(null)
   const isUserLoading = useStore((s) => s.isUserLoading)
   const selectedBookmarkId = useStore((s) => s.selectedBookmarkId)
-  const selectedBookmarkRevealSeq = useStore((s) => s.selectedBookmarkRevealSeq)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
   useScrollResetOnSearch(parentRef, displayBookmarks.length)
 
@@ -34,20 +33,7 @@ export function BookmarkList() {
     ? -1
     : displayBookmarks.findIndex((bookmark) => bookmark.id === selectedBookmarkId)
 
-  useEffect(() => {
-    if (selectedIndex < 0) return
-    const container = parentRef.current
-    if (!container) return
-    if (selectedBookmarkId !== null && isBookmarkFullyVisible(container, selectedBookmarkId)) return
-
-    const target = container.querySelector<HTMLElement>(`[data-bookmark-id="${selectedBookmarkId}"]`)
-    if (target) {
-      smoothScrollElementToCenter(container, target)
-      return
-    }
-
-    smoothScrollVirtualIndexToCenter(container, virtualizer.scrollToIndex, selectedIndex)
-  }, [selectedIndex, selectedBookmarkId, selectedBookmarkRevealSeq, virtualizer])
+  useRevealSelectedBookmark(parentRef, selectedIndex, virtualizer.scrollToIndex)
 
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 

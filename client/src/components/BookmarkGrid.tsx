@@ -6,7 +6,7 @@ import { EmptyState } from './bookmark-parts'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
 import { useAutoColumns, MAX_GRID_WIDTH } from '@/hooks/useResponsive'
 import { useScrollResetOnSearch } from '@/hooks/useScrollResetOnSearch'
-import { isBookmarkFullyVisible, smoothScrollElementToCenter, smoothScrollVirtualIndexToCenter } from '@/lib/selectionScroll'
+import { useRevealSelectedBookmark } from '@/hooks/useRevealSelectedBookmark'
 
 const ROW_GAP = 16
 const ESTIMATED_ROW_HEIGHT = 330
@@ -25,7 +25,6 @@ export function BookmarkGrid() {
   const setColumns = useStore((s) => s.setColumns)
   const isUserLoading = useStore((s) => s.isUserLoading)
   const selectedBookmarkId = useStore((s) => s.selectedBookmarkId)
-  const selectedBookmarkRevealSeq = useStore((s) => s.selectedBookmarkRevealSeq)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
   useScrollResetOnSearch(parentRef, displayBookmarks.length)
 
@@ -86,21 +85,8 @@ export function BookmarkGrid() {
     virtualizer.scrollToIndex(newRow, { align: 'start' })
   }, [columns, virtualizer])
 
-  useEffect(() => {
-    if (selectedIndex < 0) return
-    const rowIndex = Math.floor(selectedIndex / columns)
-    const container = parentRef.current
-    if (!container) return
-    if (selectedBookmarkId !== null && isBookmarkFullyVisible(container, selectedBookmarkId)) return
-
-    const target = container.querySelector<HTMLElement>(`[data-bookmark-id="${selectedBookmarkId}"]`)
-    if (target) {
-      smoothScrollElementToCenter(container, target)
-      return
-    }
-
-    smoothScrollVirtualIndexToCenter(container, virtualizer.scrollToIndex, rowIndex)
-  }, [selectedIndex, selectedBookmarkId, selectedBookmarkRevealSeq, columns, virtualizer])
+  const selectedRowIndex = selectedIndex < 0 ? -1 : Math.floor(selectedIndex / columns)
+  useRevealSelectedBookmark(parentRef, selectedRowIndex, virtualizer.scrollToIndex)
 
   // Re-measure visible rows after bookmark data changes (new bookmark, metadata fetch, etc.)
   // measureElement must be called on actual DOM nodes — measure() alone only clears the cache
