@@ -158,7 +158,7 @@ export function Toolbar() {
   const showFilters = filtersOpen || hasAdvancedFilters
 
   return (
-    <header className="order-last z-40 flex shrink-0 flex-col border-t border-white/[0.04] bg-bg/88 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)-1rem))] backdrop-blur-xl backdrop-saturate-150 sm:sticky sm:top-0 sm:order-none sm:block sm:border-t-0 sm:border-b sm:pb-0">
+    <header className="order-last z-40 flex shrink-0 flex-col border-t border-white/[0.04] bg-bg/88 pb-6 backdrop-blur-xl backdrop-saturate-150 sm:sticky sm:top-0 sm:order-none sm:block sm:border-t-0 sm:border-b sm:pb-0">
       {/* ── Search row ── */}
       <div className="order-2 flex flex-wrap items-center gap-1.5 px-2 py-1.5 sm:order-none sm:flex-nowrap sm:gap-3 sm:px-3 sm:py-2.5">
         {/* Logo */}
