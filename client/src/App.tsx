@@ -79,7 +79,7 @@ function AppShell() {
   return (
     <div className="flex h-dvh flex-col bg-bg pt-[calc(env(safe-area-inset-top)+1.5rem)] sm:pt-0">
       <Toolbar />
-      <main className="min-h-0 flex-1">
+      <main className="min-h-0 flex-1 overflow-hidden">
         {viewMode === 'grid' && <BookmarkGrid />}
         {viewMode === 'cards' && <BookmarkList />}
         {viewMode === 'table' && <BookmarkTable />}

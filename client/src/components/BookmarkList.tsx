@@ -38,7 +38,7 @@ export function BookmarkList() {
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
   return (
-    <div ref={parentRef} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto p-4 focus:outline-none">
+    <div ref={parentRef} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto overscroll-contain p-4 focus:outline-none">
       <div
         className={`relative w-full transition-opacity duration-150 ${isUserLoading ? 'opacity-40' : ''}`}
         style={{ height: virtualizer.getTotalSize() }}

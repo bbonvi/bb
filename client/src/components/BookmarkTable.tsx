@@ -36,7 +36,7 @@ export function BookmarkTable() {
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
   return (
-    <div ref={parentRef} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto focus:outline-none">
+    <div ref={parentRef} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto overscroll-contain focus:outline-none">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.06] bg-bg px-4 py-2 text-[11px] font-medium uppercase tracking-wider text-text-dim">
         <span className="min-w-0 flex-[3]">Title</span>

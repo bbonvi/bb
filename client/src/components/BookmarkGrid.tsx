@@ -107,7 +107,7 @@ export function BookmarkGrid() {
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
   return (
-    <div ref={setRefs} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto p-2 focus:outline-none sm:p-4">
+    <div ref={setRefs} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto overscroll-contain p-2 focus:outline-none sm:p-4">
       <div
         className={`relative mx-auto w-full transition-opacity duration-150 ${isUserLoading ? 'opacity-40' : ''}`}
         style={{ height: virtualizer.getTotalSize(), maxWidth: MAX_GRID_WIDTH }}
