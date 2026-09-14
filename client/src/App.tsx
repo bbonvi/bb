@@ -77,7 +77,7 @@ function AppShell() {
   }, [openCreateModal])
 
   return (
-    <div className="flex h-dvh flex-col bg-bg">
+    <div className="flex h-dvh flex-col bg-bg pt-[env(safe-area-inset-top)] sm:pt-0">
       <Toolbar />
       <main className="min-h-0 flex-1">
         {viewMode === 'grid' && <BookmarkGrid />}
