@@ -158,9 +158,9 @@ export function Toolbar() {
   const showFilters = filtersOpen || hasAdvancedFilters
 
   return (
-    <header className="order-last z-40 flex shrink-0 flex-col border-t border-white/[0.04] bg-bg/88 pb-[calc(0.25rem+env(safe-area-inset-bottom))] backdrop-blur-xl backdrop-saturate-150 sm:sticky sm:top-0 sm:order-none sm:block sm:border-t-0 sm:border-b sm:pb-0">
+    <header className="order-last z-40 flex shrink-0 flex-col border-t border-white/[0.04] bg-bg/88 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl backdrop-saturate-150 sm:sticky sm:top-0 sm:order-none sm:block sm:border-t-0 sm:border-b sm:pb-0">
       {/* ── Search row ── */}
-      <div className="order-2 flex flex-wrap items-center gap-2 px-2 py-2 sm:order-none sm:flex-nowrap sm:gap-3 sm:px-3 sm:py-2.5">
+      <div className="order-2 flex flex-wrap items-center gap-1.5 px-2 py-1.5 sm:order-none sm:flex-nowrap sm:gap-3 sm:px-3 sm:py-2.5">
         {/* Logo */}
         <button
           onClick={clearAll}
@@ -226,7 +226,7 @@ export function Toolbar() {
 
         {/* Workspace selector */}
         {workspacesAvailable && (
-          <div className="relative shrink-0">
+          <div className="relative max-w-24 shrink-0 sm:max-w-none">
             <select
               data-workspace-select="true"
               value={activeWorkspaceId ?? ''}
@@ -234,7 +234,7 @@ export function Toolbar() {
                 const v = e.target.value
                 setActiveWorkspaceId(v === '' ? null : v)
               }}
-              className="h-7 appearance-none rounded-md border border-white/[0.06] bg-surface pl-2 pr-7 text-xs text-text outline-none transition-colors hover:bg-surface-hover focus:border-hi-dim cursor-pointer"
+              className="h-7 max-w-24 appearance-none rounded-md border border-white/[0.06] bg-surface pl-2 pr-7 text-xs text-text outline-none transition-colors hover:bg-surface-hover focus:border-hi-dim cursor-pointer sm:max-w-none"
             >
               {(settings.showCatchAllWorkspace || workspaces.length === 0) && (
                 <option value="">---</option>
@@ -266,6 +266,10 @@ export function Toolbar() {
             <XIcon />
           </button>
         )}
+
+        <div className="sm:hidden">
+          <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="All" />
+        </div>
 
         {/* New bookmark */}
         <button
@@ -351,36 +355,6 @@ export function Toolbar() {
         </div>
       )}
 
-      {/* ── Mobile controls row ── */}
-      <div className="order-3 flex items-center gap-2 border-t border-white/[0.04] px-3 py-1.5 sm:hidden">
-        {/* View mode */}
-        <div className="flex items-center rounded-lg bg-surface p-0.5">
-          {(['grid', 'cards', 'table'] as const).map((mode) => (
-            <button
-              key={mode}
-              tabIndex={-1}
-              onClick={() => setViewMode(mode)}
-              className={`rounded-md px-2 py-1 text-xs font-medium transition-all ${
-                viewMode === mode
-                  ? 'bg-hi-dim text-text'
-                  : 'text-text-muted hover:text-text'
-              }`}
-            >
-              {mode === 'grid' ? 'Grid' : mode === 'cards' ? 'List' : 'Table'}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1" />
-
-        {/* Toggles on mobile */}
-        <div className="flex items-center gap-1.5">
-          <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shfl" />
-          <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="All" />
-          <PillButton onClick={pinCurrentState} label="Pin" />
-        </div>
-      </div>
-
       {/* ── Expandable filters ── */}
       <div
         className={`order-first grid transition-[grid-template-rows] duration-200 ease-out sm:order-none ${
@@ -407,7 +381,31 @@ export function Toolbar() {
             <FilterField label="url" value={localUrl} onChange={setLocalUrl} />
             <FilterField label="description" value={localDescription} onChange={setLocalDescription} />
 
-            {/* Toggles — desktop only (mobile has them in controls row) */}
+            {/* Secondary mobile controls */}
+            <div className="flex w-full items-center justify-between border-t border-white/[0.04] pt-2 sm:hidden">
+              <div className="flex items-center rounded-lg bg-surface p-0.5">
+                {(['grid', 'cards', 'table'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    tabIndex={-1}
+                    onClick={() => setViewMode(mode)}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition-all ${
+                      viewMode === mode
+                        ? 'bg-hi-dim text-text'
+                        : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    {mode === 'grid' ? 'Grid' : mode === 'cards' ? 'List' : 'Table'}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shfl" />
+                <PillButton onClick={pinCurrentState} label="Pin" />
+              </div>
+            </div>
+
+            {/* Toggles — desktop only */}
             <div className="ml-auto hidden sm:flex items-center gap-3">
               <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shuffle" />
               <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="Show all" />
