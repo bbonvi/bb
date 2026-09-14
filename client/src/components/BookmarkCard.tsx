@@ -43,17 +43,17 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
       {deleteArmed && <ArmedDeleteOverlay />}
       <CardActions bookmarkId={bookmark.id} />
       <div className="relative">
-        <Thumbnail bookmark={bookmark} className="h-36 w-full rounded-t-lg" />
+        <Thumbnail bookmark={bookmark} className="h-24 w-full rounded-t-lg sm:h-36" />
         {bookmark.fetching && (
           <div className="absolute inset-0 flex items-center justify-center rounded-t-lg bg-surface">
             <FetchingIndicator />
           </div>
         )}
       </div>
-      <div className="flex flex-col gap-1.5 p-3">
+      <div className="flex flex-col gap-1.5 p-2 sm:p-3">
         <span
           onClick={(e) => e.stopPropagation()}
-          className={`mt-1.5 line-clamp-2 cursor-pointer text-[16px] font-semibold leading-snug tracking-[-0.01em] ${
+          className={`line-clamp-2 cursor-pointer text-sm font-semibold leading-snug tracking-[-0.01em] sm:mt-1.5 sm:text-[16px] ${
             selected ? 'text-white hover:text-white' : 'text-text hover:text-hi'
           }`}
         >
@@ -61,9 +61,15 @@ export const BookmarkCard = memo(function BookmarkCard({ bookmark }: BookmarkCar
           {bookmark.title || bookmark.url}
         </span>
 
-        <UrlDisplay url={bookmark.url} selected={selected} />
-        <Tags tags={bookmark.tags} hiddenTags={hiddenTags} selected={selected} />
-        <Description text={bookmark.description} selected={selected} />
+        <div className="hidden sm:block">
+          <UrlDisplay url={bookmark.url} selected={selected} />
+        </div>
+        <div className="hidden sm:block">
+          <Tags tags={bookmark.tags} hiddenTags={hiddenTags} selected={selected} />
+        </div>
+        <div className="hidden sm:block">
+          <Description text={bookmark.description} selected={selected} />
+        </div>
       </div>
     </a>
   )

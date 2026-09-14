@@ -158,9 +158,9 @@ export function Toolbar() {
   const showFilters = filtersOpen || hasAdvancedFilters
 
   return (
-    <header className="sticky top-0 z-40 bg-bg/88 backdrop-blur-xl backdrop-saturate-150 border-b border-white/[0.04]">
+    <header className="order-last z-40 flex shrink-0 flex-col border-t border-white/[0.04] bg-bg/88 pb-[calc(0.25rem+env(safe-area-inset-bottom))] backdrop-blur-xl backdrop-saturate-150 sm:sticky sm:top-0 sm:order-none sm:block sm:border-t-0 sm:border-b sm:pb-0">
       {/* ── Search row ── */}
-      <div className="flex items-center gap-2 px-2 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
+      <div className="order-2 flex flex-wrap items-center gap-2 px-2 py-2 sm:order-none sm:flex-nowrap sm:gap-3 sm:px-3 sm:py-2.5">
         {/* Logo */}
         <button
           onClick={clearAll}
@@ -175,7 +175,7 @@ export function Toolbar() {
         </button>
 
         {/* Search bar */}
-        <div className="relative flex min-w-0 flex-1 items-center sm:max-w-2xl">
+        <div className="relative flex min-w-0 basis-full items-center sm:max-w-2xl sm:basis-auto sm:flex-1">
           <SearchIcon className="pointer-events-none absolute left-3 text-text-dim" />
           <input
             ref={searchInputRef}
@@ -271,7 +271,7 @@ export function Toolbar() {
         <button
           tabIndex={-1}
           onClick={() => setCreateModalOpen(true)}
-          className="flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text"
+          className="ml-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-text-muted transition-colors hover:bg-surface-hover hover:text-text sm:ml-0"
           title="New bookmark (Ctrl+N)"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -346,13 +346,13 @@ export function Toolbar() {
 
       {/* ── Search error ── */}
       {searchError && (
-        <div className="mx-2 mb-1 rounded-md bg-danger/10 px-3 py-1.5 text-xs text-danger sm:mx-3">
+        <div className="order-1 mx-2 mb-1 rounded-md bg-danger/10 px-3 py-1.5 text-xs text-danger sm:order-none sm:mx-3">
           {searchError}
         </div>
       )}
 
       {/* ── Mobile controls row ── */}
-      <div className="flex items-center gap-2 border-t border-white/[0.04] px-3 py-1.5 sm:hidden">
+      <div className="order-3 flex items-center gap-2 border-t border-white/[0.04] px-3 py-1.5 sm:hidden">
         {/* View mode */}
         <div className="flex items-center rounded-lg bg-surface p-0.5">
           {(['grid', 'cards', 'table'] as const).map((mode) => (
@@ -383,7 +383,7 @@ export function Toolbar() {
 
       {/* ── Expandable filters ── */}
       <div
-        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+        className={`order-first grid transition-[grid-template-rows] duration-200 ease-out sm:order-none ${
           showFilters ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}
       >
@@ -418,7 +418,7 @@ export function Toolbar() {
       </div>
 
       {/* Bottom edge */}
-      <div className="h-px bg-white/[0.06]" />
+      <div className="hidden h-px bg-white/[0.06] sm:block" />
     </header>
   )
 }

@@ -4,12 +4,14 @@ import { useStore } from '@/lib/store'
 import { BookmarkCard } from './BookmarkCard'
 import { EmptyState } from './bookmark-parts'
 import { useDisplayBookmarks } from '@/hooks/useDisplayBookmarks'
-import { useAutoColumns, MAX_GRID_WIDTH } from '@/hooks/useResponsive'
+import { useAutoColumns, useIsMobile, MAX_GRID_WIDTH } from '@/hooks/useResponsive'
 import { useScrollResetOnSearch } from '@/hooks/useScrollResetOnSearch'
 import { useRevealSelectedBookmark } from '@/hooks/useRevealSelectedBookmark'
 
 const ROW_GAP = 16
+const MOBILE_ROW_GAP = 8
 const ESTIMATED_ROW_HEIGHT = 330
+const MOBILE_ESTIMATED_ROW_HEIGHT = 180
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = []
@@ -27,9 +29,10 @@ export function BookmarkGrid() {
   const selectedBookmarkId = useStore((s) => s.selectedBookmarkId)
   const { displayBookmarks, emptyReason } = useDisplayBookmarks()
   useScrollResetOnSearch(parentRef, displayBookmarks.length)
+  const isMobile = useIsMobile()
 
   // Auto-compute columns from container width, with scroll preservation
-  const [autoCols, colsRef] = useAutoColumns()
+  const [autoCols, colsRef] = useAutoColumns(isMobile)
 
   // Merge callback ref with parentRef so both track the same element
   const setRefs = useCallback((node: HTMLDivElement | null) => {
@@ -65,9 +68,9 @@ export function BookmarkGrid() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    estimateSize: () => isMobile ? MOBILE_ESTIMATED_ROW_HEIGHT : ESTIMATED_ROW_HEIGHT,
     overscan: 4,
-    gap: ROW_GAP,
+    gap: isMobile ? MOBILE_ROW_GAP : ROW_GAP,
     getItemKey: (index) => rows[index]?.[0]?.id ?? index, // stable key from first bookmark in row
   })
 
@@ -104,7 +107,7 @@ export function BookmarkGrid() {
   if (emptyReason) return <ViewEmptyState reason={emptyReason} />
 
   return (
-    <div ref={setRefs} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto p-4 focus:outline-none">
+    <div ref={setRefs} data-bookmark-viewport="true" tabIndex={0} className="h-full overflow-auto p-2 focus:outline-none sm:p-4">
       <div
         className={`relative mx-auto w-full transition-opacity duration-150 ${isUserLoading ? 'opacity-40' : ''}`}
         style={{ height: virtualizer.getTotalSize(), maxWidth: MAX_GRID_WIDTH }}
@@ -122,7 +125,7 @@ export function BookmarkGrid() {
               }}
             >
               <div
-                className="grid gap-4"
+                className="grid gap-2 sm:gap-4"
                 style={{
                   gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                 }}
