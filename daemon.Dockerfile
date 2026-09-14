@@ -1,4 +1,4 @@
-FROM node AS node_builder 
+FROM node:24 AS node_builder
 WORKDIR /app
 COPY client/package.json client/yarn.lock ./
 RUN yarn
