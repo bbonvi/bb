@@ -57,7 +57,7 @@ export function Toolbar() {
   const setShuffle = useStore((s) => s.setShuffle)
   const showAll = useStore((s) => s.showAll)
   const setShowAll = useStore((s) => s.setShowAll)
-  const pinToUrl = useStore((s) => s.pinToUrl)
+  const pinCurrentState = useStore((s) => s.pinCurrentState)
   const setCreateModalOpen = useStore((s) => s.setCreateModalOpen)
   const setBulkEditOpen = useStore((s) => s.setBulkEditOpen)
   const setBulkDeleteOpen = useStore((s) => s.setBulkDeleteOpen)
@@ -377,7 +377,7 @@ export function Toolbar() {
         <div className="flex items-center gap-1.5">
           <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shfl" />
           <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="All" />
-          <PillButton onClick={pinToUrl} label="Pin" />
+          <PillButton onClick={pinCurrentState} label="Pin" />
         </div>
       </div>
 
@@ -411,7 +411,7 @@ export function Toolbar() {
             <div className="ml-auto hidden sm:flex items-center gap-3">
               <PillToggle active={shuffle} onClick={() => setShuffle(!shuffle)} label="Shuffle" />
               <PillToggle active={showAll} onClick={() => setShowAll(!showAll)} label="Show all" />
-              <PillButton onClick={pinToUrl} label="Pin" />
+              <PillButton onClick={pinCurrentState} label="Pin" />
             </div>
           </div>
         </div>

@@ -45,7 +45,7 @@
     }
   ],
   "share_target": {
-    "action": "/",
+    "action": "/?action=create",
     "method": "GET",
     "params": {
       "url": "url",

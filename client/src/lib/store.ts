@@ -1,5 +1,11 @@
 import { create } from 'zustand'
 import { getResponsiveColumns } from '@/hooks/useResponsive'
+import {
+  isStandaloneApp,
+  loadPinnedNavigationState,
+  resolveInitialNavigationState,
+  savePinnedNavigationState,
+} from './navigationState'
 import type {
   Bookmark,
   SearchQuery,
@@ -40,7 +46,7 @@ export interface AppState {
   setColumns: (columns: number) => void
   setShuffle: (shuffle: boolean) => void
   setShowAll: (showAll: boolean) => void
-  pinToUrl: () => void
+  pinCurrentState: () => void
 
   // Detail modal
   detailModalId: number | null
@@ -131,17 +137,13 @@ const emptySelectionState = {
   armedDeleteBookmarkId: null,
 }
 
-function searchQueryFromUrl(): SearchQuery {
-  const p = new URLSearchParams(window.location.search)
-  const q: SearchQuery = {}
-  if (p.get('tags')) q.tags = p.get('tags')!
-  if (p.get('title')) q.title = p.get('title')!
-  if (p.get('url')) q.url = p.get('url')!
-  if (p.get('description')) q.description = p.get('description')!
-  if (p.get('query')) q.query = p.get('query')!
-  if (p.get('semantic')) q.semantic = p.get('semantic')!
-  return q
-}
+const standaloneApp = isStandaloneApp()
+const initialNavigationState = resolveInitialNavigationState({
+  search: window.location.search,
+  standalone: standaloneApp,
+  pinnedState: standaloneApp ? loadPinnedNavigationState() : null,
+  lastWorkspaceId: localStorage.getItem('bb:activeWorkspaceId'),
+})
 
 export const useStore = create<AppState>()((set, get) => ({
   // Auth
@@ -168,7 +170,7 @@ export const useStore = create<AppState>()((set, get) => ({
   setConfig: (config) => set({ config }),
 
   // Search
-  searchQuery: searchQueryFromUrl(),
+  searchQuery: initialNavigationState.searchQuery,
   setSearchQuery: (searchQuery) => {
     const current = get().searchQuery
     const changed = JSON.stringify(current) !== JSON.stringify(searchQuery)
@@ -183,7 +185,7 @@ export const useStore = create<AppState>()((set, get) => ({
   viewMode: (localStorage.getItem('bb_view_mode') as 'grid' | 'cards' | 'table') || 'grid',
   columns: getResponsiveColumns(),
   shuffle: false,
-  showAll: new URLSearchParams(window.location.search).get('all') === '1',
+  showAll: initialNavigationState.showAll,
   setViewMode: (viewMode) => {
     localStorage.setItem('bb_view_mode', viewMode)
     set({ viewMode })
@@ -197,8 +199,13 @@ export const useStore = create<AppState>()((set, get) => ({
     const changed = get().showAll !== showAll
     set({ showAll, bookmarksFresh: false, ...(changed && { isUserLoading: true, ...emptySelectionState }) })
   },
-  pinToUrl: () => {
+  pinCurrentState: () => {
     const { searchQuery, showAll, activeWorkspaceId, workspaces } = get()
+    if (standaloneApp) {
+      savePinnedNavigationState({ searchQuery, showAll, activeWorkspaceId })
+      return
+    }
+
     const url = new URL(window.location.href)
     const fields: Record<string, string | undefined> = {
       tags: searchQuery.tags,
@@ -270,8 +277,8 @@ export const useStore = create<AppState>()((set, get) => ({
 
   // Workspace
   workspaces: [],
-  activeWorkspaceId: localStorage.getItem('bb:activeWorkspaceId') ?? null,
-  urlWorkspaceName: new URLSearchParams(window.location.search).get('workspace'),
+  activeWorkspaceId: initialNavigationState.activeWorkspaceId,
+  urlWorkspaceName: initialNavigationState.urlWorkspaceName,
   workspacesAvailable: false,
   setWorkspaces: (workspaces) => {
     const { urlWorkspaceName } = get()

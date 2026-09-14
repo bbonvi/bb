@@ -138,7 +138,7 @@ export function useGlobalShortcuts() {
 
       if (e.key === 'p') {
         e.preventDefault()
-        state.pinToUrl()
+        state.pinCurrentState()
         return
       }
 
