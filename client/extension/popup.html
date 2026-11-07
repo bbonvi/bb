@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Send to BB</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <header>
+      <a id="open-bb" class="brand" href="#" title="Open BB" aria-label="Open BB">
+        <img src="/favicon-32x32.png" width="28" height="28" alt="" />
+        <span>bb</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10" /></svg>
+      </a>
+      <button id="settings-toggle" class="icon-button" type="button" aria-label="Connection settings" aria-expanded="false" aria-controls="connection-panel" title="Connection settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-.6 2.2-1.9 1.1-2.2-.6-2 3.5 1.6 1.6v2.4l-1.6 1.6 2 3.5 2.2-.6 1.9 1.1L9 21h4l.6-2.2 1.9-1.1 2.2.6 2-3.5-1.6-1.6v-2.4l1.6-1.6-2-3.5-2.2.6-1.9-1.1L13 3Z" /><circle cx="11" cy="12" r="3" /></svg>
+      </button>
+    </header>
+
+    <main>
+      <section id="connection-panel" hidden aria-labelledby="connection-heading">
+        <h1 id="connection-heading">Connect to BB</h1>
+        <form id="connection-form">
+          <fieldset id="connection-fields">
+            <label for="server">Server address</label>
+            <input id="server" type="url" placeholder="http://localhost:8080" required spellcheck="false" autocomplete="url" />
+            <label for="token">Access token <span class="optional">optional</span></label>
+            <input id="token" type="password" placeholder="BB_AUTH_TOKEN" autocomplete="off" spellcheck="false" />
+            <p id="connection-status" class="status" role="status" aria-live="polite" hidden></p>
+            <button id="connect" class="primary" type="submit">Connect</button>
+          </fieldset>
+        </form>
+      </section>
+
+      <form id="bookmark-form">
+        <fieldset id="bookmark-fields" disabled>
+          <div class="form-heading">
+            <h1 id="bookmark-heading">Send to BB</h1>
+            <a id="editor-link" href="#" hidden>Open in BB <span aria-hidden="true">↗</span></a>
+          </div>
+          <label for="url">URL</label>
+          <textarea id="url" rows="2" required spellcheck="false" placeholder="https://example.com"></textarea>
+          <label for="title">Title</label>
+          <input id="title" type="text" placeholder="Fetch automatically" />
+          <label for="description">Description</label>
+          <textarea id="description" rows="3" placeholder="Add a note"></textarea>
+          <label for="tags">Tags</label>
+          <input id="tags" type="text" placeholder="reading, dev/rust" autocomplete="off" spellcheck="false" />
+          <p id="save-status" class="status" role="status" aria-live="polite" hidden></p>
+          <button id="save" class="primary" type="submit">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v17l-6-4-6 4Z" /></svg>
+            <span id="save-label" aria-live="polite">Save bookmark</span>
+          </button>
+        </fieldset>
+      </form>
+    </main>
+    <footer><span id="server-label">Not connected</span><kbd id="shortcut">⌘ ↵</kbd></footer>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

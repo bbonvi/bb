@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "BB",
+  "version": "1.0.0",
+  "description": "Send pages and links to your BB bookmark manager.",
+  "minimum_chrome_version": "127",
+  "permissions": ["activeTab", "contextMenus", "storage", "scripting"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "commands": {
+    "send-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Send current page to BB"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Send to BB",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "favicon-16x16.png",
+      "32": "favicon-32x32.png",
+      "48": "favicon-48x48.png"
+    }
+  },
+  "icons": {
+    "16": "favicon-16x16.png",
+    "32": "favicon-32x32.png",
+    "48": "favicon-48x48.png",
+    "192": "logo192.png"
+  }
+}

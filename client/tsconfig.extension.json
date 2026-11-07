@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "types": ["chrome", "node"],
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["extension", "vite.extension.config.ts"]
+}

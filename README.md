@@ -352,6 +352,28 @@ docker run --rm -it -v bb-data:/root/.local/share/bb -p 8080:8080 --name bb-daem
 
 When running bb as daemon, you can access webui at [http://localhost:8080/](http://localhost:8080/)
 
+### Chrome extension
+
+The extension saves pages and links directly to your BB server. Its toolbar popup lets you edit the URL, title, description, and tags. On a page already saved in BB, the popup loads its saved details and updates that bookmark.
+
+Build from the repository root:
+
+```bash
+cd client
+yarn install --frozen-lockfile
+yarn build:extension
+```
+
+1. Open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked**.
+2. Select `client/dist-extension` in this repository and pin **BB** to the toolbar.
+3. Open the BB icon, enter your BB server address and optional `BB_AUTH_TOKEN`, then click **Connect**. Allow Chrome access to that server when prompted. Settings and the token stay in local extension storage.
+
+Right-click a link to choose **Send link to BB** or **Send current page to BB** under the BB submenu. Elsewhere on a web page, **Send current page to BB** saves the page directly. A brief icon badge and a toast at the page's top right show the result. Errors preserve the URL for retry. Saving an existing URL keeps its details and reports **Already in BB**. Metadata is fetched by BB in the background.
+
+Press **Cmd+Shift+Y** on macOS or **Ctrl+Shift+Y** on Windows/Linux to save the current page directly. Change the binding at `chrome://extensions/shortcuts`; if another extension already uses it, assign an available shortcut there.
+
+After editing the extension, rebuild and click **Reload** on its card at `chrome://extensions`.
+
 ### Authentication
 
 bb supports optional bearer token authentication for API routes. When enabled, both the web UI and CLI client require a valid token to access the API.
